@@ -1,0 +1,28 @@
+[package]
+name = "clantool"
+version = "0.1.0"
+authors = ["Aron Heinecke"]
+
+[[bin]]
+name = "clantool"
+
+[dependencies]
+lazy_static = ">= 0.1.15"
+toml = ">= 0.2.1"
+rustc-serialize = ">= 0.3.22"
+log = ">= 0.3.6"
+log4rs = ">= 0.5.2"
+timer = ">= 0.1.6"
+chrono = ">= 0.2.25"
+reqwest = ">= 0.3.0"
+json = ">= 0.11.5"
+flate2 = ">= 0.2.17"
+quick-error = ">= 1.1.0"
+
+[dependencies.mysql]
+version = ">= 9.0.1"
+default-features = false
+
+[dependencies.regex]
+version = ">= 0.2.1"
+#regex_macros = ">= 0.1.26"
