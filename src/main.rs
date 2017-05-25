@@ -147,14 +147,36 @@ fn run_timer<'a>(pool: Arc<Pool>, config: Arc<Config>, timer: &'a timer::Timer) 
     a.ignore();
 }
 
+/// get member url for ajax request
+fn get_member_url(site: &u8, config: &Config) -> String {
+    let _site = format!("{}",site);
+    config.main.clan_ajax_url.replace(&config.main.clan_ajax_site_key, &_site)
+}
+
 /// Run crawl + db update
 fn run_update(pool: &Pool, config: &Config) -> Result<(),Error> {
     let time = Local::now().naive_local();
     let mut conn = try!(pool.get_conn());
     let raw_http_clan = try!(http::get(&config.main.clan_url,HeaderType::Html));
     let clan = try!(parser::parse_clan(&raw_http_clan));
-    let raw_json_members = try!(http::get(&config.main.clan_ajax_url,HeaderType::Ajax));
-    let members = try!(parser::parse_all_member(&raw_json_members));
+    
+    let mut site = 0;
+    let mut members = Vec::new();
+    let mut members_temp;
+    let mut received_total = 0;
+    let min = config.main.clan_ajax_exptected_per_site.into();
+    let mut received_last_req = min;
+    while received_last_req >= min {
+        site += 1;
+        let raw_members_json = try!(http::get(&get_member_url(&site,config),HeaderType::Ajax));
+        members_temp = try!(parser::parse_all_member(&raw_members_json));
+        received_last_req = members_temp.len();
+        received_total += received_last_req;
+        members.append(&mut members_temp);
+        trace!("fetched site {} with {} entries",site, received_last_req);
+    }
+    assert_eq!(members.len(),received_total,"mismatched amount of members compared to received");
+    debug!("Fetched {} member entries",members.len());
     try!(db::insert_members(&mut conn,&members,&time));
     try!(db::insert_clan_update(&mut conn,&clan,&time));
     Ok(())

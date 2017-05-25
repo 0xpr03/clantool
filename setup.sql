@@ -30,5 +30,6 @@ CREATE TABLE `member_names` (
  `name` varchar(12) NOT NULL,
  `date` datetime NOT NULL,
  UNIQUE KEY `id` (`id`,`name`),
- KEY `name` (`name`)
+ KEY `name` (`name`),
+ KEY `date` (`date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
