@@ -150,7 +150,15 @@ fn run_timer<'a>(pool: Arc<Pool>, config: Arc<Config>, timer: &'a timer::Timer) 
 /// get member url for ajax request
 fn get_member_url(site: &u8, config: &Config) -> String {
     let _site = format!("{}",site);
-    config.main.clan_ajax_url.replace(&config.main.clan_ajax_site_key, &_site)
+    let end_row = site*config.main.clan_ajax_exptected_per_site;
+    let start_row = end_row - (config.main.clan_ajax_exptected_per_site -1);
+    let _start_row = format!("{}", start_row);
+    let _end_row = format!("{}", end_row);
+    let mut output = config.main.clan_ajax_url.replace(&config.main.clan_ajax_site_key, &_site);
+    output = output.replace(&config.main.clan_ajax_start_row_key, &_start_row);
+    output = output.replace(&config.main.clan_ajax_end_row_key, &_end_row);
+    debug!("Start: {} end: {} site: {}",start_row,end_row,site);
+    output
 }
 
 /// Run crawl + db update
@@ -162,20 +170,19 @@ fn run_update(pool: &Pool, config: &Config) -> Result<(),Error> {
     
     let mut site = 0;
     let mut members = Vec::new();
-    let mut members_temp;
-    let mut received_total = 0;
-    let min = config.main.clan_ajax_exptected_per_site.into();
-    let mut received_last_req = min;
-    while received_last_req >= min {
+    let mut to_receive = 100;
+    while members.len() < to_receive {
         site += 1;
+        if site > config.main.clan_ajax_max_sites {
+            error!("Reaching site {}, aborting.",site);
+            return Err(Error::Other("Site over limit."));
+        }
         let raw_members_json = try!(http::get(&get_member_url(&site,config),HeaderType::Ajax));
-        members_temp = try!(parser::parse_all_member(&raw_members_json));
-        received_last_req = members_temp.len();
-        received_total += received_last_req;
+        let (mut members_temp,t_total) = try!(parser::parse_all_member(&raw_members_json));
+        to_receive = t_total as usize;
         members.append(&mut members_temp);
-        trace!("fetched site {} with {} entries",site, received_last_req);
+        trace!("fetched site {}",site);
     }
-    assert_eq!(members.len(),received_total,"mismatched amount of members compared to received");
     debug!("Fetched {} member entries",members.len());
     try!(db::insert_members(&mut conn,&members,&time));
     try!(db::insert_clan_update(&mut conn,&clan,&time));

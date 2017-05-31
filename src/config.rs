@@ -66,6 +66,9 @@ pub struct MainConfig {
     pub clan_ajax_url: String,
     pub clan_ajax_site_key: String,
     pub clan_ajax_exptected_per_site: u8,
+    pub clan_ajax_start_row_key: String,
+    pub clan_ajax_end_row_key: String,
+    pub clan_ajax_max_sites: u8,
     pub clan_url: String,
     pub time: String,
     pub retries: u16,
@@ -136,9 +139,13 @@ port = 3306
 ip = "127.0.0.1"
 
 [main]
-clan_ajax_url = "http://crossfire.z8games.com/rest/clanmembers.json?clanID=68910&endrow=100&page=%Page&perPage=10&rankType=user&startrow=1"
+clan_ajax_url = "http://crossfire.z8games.com/rest/clanmembers.json?clanID=68910&%EndRow&page=%Page&perPage=10&rankType=user&startrow=%Row"
 clan_ajax_site_key = "%Page"
 clan_ajax_exptected_per_site = 10
+clan_ajax_start_row_key = "%StartRow"
+clan_ajax_end_row_key = "%EndRow"
+# maximum amount of sites, after which to abort
+clan_ajax_max_sites = 10
 clan_url = "http://crossfire.z8games.com/clan/68910"
 # time of the day the crawler should run
 time = "12:00"

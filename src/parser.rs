@@ -31,8 +31,9 @@ const REGEX_MEMBERS: &'static str = r#"<div>(\d+) Clan members"#;
 const KEY_MEMBERSHIP: &'static str = "position_title";
 
 /// Parse a raw member json request to a vec of Members
-pub fn parse_all_member(input: &str) -> Result<Vec<Member>,Error> {//Result<Vec<Member>,Error> {
+pub fn parse_all_member(input: &str) -> Result<(Vec<Member>,u32),Error> {//Result<Vec<Member>,Error> {
     let mut parsed = try!(json::parse(input));
+    let total = get_u32_value(&mut parsed,"Total_Count")?;
     let mut pmembers = parsed["members"].take();
 
     let members: Vec<Member> = try!(pmembers.members_mut()
@@ -45,7 +46,7 @@ pub fn parse_all_member(input: &str) -> Result<Vec<Member>,Error> {//Result<Vec<
             }
         )
         .collect());
-    Ok(members)
+    Ok((members,total))
 }
 
 /// Parse json object to member,
@@ -162,8 +163,9 @@ mod test {
             exp: 7919289,
             contribution: 4316
         });
-        let r = parse_all_member(input).unwrap();
+        let (r,t) = parse_all_member(input).unwrap();
         assert_eq!(var,r);
+        assert_eq!(1,t);
     }
     
     /// Test parsing of single member function parse_member
