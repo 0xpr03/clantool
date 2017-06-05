@@ -3,6 +3,9 @@ name = "clantool"
 version = "0.1.1"
 authors = ["Aron Heinecke"]
 
+#[profile.release]
+#lto = true
+
 [[bin]]
 name = "clantool"
 

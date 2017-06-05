@@ -115,15 +115,8 @@ fn run_timer<'a>(pool: Arc<Pool>, config: Arc<Config>, timer: &'a timer::Timer) 
     if target_time < date_time.time() {
 		debug!("Target time is tinier then current time");
         date_time = date_time.checked_add(Duration::hours(INTERVALL_H)).unwrap();
-        date_time = date_time.checked_add(target_time - date_time.time()).unwrap();
-    }else{
-		debug!("Offset: {}",date_time.offset());
-		// create new DateTime from current Date & NaiveTime specified
-		date_time = DateTime::from_utc(NaiveDateTime::new(date_time.naive_utc().date(),target_time),
-			 FixedOffset::from_offset(date_time.offset()));
-		// substract the offset, otherwise we're one offset ahead
-		date_time = date_time - date_time.offset().local_minus_utc();
-	}
+    }
+    date_time = date_time.checked_add(target_time - date_time.time()).unwrap();
     info!("First execution will be on {}",date_time);
     
 	let a = timer.schedule(date_time,Some(chrono::Duration::hours(INTERVALL_H)), move || {
