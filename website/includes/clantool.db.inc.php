@@ -46,12 +46,12 @@ class clanDB extends dbException {
 		join member as m1 on m1.id = m2.id 
 		and m1.date LIKE "'.$date2.'%"
 		JOIN (SELECT n1.id,n1.`name` FROM 
-				(SELECT id,MAX(date) as maxdate 
+				(SELECT id,MAX(updated) as maxdate 
 				FROM member_names 
 				GROUP BY id) as nEndDate 
 				JOIN member_names AS n1 ON ( 
 					n1.id = nEndDate.id 
-					AND n1.date = nEndDate.maxdate 
+					AND n1.updated = nEndDate.maxdate 
 				) 
 		) names 
 		on m2.id = names.id 
@@ -280,7 +280,7 @@ class clanDB extends dbException {
 	 */
 	public function searchForMemberName($key) {
 		$key = '%'.$key.'%';
-		if ($query = $this->db->prepare ( 'SELECT name,id,date from member_names WHERE name LIKE ? OR id LIKE ? order by id, date ,name' )) { // Y-m-d G:i:s Y-m-d h:i:s
+		if ($query = $this->db->prepare ( 'SELECT name,id,date,updated from member_names WHERE name LIKE ? OR id LIKE ? order by id, date,updated ,name' )) { // Y-m-d G:i:s Y-m-d h:i:s
 			$query->bind_param ( 'ss', $key, $key );
 			$query->execute();
 			$result = $query->get_result ();
@@ -297,7 +297,8 @@ class clanDB extends dbException {
 					$resultset[] = array(
 						'id' => $row['id'],
 						'name' => $row['name'],
-						'date' => $row['date']
+						'date' => $row['date'],
+						'updated' => $row['updated']
 					);
 				}
 			}

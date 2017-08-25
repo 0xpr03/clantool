@@ -48,9 +48,15 @@ pub fn insert_members(conn: &mut PooledConn, members: &Vec<Member>, timestamp: &
         }
     }
     {
-        let mut stmt = try!(conn.prepare("INSERT IGNORE INTO `member_names` (`id`,`name`,`date`) VALUES (?,?,?)"));
+        let mut stmt = try!(conn.prepare("INSERT IGNORE INTO `member_names` (`id`,`name`,`date`,`updated`) VALUES (?,?,?)"));
         for member in members {
-            try!(stmt.execute((&member.id,&member.name,timestamp)));
+            try!(stmt.execute((&member.id,&member.name,timestamp,timestamp)));
+        }
+    }
+    {
+        let mut stmt = try!(conn.prepare("UPDATE `member_names` SET `updated` = ? WHERE `id` = ? AND `name` = ?"));
+        for member in members {
+            try!(stmt.execute((timestamp,&member.id,&member.name)));
         }
     }
     Ok(())
