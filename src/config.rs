@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-use toml::decode_str;
+use toml::de::from_str;
 
 use std::io::Write;
 use std::io::Read;
@@ -22,12 +22,13 @@ use std::fs::{File,metadata,OpenOptions};
 use std::path::Path;
 
 use std;
-
 use std::process::exit;
 
 use CONFIG_PATH;
 
 use get_executable_folder;
+
+use error::Error;
 
 // pub mod config;
 // Config section
@@ -50,18 +51,17 @@ pub enum ConfigError {
     ReadError,
     WriteError,
     CreateError,
-    ParseError,
 }
 
 /// Config struct
-#[derive(Debug, RustcDecodable)]
+#[derive(Debug, Deserialize)]
 pub struct Config {
     pub db: DBConfig,
     pub main: MainConfig,
 }
 
 /// Main config struct
-#[derive(Debug, RustcDecodable)]
+#[derive(Debug, Deserialize)]
 pub struct MainConfig {
     pub clan_ajax_url: String,
     pub clan_ajax_site_key: String,
@@ -76,7 +76,7 @@ pub struct MainConfig {
 }
 
 /// DB Config struct
-#[derive(Debug, RustcDecodable)]
+#[derive(Debug, Deserialize)]
 pub struct DBConfig {
     pub user: String,
     pub password: String,
@@ -106,11 +106,9 @@ pub fn init_config() -> Config {
 }
 
 /// Parse input toml to config struct
-fn parse_config(input: String) -> Result<Config, ConfigError> {
-    match decode_str(&input) {
-        None => Err(ConfigError::ParseError),
-        Some(dconfig) => Ok(dconfig),
-    }
+fn parse_config(input: String) -> Result<Config, Error> {
+    let a = from_str(&input)?;
+    Ok(a)
 }
 
 /// Read config from file.

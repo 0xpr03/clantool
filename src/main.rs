@@ -25,9 +25,11 @@ extern crate quick_error;
 extern crate mysql;
 extern crate regex;
 extern crate chrono;
-extern crate rustc_serialize;
 extern crate toml;
 extern crate timer;
+#[macro_use]
+extern crate serde_derive;
+extern crate serde;
 
 mod http;
 mod error;
@@ -44,16 +46,12 @@ use std::io::Write;
 
 use std::sync::Arc;
 
-use chrono::naive::datetime::NaiveDateTime;
-use chrono::offset::fixed::FixedOffset;
-use chrono::naive::time::NaiveTime;
-use chrono::offset::local::Local;
-use chrono::duration::Duration;
-use chrono::datetime::DateTime;
-use chrono::Offset;
-use chrono::TimeZone;
 
-use mysql::conn::pool::Pool;
+use chrono::naive::NaiveTime;
+use chrono::offset::Local;
+use chrono::Timelike;
+
+use mysql::Pool;
 
 use error::Error;
 
@@ -93,33 +91,33 @@ fn main() {
 
 /// Initialize timed task
 fn run_timer<'a>(pool: Arc<Pool>, config: Arc<Config>, timer: &'a timer::Timer) {
-    let mut date_time = Local::now(); // get current datetime
-    let target_time = match NaiveTime::parse_from_str(&config.main.time, "%H:%M") {
+    let date_time = Local::now(); // get current datetime
+    let today = Local::today();
+    let target_naive_time = match NaiveTime::parse_from_str(&config.main.time, "%H:%M") {
         Ok(v) => v,
         Err(e) => {error!("Unable to parse config time!: {}",e); panic!();}
     };
 	
-	// get retry intervall
-	let retry_time = match NaiveTime::parse_from_str(&config.main.retry_interval, "%H:%M") {
+	// get retry time
+	let retry_time: NaiveTime = match NaiveTime::parse_from_str(&config.main.retry_interval, "%H:%M") {
 		Ok(v) => v,
 		Err(e) => {error!("Unable to parse config retry time!: {}",e); panic!();}
 	};
-	// little hack to parse it via NaiveTime but get a Duration
-	let retry_duration = retry_time - NaiveTime::from_hms(0,0,0);
-	let retry_duration = match retry_duration.to_std() {
-		Ok(v) => v,
-		Err(e) => {error!("Unable to convert retry_interval! {}",e); panic!();}
-	};
 	
-    trace!("Parsed time: {}",target_time);
-    if target_time < date_time.time() {
-		debug!("Target time is tinier then current time");
-        date_time = date_time.checked_add(Duration::hours(INTERVALL_H)).unwrap();
+    let schedule_time;
+    trace!("Parsed time: {}",target_naive_time);
+    if target_naive_time < date_time.time() {
+        debug!("Target time is tinier then current time");
+        // create from chrono::Duration, convert to std::time::Duration to add
+        let c_duration = chrono::Duration::hours(INTERVALL_H);
+        let tomorrow = today.checked_add_signed(c_duration).unwrap();
+        schedule_time = tomorrow.and_time(target_naive_time).unwrap();
+    } else {
+        schedule_time = today.and_time(target_naive_time).unwrap();
     }
-    date_time = date_time.checked_add(target_time - date_time.time()).unwrap();
-    info!("First execution will be on {}",date_time);
+    info!("First execution will be on {}",schedule_time);
     
-	let a = timer.schedule(date_time,Some(chrono::Duration::hours(INTERVALL_H)), move || {
+	let a = timer.schedule(schedule_time,Some(chrono::Duration::hours(INTERVALL_H)), move || {
         trace!("performing crawler");
 		let local_pool = &*pool;
 		let local_config = &*config;
@@ -131,11 +129,11 @@ fn run_timer<'a>(pool: Arc<Pool>, config: Arc<Config>, timer: &'a timer::Timer) 
 					if x == local_config.main.retries {
 						warn!("No dataset for this schedule, all retries failed!");
 					}else{
-						std::thread::sleep(retry_duration);
-					}
-				}
-			}
-		}
+                    std::thread::sleep(std::time::Duration::from_secs(retry_time.num_seconds_from_midnight().into()));
+                    }
+                }
+            }
+        }
     });
     a.ignore();
 }
@@ -230,7 +228,19 @@ pub struct Member {
 
 #[cfg(test)]
 mod tests {
+    
+    use chrono::naive::NaiveTime;
+    use chrono::Local;
+    
     #[test]
-    fn it_works() {
+    fn test_chrono() {
+        let date = Local::today();
+        let parsed_time = NaiveTime::parse_from_str("12:00","%H:%M").unwrap();
+        let parsed_time_2 = NaiveTime::parse_from_str("12:01","%H:%M").unwrap();
+        let datetime_1 = date.and_time(parsed_time).unwrap();
+        let datetime_2 = date.and_time(parsed_time_2).unwrap();
+        //assert_eq!(datetime_1.cmp(datetime_2),Ordering::Less);
+        assert_eq!(parsed_time_2 > parsed_time,true);
+        assert_eq!(datetime_2 > datetime_1,true);
     }
 }

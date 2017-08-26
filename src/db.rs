@@ -13,9 +13,8 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-use mysql::conn::pool::{PooledConn,Pool};
-use mysql::conn::{Opts, OptsBuilder};
-use chrono::naive::datetime::NaiveDateTime;
+use mysql::{Opts, OptsBuilder,Pool,PooledConn};
+use chrono::naive::NaiveDateTime;
 
 use error::Error;
 
@@ -31,6 +30,7 @@ pub fn new(address: String, port: u16, user: String, password: String, db: Strin
     builder.ip_or_hostname(Some(address))
     .db_name(Some(db))
     .tcp_port(port)
+    .prefer_socket(false)
     .user(Some(user))
     .pass(Some(password));
     let opts: Opts = builder.into();
@@ -48,7 +48,7 @@ pub fn insert_members(conn: &mut PooledConn, members: &Vec<Member>, timestamp: &
         }
     }
     {
-        let mut stmt = try!(conn.prepare("INSERT IGNORE INTO `member_names` (`id`,`name`,`date`,`updated`) VALUES (?,?,?)"));
+        let mut stmt = try!(conn.prepare("INSERT IGNORE INTO `member_names` (`id`,`name`,`date`,`updated`) VALUES (?,?,?,?)"));
         for member in members {
             try!(stmt.execute((&member.id,&member.name,timestamp,timestamp)));
         }
@@ -72,11 +72,11 @@ pub fn insert_clan_update(conn: &mut PooledConn,clan: &Clan, timestamp: &NaiveDa
 #[cfg(test)]
 mod test {
     use super::*;
-    use chrono::naive::datetime::NaiveDateTime;
-    use chrono::offset::local::Local;
-    use chrono::duration::Duration;
+    use chrono::naive::NaiveDateTime;
+    use chrono::offset::Local;
+    use chrono::Duration;
     
-    use mysql::conn::pool::{PooledConn,Pool};
+    use mysql::{PooledConn,Pool};
     
     use error::Error;
     use Member;
@@ -85,8 +85,9 @@ mod test {
     use regex;
     
     const TEST_USER: &'static str = "root";
-    const TEST_PASSWORD: &'static str = "";
+    const TEST_PASSWORD: &'static str = "root";
     const TEST_DB: &'static str = "test";
+    const TEST_PORT: u16 = 3306;
     
     /// Get database setup sql
     /// Returns a vector of table setup sql
@@ -134,7 +135,7 @@ mod test {
     
     /// Helper method to connect to the db
     fn connect_db() -> Pool {
-        new("localhost".into(), 3306,TEST_USER.into(),TEST_PASSWORD.into(),TEST_DB.into()).unwrap()
+        new("localhost".into(), TEST_PORT,TEST_USER.into(),TEST_PASSWORD.into(),TEST_DB.into()).unwrap()
     }
     
     /// Helper method to setup a db connection
@@ -188,7 +189,7 @@ mod test {
         let (_,mut conn) = setup_db();
         let members: Vec<Member> = (0..5).map(|x| create_member(&format!("tester {}",x),x,500,1)).collect();
         insert_members(&mut conn,&members,&time).unwrap();
-        time = time.checked_add(Duration::seconds(1)).unwrap();
+        time = time.checked_add_signed(Duration::seconds(1)).unwrap();
         let members_2: Vec<Member> = (0..5).map(|x| create_member(&format!("tester {}",x),x,500,1)).collect();
         insert_members(&mut conn,&members_2,&time).unwrap();
     }

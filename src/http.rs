@@ -18,7 +18,7 @@ use std::io::Read;
 
 use flate2::read::GzDecoder;
 
-use reqwest::header::{Headers,Pragma,Referer,Location,AcceptEncoding,Connection,ConnectionOption,AcceptCharset,Accept,Encoding,UserAgent,ContentEncoding,qitem,QualityItem,Charset,Quality};
+use reqwest::header::{Headers,Pragma,Referer,Location,AcceptEncoding,Connection,ConnectionOption,AcceptCharset,Accept,Encoding,UserAgent,ContentEncoding,qitem,QualityItem,Charset,q};
 
 use USER_AGENT;
 use REFERER;
@@ -35,11 +35,10 @@ pub enum HeaderType {
 pub fn get(url: &str, htype: HeaderType) -> Result<String,Error>{
     trace!("Starting downloading {}",url);
     let client = try!(Client::new());
-    let builder = client.get(url);
-    let mut res = try!(builder.headers(header(htype)).send());
+    let mut builder = client.get(url)?;
+    let mut res = builder.headers(header(htype)).send()?;
     debug!("Response header: {:?}",res.headers());
     debug!("Response status: {:?}",res.status());
-    debug!("Response http version: {:?}",res.version());
     debug!("Final URL: {:?}",res.headers().get::<Location>());
     trace!("DEV header: {:?}",res.headers().get::<ContentEncoding>());
     let mut body = String::new();
@@ -72,7 +71,7 @@ fn header(htype: HeaderType) -> Headers {
         ])
     );
     
-    headers.set(Referer(REFERER.to_owned()));
+    headers.set(Referer::new(REFERER));
     
     headers.set(Pragma::NoCache);
 
@@ -80,8 +79,8 @@ fn header(htype: HeaderType) -> Headers {
         HeaderType::Html => {
             headers.set(
                 AcceptCharset(vec![
-                    QualityItem::new(Charset::Us_Ascii, Quality(100)),
-                    QualityItem::new(Charset::Ext("utf-8".to_owned()), Quality(900)),
+                    QualityItem::new(Charset::Us_Ascii, q(0.100)),
+                    QualityItem::new(Charset::Ext("utf-8".to_owned()), q(0.900)),
                 ])
             );
             
@@ -89,7 +88,7 @@ fn header(htype: HeaderType) -> Headers {
                 Accept(vec![
                     qitem("text/html".parse().unwrap()),
                     qitem("application/xhtml+xml".parse().unwrap()),
-                    qitem("application/xml;q=0.9,*/*;q=0.8".parse().unwrap()),
+                    qitem("application/xml;q=0.9;q=0.8".parse().unwrap()),
                 ])
             );
         },
@@ -107,7 +106,7 @@ fn header(htype: HeaderType) -> Headers {
             vec![(ConnectionOption::Close)]
         )
     );
-    headers.set(UserAgent(USER_AGENT.to_owned()));
+    headers.set(UserAgent::new(USER_AGENT.to_owned()));
     
     trace!("Generated headers: {}",headers);
     headers

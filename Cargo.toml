@@ -11,20 +11,23 @@ name = "clantool"
 
 [dependencies]
 lazy_static = ">= 0.1.15"
-toml = ">= 0.2.1"
-rustc-serialize = ">= 0.3.22"
-log = ">= 0.3.6"
-log4rs = ">= 0.5.2"
-timer = ">= 0.1.6"
-chrono = ">= 0.2.25"
-reqwest = ">= 0.3.0"
-json = ">= 0.11.5"
-flate2 = ">= 0.2.17"
-quick-error = ">= 1.1.0"
+toml = ">= 0.4.5"
+serde = "*"
+serde_derive = "*"
+log = ">= 0.3.8"
+log4rs = ">= 0.7.0"
+chrono = ">= 0.4.0"
+reqwest = ">= 0.7.3"
+json = ">= 0.11.9"
+flate2 = ">= 0.2.19"
+quick-error = ">= 1.2.0"
+
+[dependencies.timer]
+version = "^ 0.2"
+git = "https://github.com/0xpr03/timer.rs"
 
 [dependencies.mysql]
-version = ">= 9.0.1"
-default-features = false
+version = ">= 12.0.2"
 
 [dependencies.regex]
 version = ">= 0.2.1"

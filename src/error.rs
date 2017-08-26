@@ -20,10 +20,17 @@ use mysql;
 use log4rs;
 use regex;
 use std;
+use toml;
 
 quick_error! {
     #[derive(Debug)]
     pub enum Error {
+        Toml(err: toml::de::Error) {
+            from()
+            description("toml error")
+            display("toml error: {}",err)
+            cause(err)
+        }
         Io(err: io::Error) {
             from()
             description("io error")
