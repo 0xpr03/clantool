@@ -97,13 +97,13 @@ fn run_timer<'a>(pool: Arc<Pool>, config: Arc<Config>, timer: &'a timer::Timer) 
         Ok(v) => v,
         Err(e) => {error!("Unable to parse config time!: {}",e); panic!();}
     };
-	
-	// get retry time
-	let retry_time: NaiveTime = match NaiveTime::parse_from_str(&config.main.retry_interval, "%H:%M") {
-		Ok(v) => v,
-		Err(e) => {error!("Unable to parse config retry time!: {}",e); panic!();}
-	};
-	
+    
+    // get retry time
+    let retry_time: NaiveTime = match NaiveTime::parse_from_str(&config.main.retry_interval, "%H:%M") {
+        Ok(v) => v,
+        Err(e) => {error!("Unable to parse config retry time!: {}",e); panic!();}
+    };
+    
     let schedule_time;
     trace!("Parsed time: {}",target_naive_time);
     if target_naive_time < date_time.time() {
@@ -117,18 +117,18 @@ fn run_timer<'a>(pool: Arc<Pool>, config: Arc<Config>, timer: &'a timer::Timer) 
     }
     info!("First execution will be on {}",schedule_time);
     
-	let a = timer.schedule(schedule_time,Some(chrono::Duration::hours(INTERVALL_H)), move || {
+    let a = timer.schedule(schedule_time,Some(chrono::Duration::hours(INTERVALL_H)), move || {
         trace!("performing crawler");
-		let local_pool = &*pool;
-		let local_config = &*config;
-		for x in 1..local_config.main.retries+1 {
-			match run_update(local_pool,local_config) {
-				Ok(_) => { debug!("Crawling successfull."); break;
-					},
-				Err(e) => { error!("Error at update: {}: {}",x,e);
-					if x == local_config.main.retries {
-						warn!("No dataset for this schedule, all retries failed!");
-					}else{
+        let local_pool = &*pool;
+        let local_config = &*config;
+        for x in 1..local_config.main.retries+1 {
+            match run_update(local_pool,local_config) {
+                Ok(_) => { debug!("Crawling successfull."); break;
+                    },
+                Err(e) => { error!("Error at update: {}: {}",x,e);
+                    if x == local_config.main.retries {
+                        warn!("No dataset for this schedule, all retries failed!");
+                    }else{
                     std::thread::sleep(std::time::Duration::from_secs(retry_time.num_seconds_from_midnight().into()));
                     }
                 }
