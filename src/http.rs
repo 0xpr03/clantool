@@ -86,9 +86,9 @@ fn header(htype: HeaderType) -> Headers {
             
             headers.set(
                 Accept(vec![
-                    qitem("text/html".parse().unwrap()),
+                    qitem("text/html;q=0.9".parse().unwrap()),
                     qitem("application/xhtml+xml".parse().unwrap()),
-                    qitem("application/xml;q=0.9;q=0.8".parse().unwrap()),
+                    qitem("application/xml;q=0.8".parse().unwrap()),
                 ])
             );
         },

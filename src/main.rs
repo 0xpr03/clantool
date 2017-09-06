@@ -47,7 +47,7 @@ use std::io::Write;
 use std::sync::Arc;
 
 
-use chrono::naive::NaiveTime;
+use chrono::naive::{NaiveTime,NaiveDateTime};
 use chrono::offset::Local;
 use chrono::Timelike;
 
@@ -57,7 +57,7 @@ use error::Error;
 
 use config::Config;
 
-const USER_AGENT: &'static str = "Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:49.0) Gecko/20100101 Firefox/49.0";
+const USER_AGENT: &'static str = "Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:55.0) Gecko/20100101 Firefox/55.0";
 const REFERER: &'static str = "http://crossfire.z8games.com/";
 const CONFIG_PATH: &'static str = "config/config.toml";
 const LOG_PATH: &'static str = "config/log.yml";
@@ -121,16 +121,31 @@ fn run_timer<'a>(pool: Arc<Pool>, config: Arc<Config>, timer: &'a timer::Timer) 
         trace!("performing crawler");
         let local_pool = &*pool;
         let local_config = &*config;
+        let mut member_success  = false;
+        let mut clan_success = false;
+        
         for x in 1..local_config.main.retries+1 {
-            match run_update(local_pool,local_config) {
-                Ok(_) => { debug!("Crawling successfull."); break;
+            let time = Local::now().naive_local();
+            
+            match run_update_member(local_pool,local_config, &time) {
+                Ok(_) => { debug!("Member crawling successfull."); member_success = true;
                     },
-                Err(e) => { error!("Error at update: {}: {}",x,e);
-                    if x == local_config.main.retries {
+                Err(e) => error!("Error at member update: {}: {}",x,e),
+            }
+            
+            match run_update_clan(local_pool, local_config, &time) {
+                Ok(_) => { debug!("Clan crawling successfull."); clan_success = true;
+                    },
+                Err(e) => error!("Error at clan update: {}: {}",x,e),
+            }
+            
+            if member_success && clan_success {
+                break;
+            } else {
+                if x == local_config.main.retries {
                         warn!("No dataset for this schedule, all retries failed!");
-                    }else{
+                }else{
                     std::thread::sleep(std::time::Duration::from_secs(retry_time.num_seconds_from_midnight().into()));
-                    }
                 }
             }
         }
@@ -152,13 +167,9 @@ fn get_member_url(site: &u8, config: &Config) -> String {
     output
 }
 
-/// Run crawl + db update
-fn run_update(pool: &Pool, config: &Config) -> Result<(),Error> {
-    let time = Local::now().naive_local();
-    let mut conn = try!(pool.get_conn());
-    let raw_http_clan = try!(http::get(&config.main.clan_url,HeaderType::Html));
-    let clan = try!(parser::parse_clan(&raw_http_clan));
-    
+/// run member data crawl & update
+fn run_update_member(pool: &Pool, config: &Config, time: &NaiveDateTime) -> Result<(),Error> {
+    trace!("run_update_member");
     let mut site = 0;
     let mut members = Vec::new();
     let mut to_receive = 100;
@@ -175,8 +186,16 @@ fn run_update(pool: &Pool, config: &Config) -> Result<(),Error> {
         trace!("fetched site {}",site);
     }
     debug!("Fetched {} member entries",members.len());
-    try!(db::insert_members(&mut conn,&members,&time));
-    try!(db::insert_clan_update(&mut conn,&clan,&time));
+    try!(db::insert_members(&mut pool.get_conn()?,&members,time));
+    Ok(())
+}
+
+/// run clan crawl & update
+fn run_update_clan(pool: &Pool, config: &Config, time: &NaiveDateTime) -> Result<(),Error> {
+    trace!("run_update_clan");
+    let raw_http_clan = try!(http::get(&config.main.clan_url,HeaderType::Html));
+    let clan = try!(parser::parse_clan(&raw_http_clan));
+    try!(db::insert_clan_update(&mut pool.get_conn()?,&clan,&time));
     Ok(())
 }
 
