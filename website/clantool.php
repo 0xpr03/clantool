@@ -10,8 +10,13 @@ define('C_TOTAL_NAMES', 'clantool_names');
 define('C_DIFFERENCE', 'clantool_c_overview');
 define('C_DATE1', 'clantool_c_date1');
 define('C_DATE2', 'clantool_c_date2');
+
 function getContent() {
 	getCTTemplate();
+}
+
+function increaseSite($site) {
+    \main\getDB()->increaseSiteStats('clantool_' . $site, $_SESSION[\main\C_USER][\main\C_U_UID]);
 }
 
 function getCTTemplate() {
@@ -98,6 +103,7 @@ function getCTTemplate() {
 			});
 		});
 		</script>
+		Copyright Aron Heinecke 2017 <a href="https://github.com/0xpr03/clantool">Sourcecode</a>
 	</div>
 <?php }
 
@@ -146,29 +152,35 @@ function getAjax(){
 			$_SESSION[C_DATE1] = $date1;
 			$_SESSION[C_DATE2] = $date2;
 			
+			
 			switch($_REQUEST['type']) {
 			case 'difference-json':
+                increaseSite('difference');
 				if($_SESSION[C_DIFFERENCE] === null){
 					$_SESSION[C_DIFFERENCE] = json_encode($clanDB->getDifference($date1,$date2));
 				}
 				echo $_SESSION[C_DIFFERENCE];
 				break;
 			case 'overview-json':
+                increaseSite('overview');
 				echo json_encode($clanDB->getOverview($date1,$date2));
 				break;
 			case 'member-json':
+                increaseSite('member');
 				if(isset($_REQUEST['memberID'])){
 					$_SESSION[MEMBER_ID] = $_REQUEST['memberID'];
 				}
 				echo json_encode($clanDB->getMemberChange($date1,$date2,$_SESSION[MEMBER_ID]));
 				break;
 			case 'search-json':
+                increaseSite('search');
 				if(isset($_REQUEST['key'])){
 					$_SESSION[SEARCH_KEY] = $_REQUEST['key'];
 				}
 				echo json_encode($clanDB->searchForMemberName($_SESSION[SEARCH_KEY]));
 				break;
 			case 'misc-json':
+                increaseSite('misc');
 				$res = array(
 				'left' => $clanDB->getMemberDifference($date1,$date2,true),
 				'joined' => $clanDB->getMemberDifference($date1,$date2,false),
