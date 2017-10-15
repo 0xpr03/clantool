@@ -137,7 +137,7 @@ port = 3306
 ip = "127.0.0.1"
 
 [main]
-clan_ajax_url = "http://crossfire.z8games.com/rest/clanmembers.json?clanID=68910&%EndRow&page=%Page&perPage=10&rankType=user&startrow=%Row"
+clan_ajax_url = "http://crossfire.z8games.com/rest/clanmembers.json?clanID=68910&page=%Page&perPage=10&rankType=user&startrow=%StartRow&endrow=%EndRow"
 clan_ajax_site_key = "%Page"
 clan_ajax_exptected_per_site = 10
 clan_ajax_start_row_key = "%StartRow"

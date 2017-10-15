@@ -110,7 +110,7 @@ fn main() {
             info!("Performing force crawl");
             let local_pool = &*pool;
             let local_config = &*config;
-            let rt_time = NaiveTime::from_num_seconds_from_midnight(1,0);
+            let rt_time = NaiveTime::from_num_seconds_from_midnight(20,0);
             debug!("Result: {:?}",run_update(local_pool,local_config, &rt_time));
         },
         _ =>  {
