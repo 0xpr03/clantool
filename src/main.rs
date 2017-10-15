@@ -30,6 +30,7 @@ extern crate timer;
 #[macro_use]
 extern crate serde_derive;
 extern crate serde;
+extern crate clap;
 
 mod http;
 mod error;
@@ -57,6 +58,8 @@ use error::Error;
 
 use config::Config;
 
+use clap::{Arg,App,SubCommand};
+
 const USER_AGENT: &'static str = "Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:55.0) Gecko/20100101 Firefox/55.0";
 const REFERER: &'static str = "http://crossfire.z8games.com/";
 const CONFIG_PATH: &'static str = "config/config.toml";
@@ -68,7 +71,8 @@ fn main() {
         Err(e) => println!("Error on config initialization: {}",e),
         Ok(_) => println!("Initialized log")
     }
-    info!("Starting clan tools crawler v0.0.1");
+    info!("Clan tools crawler v0.2.0");
+        
     let config = Arc::new(config::init_config());
     let pool = match db::new(config.db.ip.clone(),
         config.db.port,
@@ -79,15 +83,64 @@ fn main() {
         Ok(v) => Arc::new(v)
     };
     let timer = timer::Timer::new();
-    run_timer(pool.clone(), config.clone(),&timer);
-    //let local_pool = &*pool;
-    //let local_config = &*config;
-    //debug!("Result: {:?}",run_update(local_pool,local_config));
     
-    loop {
-        std::thread::sleep(std::time::Duration::from_millis(1000));
+    let app = App::new("Clantool")
+                    .version("2.0")
+                    .author("Aron H. <aron.heinecke@t-online.de>")
+                    .about("Gathers statistics about CF-NA clans. Starts a daemon per default")
+                    .subcommand(SubCommand::with_name("fcrawl"))
+                        .about("force run crawl & exit")
+                    .subcommand(SubCommand::with_name("checkdb")
+                        .about("checks DB for missing entries or doubles and corrects those")
+                        .arg(Arg::with_name("simulate")
+                            .short("s")
+                            .help("simulation mode, leaves DB unchanged")))
+                    .get_matches();
+    trace!("{:?}",app);
+    
+    match app.subcommand() {
+        ("checkdb", Some(sub_m)) => {
+            info!("Performing check db");
+            match run_checkdb(pool,sub_m.is_present("simulate")) {
+                Ok(_) => {},
+                Err(e) => error!("Error at checkdb: {}",e)
+            }
+        },
+        ("fcrawl", _) => {
+            info!("Performing force crawl");
+            let local_pool = &*pool;
+            let local_config = &*config;
+            let rt_time = NaiveTime::from_num_seconds_from_midnight(1,0);
+            debug!("Result: {:?}",run_update(local_pool,local_config, &rt_time));
+        },
+        _ =>  {
+            info!("Entering daemon mode");
+            run_timer(pool.clone(), config.clone(),&timer);
+            loop {
+                std::thread::sleep(std::time::Duration::from_millis(1000));
+            }
+        }
     }
 }
+
+/// Check DB for missing entries
+fn run_checkdb(pool: Arc<Pool>, simulate: bool) -> Result<(),Error> {
+    let mut conn = pool.get_conn()?;
+    let missing_dates = db::get_missing_dates(&mut conn)?;
+    
+    if simulate {
+        info!("Simulation mode, discarding result");
+    } else {
+        db::insert_missing_dates(&mut conn)?;
+    }
+    
+    for date in missing_dates {
+        info!("Missing: {}",date);    
+    }
+    
+    Ok(())
+}
+
 
 /// Initialize timed task
 fn run_timer<'a>(pool: Arc<Pool>, config: Arc<Config>, timer: &'a timer::Timer) {
@@ -118,39 +171,54 @@ fn run_timer<'a>(pool: Arc<Pool>, config: Arc<Config>, timer: &'a timer::Timer) 
     info!("First execution will be on {}",schedule_time);
     
     let a = timer.schedule(schedule_time,Some(chrono::Duration::hours(INTERVALL_H)), move || {
-        trace!("performing crawler");
-        let local_pool = &*pool;
-        let local_config = &*config;
-        let mut member_success  = false;
-        let mut clan_success = false;
-        
-        for x in 1..local_config.main.retries+1 {
-            let time = Local::now().naive_local();
-            
-            match run_update_member(local_pool,local_config, &time) {
-                Ok(_) => { debug!("Member crawling successfull."); member_success = true;
-                    },
-                Err(e) => error!("Error at member update: {}: {}",x,e),
-            }
-            
-            match run_update_clan(local_pool, local_config, &time) {
-                Ok(_) => { debug!("Clan crawling successfull."); clan_success = true;
-                    },
-                Err(e) => error!("Error at clan update: {}: {}",x,e),
-            }
-            
-            if member_success && clan_success {
-                break;
-            } else {
-                if x == local_config.main.retries {
-                        warn!("No dataset for this schedule, all retries failed!");
-                }else{
-                    std::thread::sleep(std::time::Duration::from_secs(retry_time.num_seconds_from_midnight().into()));
-                }
-            }
-        }
+        run_update(&*pool, &*config, &retry_time);
     });
     a.ignore();
+}
+
+/// Performs a complete crawl
+fn run_update(pool: &Pool, config: &Config, retry_time: &NaiveTime) {
+    trace!("performing crawler");
+    
+    let mut member_success  = false;
+    let mut clan_success = false;
+    
+    for x in 1..config.main.retries+1 {
+        let time = Local::now().naive_local();
+        
+        match run_update_member(pool,config, &time) {
+            Ok(_) => { debug!("Member crawling successfull."); member_success = true;
+                },
+            Err(e) => error!("Error at member update: {}: {}",x,e),
+        }
+        
+        match run_update_clan(pool, config, &time) {
+            Ok(_) => { debug!("Clan crawling successfull."); clan_success = true;
+                },
+            Err(e) => error!("Error at clan update: {}: {}",x,e),
+        }
+        
+        if member_success && clan_success {
+            break;
+        } else {
+            if x == config.main.retries {
+                warn!("No dataset for this schedule, all retries failed!");
+                match write_missing(&time,pool) {
+                    Ok(_) => {},
+                    Err(e) => error!("Unable to write missing date! {}",e),
+                }    
+            }else{
+                std::thread::sleep(std::time::Duration::from_secs(retry_time.num_seconds_from_midnight().into()));
+            }
+        }
+    }
+}
+
+/// wrapper to write missing date
+/// allowing for error return
+fn write_missing(timestamp: &NaiveDateTime, pool: &Pool) -> Result<(),Error> {
+    db::insert_missing_entry(timestamp,&mut pool.get_conn()?)?;
+    Ok(())
 }
 
 /// get member url for ajax request

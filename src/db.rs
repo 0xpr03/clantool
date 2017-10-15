@@ -13,8 +13,9 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-use mysql::{Opts, OptsBuilder,Pool,PooledConn};
+use mysql::{from_row_opt,Row,Opts, OptsBuilder,Pool,PooledConn};
 use chrono::naive::NaiveDateTime;
+use chrono::naive::NaiveDate;
 
 use error::Error;
 
@@ -23,6 +24,7 @@ use Clan;
 
 const POOL_MIN_CONN: usize = 0; // minimum amount of running connection per pool
 const POOL_MAX_CONN: usize = 2; // maximum amount of running connections per pool
+const TABLE_MISSING_DATES: &'static str = "t_missingdates"; // temporary table used to store missing dates
 
 /// Create a new db pool with fixed min-max connections
 pub fn new(address: String, port: u16, user: String, password: String, db: String) -> Result<Pool,Error> {
@@ -67,6 +69,103 @@ pub fn insert_clan_update(conn: &mut PooledConn,clan: &Clan, timestamp: &NaiveDa
     let mut stmt = try!(conn.prepare("INSERT INTO `clan` (`date`,`wins`,`losses`,`draws`,`members`) VALUES (?,?,?,?,?)"));
     try!(stmt.execute((timestamp,clan.wins,clan.losses,clan.draws,clan.members)));
     Ok(())
+}
+
+/// Insert datetime into missing entry table
+pub fn insert_missing_entry(datetime: &NaiveDateTime,conn: &mut PooledConn) -> Result<(),Error> {
+    let mut stmt = conn.prepare("INSERT INTO `missing_entries` (`date`) VALUES (?)")?;
+    stmt.execute((datetime,))?;
+    Ok(())
+}
+
+/// Retrieves missing dates in the db
+/// for which no entri(es exist
+pub fn get_missing_dates(conn: &mut PooledConn) -> Result<Vec<NaiveDate>,Error> {
+    // create date lookup table
+    create_temp_date_table(conn,"t_dates")?;
+    create_temp_date_table(conn,TABLE_MISSING_DATES)?;
+    
+    let (min,max) = get_min_max_date(conn)?;
+    debug!("max:{} min:{}",max,min);
+    // {} required, stmt lives too long
+    {// create date lookup table
+        let mut stmt = conn.prepare("INSERT INTO `t_dates` (`date`) VALUES (?)")?;
+        let mut current = min.succ();
+        let mut i = 0;
+        while current != max {
+            stmt.execute((current,))?;
+            current = current.succ();
+            i += 1;
+        }
+        debug!("lookup table size: {}",i);
+    }
+    {// get missing dates not already stored
+        // t_dates left join (clan JOIN member) left join missing_entries
+        // where right = null
+        // using datetime as date, won't match otherwise
+        let mut stmt = conn.prepare(format!("
+        INSERT INTO `{}` (`date`)
+        SELECT t0.`date` FROM `t_dates` t0 
+        LEFT JOIN (
+            SELECT t2.date FROM `clan` t2 
+            JOIN `member` t3 ON DATE(t2.date) = DATE(t3.date)
+        ) as t1
+        ON t0.date = DATE(t1.date)
+        LEFT JOIN `missing_entries` t4
+            ON t0.date = DATE(t4.date)
+        WHERE t1.date IS NULL
+        AND t4.date IS NULL",TABLE_MISSING_DATES))?;
+        
+        stmt.execute(())?;
+    }
+    
+    let mut dates: Vec<NaiveDate> = Vec::new();
+    {// now retrieve missing dates for user information
+        let mut stmt = conn.prepare(format!(
+            "SELECT date FROM `{}`",TABLE_MISSING_DATES))?;
+        
+        for row in stmt.execute(())? {
+            dates.push(row?.take_opt("date").ok_or(Error::NoValue("date"))??);
+        }
+    }
+    Ok(dates)
+}
+
+/// Inserts TABLE_MISSING_DATES into `missing_entries`
+pub fn insert_missing_dates(conn: &mut PooledConn) -> Result<(),Error> {
+    let mut stmt = conn.prepare(format!("
+        INSERT INTO `missing_entries` (`date`)
+        SELECT `date` FROM `{}`",TABLE_MISSING_DATES))?;
+    
+    stmt.execute(())?;
+    Ok(())
+}
+
+/// Creates a temporary, single date column table with the specified name
+fn create_temp_date_table(conn: &mut PooledConn, tbl_name: &'static str) -> Result<(),Error> {
+    let mut stmt = conn.prepare(format!("CREATE TEMPORARY TABLE `{}` (
+                        `date` datetime NOT NULL PRIMARY KEY
+                        ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+                        ",tbl_name))?;
+    stmt.execute(())?;
+    Ok(())
+}
+
+/// Retrieves the oldest date in of `clan` & `member` combined
+/// Returns (min,max) dates as String
+fn get_min_max_date(conn: &mut PooledConn) -> Result<(NaiveDate,NaiveDate),Error> {
+    // full outer join to get all
+    let mut stmt = conn.prepare("SELECT MIN(`date`) as min, MAX(`date`) as max FROM (
+        SELECT t11.date FROM clan t11
+        LEFT JOIN member t12 ON t11.date = t12.date
+        UNION
+        SELECT t22.date FROM clan t21
+        RIGHT JOIN member t22 ON t21.date = t22.date
+    ) as T")?;
+    let mut result = stmt.execute(())?;
+    let row: Row = result.next().ok_or(Error::NoValue("empty result"))??;
+    let values = from_row_opt(row)?;
+    Ok(values)
 }
 
 #[cfg(test)]
@@ -192,6 +291,21 @@ mod test {
         time = time.checked_add_signed(Duration::seconds(1)).unwrap();
         let members_2: Vec<Member> = (0..5).map(|x| create_member(&format!("tester {}",x),x,500,1)).collect();
         insert_members(&mut conn,&members_2,&time).unwrap();
+    }
+    
+    /// Test temporary date lookup table creation
+    #[test]
+    fn create_temp_date_table_test() {
+        let (_,mut conn) = setup_db();
+        create_temp_date_table(&mut conn, TABLE_MISSING_DATES).unwrap();
+    }
+    
+    /// Test missing entry insertion
+    #[test]
+    fn insert_missing_entry_test() {
+        let time: NaiveDateTime = Local::now().naive_local();
+        let (_,mut conn) = setup_db();
+        insert_missing_entry(&time,&mut conn).unwrap();
     }
     
     /// Test clan insertion

@@ -71,11 +71,27 @@ quick_error! {
             display("mariadb error: {}",err)
             cause(err)
         }
+        RowParse(err: mysql::FromRowError) {
+            from()
+            description("row parse error")
+            display("RowParse: {}",err)
+            cause(err)
+        }
+        ValueParse(err: mysql::FromValueError) {
+            from()
+            description("row value parse error")
+            display("ValueParse: {}",err)
+            cause(err)
+        }
         Log(err: log4rs::Error) {
             from()
             description("log4rs error")
             display("log4rs error: {}",err)
             cause(err)
+        }
+        NoValue(descr: &'static str) {
+            description(descr)
+            display("no value {}",descr)
         }
         Other(descr: &'static str) {
             description(descr)

@@ -34,3 +34,7 @@ CREATE TABLE `member_names` (
  KEY `name` (`name`),
  KEY `updated` (`updated`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+CREATE TABLE `missing_entries` (
+ `date` datetime NOT NULL PRIMARY KEY
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;

@@ -15,3 +15,11 @@ UPDATE `member_names` SET `updated` = `date`;
 ALTER TABLE `member_names` ADD KEY `updated` (`updated`);
 ALTER TABLE `member_names` DROP KEY `date`;
 ALTER TABLE `member_names` MODIFY `updated` datetime NOT NULL;
+
+/*
+ * Execute on upgrade from 0.1.2
+ * please also run clantool --verify
+ */
+CREATE TABLE `missing_entries` (
+ `date` datetime NOT NULL PRIMARY KEY
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;

@@ -1,6 +1,6 @@
 [package]
 name = "clantool"
-version = "0.1.2"
+version = "0.2.0"
 authors = ["Aron Heinecke"]
 
 #[profile.release]
@@ -21,10 +21,10 @@ reqwest = ">= 0.7.3"
 json = ">= 0.11.9"
 flate2 = ">= 0.2.19"
 quick-error = ">= 1.2.0"
+clap = "2.26.2"
 
 [dependencies.timer]
 version = "^ 0.2"
-git = "https://github.com/0xpr03/timer.rs"
 
 [dependencies.mysql]
 version = ">= 12.0.2"
