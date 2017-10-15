@@ -18,7 +18,7 @@ ALTER TABLE `member_names` MODIFY `updated` datetime NOT NULL;
 
 /*
  * Execute on upgrade from 0.1.2
- * please also run clantool --verify
+ * please also run clantool checkdb
  */
 CREATE TABLE `missing_entries` (
  `date` datetime NOT NULL PRIMARY KEY
