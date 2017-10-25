@@ -47,20 +47,32 @@ function getCTTemplate() {
 		$_SESSION[C_DIFFERENCE] = 'a';
 	}
 	
-	?>
-	<div class="container">
-		<h2>Clantool</h2>Dataset of <?=$_SESSION[C_TOTAL_ROWS]?> entries<br>
-		<div class="container-fluid">
-			<ul class="nav nav-tabs" id="maintabs">
-				<li role="presentation" class="active"><a href="#overview" data-url="index.php?site=clantool&amp;ajaxCont=site&amp;ajaxsite=overview">Allgemein</a></li>
-				<li role="presentation"><a href="#difference" data-url="index.php?site=clantool&amp;ajaxCont=site&amp;ajaxsite=difference">Differenz</a></li>
-				<li role="presentation"><a href="#member" data-url="index.php?site=clantool&amp;ajaxCont=site&amp;ajaxsite=member">Member</a></li>
-				<li role="presentation"><a href="#search" data-url="index.php?site=clantool&amp;ajaxCont=site&amp;ajaxsite=search">Search</a></li>
-				<li role="presentation"><a href="#misc" data-url="index.php?site=clantool&amp;ajaxCont=site&amp;ajaxsite=misc">Misc</a></li>
-			</ul>
-			<div class="tab-content">
-				<div role="tabpanel" class="tab-pane active" id="overview"></div>
-				<div role="tabpanel" class="tab-pane" id="difference"></div>
+    ?>
+    <div class="container">
+        <h2>Clantool</h2>Dataset of <?=$_SESSION[C_TOTAL_ROWS]?> entries<br>
+        <div class="missing_entries"></div>
+        <!-- <div class="alert alert-warning" role="alert">Keine Datensätze für den 06.09.2017!</div> -->
+        <div class="container-fluid" id="tabdiv">
+            <ul class="nav nav-tabs" role="tablist" id="maintabs">
+                <li role="presentation">
+                    <a href="#overview" id="overview-a" aria-controls="overview" data-url="index.php?site=clantool&amp;ajaxCont=site&amp;ajaxsite=overview" data-toggle="tab">Allgemein</a>
+                </li>
+                <li role="presentation">
+                    <a href="#difference" id="difference-a" aria-controls="difference" data-url="index.php?site=clantool&amp;ajaxCont=site&amp;ajaxsite=difference" data-toggle="tab">Differenz</a>
+                </li>
+                <li role="presentation">
+                    <a href="#member" id="member-a" aria-controls="member" data-url="index.php?site=clantool&amp;ajaxCont=site&amp;ajaxsite=member" data-toggle="tab">Member</a>
+                </li>
+                <li role="presentation">
+                    <a href="#search" id="search-a" aria-controls="search" data-url="index.php?site=clantool&amp;ajaxCont=site&amp;ajaxsite=search" data-toggle="tab">Search</a>
+                </li>
+                <li role="presentation">
+                    <a href="#misc" id="misc-a" aria-controls="misc" data-url="index.php?site=clantool&amp;ajaxCont=site&amp;ajaxsite=misc" data-toggle="tab">Misc</a>
+                </li>
+            </ul>
+            <div class="tab-content">
+                <div role="tabpanel" class="tab-pane" id="overview"></div>
+                <div role="tabpanel" class="tab-pane" id="difference"></div>
 				<div role="tabpanel" class="tab-pane" id="member"></div>
 				<div role="tabpanel" class="tab-pane" id="search"></div>
 				<div role="tabpanel" class="tab-pane" id="misc"></div>
@@ -76,35 +88,66 @@ function getCTTemplate() {
 		const EXP_MAX_CP = 5000;
 		const EXP_REQUIRED_CP = 500;
 		const CP_MAX = 10;
-		var charts = [];
-		function cleanupCharts(){
-			var length = charts.length;
-			for (var i = 0; i < length; i++ ){
-				charts[i].destroy();
-			}
-			charts = [];
-		}
-		$( document ).ready(function() {
-			$( "#maintabs a" ).click( function (e) {
-				e.preventDefault();
-
-				var url = $(this).attr("data-url");
-				var href = this.hash;
-				var pane = $(this);
-
-				$(href).load(url, function (result){
-					pane.tab('show');
-					runAfterTab();
-				});
-			});
-			$('#overview').load($('#maintabs .active a').attr("data-url"),function(result){
-				  $('.active a').tab('show');
-				  runAfterTab();
-			});
-		});
-		</script>
-		Copyright Aron Heinecke 2017 <a href="https://github.com/0xpr03/clantool">Sourcecode</a>
-	</div>
+        const TAB_MEMBER = "#member";
+        var charts = [];
+        var tabChange = false;
+        var currentTab;
+        var idToShow;
+        function cleanupCharts(){
+            var length = charts.length;
+            for (var i = 0; i < length; i++ ){
+                charts[i].destroy();
+            }
+            charts = [];
+        }
+        
+        function loadTab(hash) { // general load function for tabs
+            if(hash == currentTab) {
+                return;
+            }
+            var tab = '#maintabs '+hash+'-a';
+            var url = $(tab).attr("data-url");
+            window.location.hash = hash;
+            var pane = $(tab);
+            
+            tabChange = true;
+            currentTab = hash;
+            $(hash).empty();
+            $(hash).load(url, function (result){
+                pane.tab('show');
+                runAfterTab();
+            });
+        }
+        
+        function showMemberDetails(id) {
+            idToShow = id;
+            loadTab(TAB_MEMBER);
+        }
+        
+        $( document ).ready(function() {
+            $( "#maintabs a" ).click( function (e) { // click on tab
+                e.preventDefault();
+                loadTab(this.hash);
+            });
+            var startTab = location.hash; // start tab
+            if (location.hash == '') {
+                startTab = '#overview';
+            }
+            loadTab(startTab);
+            
+            if("onhashchange" in window) { // back button support
+                $(window).bind( 'hashchange', function(e) {
+                    if(!tabChange && window.location.hash != ''){
+                        tabChange = true;
+                        loadTab(window.location.hash);
+                    }
+                    tabChange = false;
+                });
+            }
+        });
+        </script>
+        Copyright Aron Heinecke 2017 <a href="https://github.com/0xpr03/clantool">Sourcecode</a>
+    </div>
 <?php }
 
 //@Override
@@ -394,8 +437,8 @@ function getDifferenceContent() { ?>
 						str += 'class="success"';
 					}
 					str += '>';
-					str += '<td>' + row.name + '</td>';
-					str += '<td><a href="http://crossfire.z8games.com/profile/' + row.id + '">'
+                    str += '<td><a target="_blank" href="http://crossfire.z8games.com/profile/'+row.id+'">' + row.name + '</a></td>';
+                    str += '<td><a onclick="showMemberDetails('+row.id+')">'+row.id+'</a></td>';
 							+ row.id + '</a></td>';
 					str += '<td>' + row.date1 + '</td>';
 					str += '<td>' + row.exp1 + '</td>';
@@ -460,6 +503,10 @@ function getMemberContent() { ?>
 	<div id="member-ajax">
 		<script>
 		function runAfterTab() {
+            if(idToShow != null ) {
+                $('#memberID').val(idToShow);
+                idToShow = null;
+            }
 			showMemberChart();
 			$('#member-info').popover({ trigger: "hover",container: 'body' });
 			$('#memberID').focus();
@@ -640,12 +687,10 @@ function getMSearchContent() {	?>
 			var str = '';
 			$.each(data,function(i,row){
 				str += '<tr>';
-				str += '<td>' + row.name + '</td>';
-				str += '<td><a href="http://crossfire.z8games.com/profile/' + row.id + '">'
-								+ row.id + '</a></td>';
-				str += '<td>' + row.date + '</td>';
-// 				str += '<td>'++'</td>';
-				str += '</tr>';
+               str += '<td><a target="_blank" href="http://crossfire.z8games.com/profile/'+row.id+'">' + row.name + '</a></td>';
+                str += '<td>'+row.id+'</td>';
+                str += '<td>' + row.date + '</td>';
+                str += '</tr>';
 			});
 			$('#search-table tbody').html(str);
 			$(".active .table").trigger("update");
@@ -717,8 +762,8 @@ function getMiscContent() {	?>
 			var str = '';
 			$.each(data,function(i,row){
 				str += '<tr>';
-				str += '<td>' + row.name + '</td>';
-				str += '<td><a href="http://crossfire.z8games.com/profile/' + row.id + '">'
+				str += '<td><a target="_blank" href="http://crossfire.z8games.com/profile/'+row.id+'">' + row.name + '</a></td>';
+                str += '<td><a onclick="showMemberDetails('+row.id+')">'+row.id+'</a></td>';
 								+ row.id + '</a></td>';
 				str += '</tr>';
 			});
