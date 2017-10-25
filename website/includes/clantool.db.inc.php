@@ -366,6 +366,39 @@ class clanDB extends dbException {
 		}
 	}
 
+    /**
+     * Get dates for selection where there are noted missing dates
+     * @param $date1 first date
+     * @param $date2 second date
+     * @return array of missing dates
+     */
+    public function getMissingEntries($date1,$date2) {
+        if ($query = $this->db->prepare ( 'SELECT DATE(`date`) as date from `missing_entries` WHERE date BETWEEN ? AND ?')) { // Y-m-d G:i:s Y-m-d h:i:s
+            $query->bind_param ( 'ss', $date1, $date2 );
+            $query->execute();
+            $result = $query->get_result ();
+            
+            if (! $result) {
+                throw new dbException ( $this->db->error, 500 );
+            }
+            
+            if ($result->num_rows == 0) {
+                $resultset = null;
+            } else {
+                $resultset = array ();
+                while ( $row = $result->fetch_assoc () ) {
+                    $resultset[] = $row['date'];
+                }
+            }
+            $result->close();
+            
+            return $resultset;
+        } else {
+            throw new dbException ( '500' );
+        }
+        
+    }
+
 
 	public function __destruct() {
 		$this->db->close ();

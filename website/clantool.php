@@ -163,6 +163,10 @@ function getAjax(){
 				break;
 			case 'overview-json':
                 increaseSite('overview');
+                $result = array(
+                'graph' => $clanDB->getOverview($date1,$date2),
+                'missing' => $clanDB->getMissingEntries($date1,$date2),
+                );
 				echo json_encode($clanDB->getOverview($date1,$date2));
 				break;
 			case 'member-json':
@@ -223,10 +227,22 @@ function getOverviewContent() { ?>
 					'dateTo' : $('#overDate2').val(),
 				}
 			}).done(function(data){
-				drawOverviewChart(data);
-			}).fail(function(data){
-				console.log(data);
-			});
+                drawOverviewChart(data.graph);
+                drawMissingOverviewEntries(data.missing);
+            }).fail(function(data){
+                console.log(data);
+            });
+        }
+        function drawMissingOverviewEntries(data) {
+            if(data == null) {
+                $('#missing-overview').empty();
+            } else {
+                var missing_str = "<b>Missing data for:</b><br>";
+                $.each(data,function(i,row){
+                    missing_str += row + '<br>';
+                });
+                $('#missing-overview').html(missing_str);
+            }
 		}
 		function drawOverviewChart(data) {
 			cleanupCharts();
@@ -321,6 +337,7 @@ function getOverviewContent() { ?>
 			</div>
 		</div>
 		<canvas id="chart-overview" width="auto" height="auto"></canvas>
+        <div id="missing-overview" width="auto" height="auto"></div>
 	</div>
 	<?php
 }
