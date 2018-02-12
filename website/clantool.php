@@ -10,6 +10,8 @@ define('C_TOTAL_NAMES', 'clantool_names');
 define('C_DIFFERENCE', 'clantool_c_overview');
 define('C_DATE1', 'clantool_c_date1');
 define('C_DATE2', 'clantool_c_date2');
+define('MAX_CP_DAY', 10);
+define('EXP_TO_CP', 500);
 
 function getContent() {
     getCTTemplate();
@@ -85,9 +87,9 @@ function getCTTemplate() {
         </style>
         <script type="text/javascript">
         const VAR_SITE = "clantool";
-        const EXP_MAX_CP = 5000;
-        const EXP_REQUIRED_CP = 500;
-        const CP_MAX = 10;
+        const EXP_REQUIRED_CP = <?=EXP_TO_CP?>;
+        const CP_MAX = <?=MAX_CP_DAY?>;
+        const EXP_MAX_CP = EXP_REQUIRED_CP * CP_MAX;
         const TAB_MEMBER = "#member";
         var charts = [];
         var tabChange = false;
@@ -117,6 +119,15 @@ function getCTTemplate() {
                 pane.tab('show');
                 runAfterTab();
             });
+        }
+        
+        function escapeHtml(unsafe) {
+            return unsafe
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
         }
         
         function showMemberDetails(id) {
@@ -368,11 +379,11 @@ function getOverviewContent() { ?>
         <div class="form-group">
             <label for="overDate1" class = "col-sm-2 control-label">1. Datum</label>
             <div class="col-xs-10">
-                <input class="form-control datepicker" value="<?=$_SESSION[DATE_FROM]?>" type="date" id="overDate1">
+                <input class="form-control datepicker" value="<?=$_SESSION[DATE_FROM]?>" type="text" id="overDate1">
             </div>
             <label for="overDate2" class = "col-sm-2 control-label">2. Datum</label>
             <div class="col-xs-10">
-                <input class="form-control datepicker" value="<?=$_SESSION[DATE_TO]?>" type="date" id="overDate2">
+                <input class="form-control datepicker" value="<?=$_SESSION[DATE_TO]?>" type="text" id="overDate2">
             </div>
             <div class="btn-group" style="margin-top: 5px;">
                 <button type="button" class="btn btn-submit" data-dismiss="modal" onclick="showOverviewChart()">Zeige Verlauf</button>
@@ -429,15 +440,13 @@ function getDifferenceContent() { ?>
                 var str = '';
                 $.each(data,function(i,row){
                     str += '<tr ';
-                    if(row.cp == 0 && row.exp != 0 ) {
-                        str += 'class="danger"';
-                    }else if(row.cp == 0 && row.exp == 0 && row.days > 6) {
+                    if(row.cp == 0 && row.exp == 0 && row.days > 6) {
                         str += 'class="warning"';
-                    }else if(row.cp >= 10) {
+                    }else if(row.cp_by_exp >= 10) {
                         str += 'class="success"';
                     }
                     str += '>';
-                    str += '<td><a target="_blank" href="http://crossfire.z8games.com/profile/'+row.id+'">' + row.name + '</a></td>';
+                    str += '<td><a target="_blank" href="http://crossfire.z8games.com/profile/'+row.id+'">' + escapeHtml(row.name) + '</a></td>';
                     str += '<td><a onclick="showMemberDetails('+row.id+')">'+row.id+'</a></td>';
                     str += '<td>' + row.date1 + '</td>';
                     str += '<td>' + row.exp1 + '</td>';
@@ -446,6 +455,14 @@ function getDifferenceContent() { ?>
                     str += '<td>' + row.exp2 + '</td>';
                     str += '<td>' + row.cp2 + '</td>';
                     str += '<td>' + row.cp + '</td>';
+                    var possible = row.days * CP_MAX;
+                    if(row.cp != row.cp_by_exp && row.cp <= possible){
+                        str += '<td class = "danger">';
+                    } else {
+                        str += '<td>';
+                    }
+                    
+                    str += row.cp_by_exp + '</th>';
                     str += '<td>' + row.exp + '</td>';
                     str += '<td>' + row.days + '</td>';
                     str += '</tr>';
@@ -461,11 +478,11 @@ function getDifferenceContent() { ?>
         <div class="form-group">
             <label for="diffDdate1" class = "col-sm-2 control-label">1. Datum</label>
             <div class="col-xs-10">
-                <input class="form-control datepicker" value="<?=$_SESSION[DATE_FROM]?>" type="date" id="diffDdate1">
+                <input class="form-control datepicker" value="<?=$_SESSION[DATE_FROM]?>" type="text" id="diffDdate1">
             </div>
             <label for="diffDate2" class = "col-sm-2 control-label">2. Datum</label>
             <div class="col-xs-10">
-                <input class="form-control datepicker" value="<?=$_SESSION[DATE_TO]?>" type="date" id="diffDate2">
+                <input class="form-control datepicker" value="<?=$_SESSION[DATE_TO]?>" type="text" id="diffDate2">
             </div>
             <div class="btn-group" style="margin-top: 5px;">
                 <button type="button" class="btn btn-submit" data-dismiss="modal" onclick="showDifference()">Zeige Differenz</button>
@@ -487,6 +504,7 @@ function getDifferenceContent() { ?>
                     <th scope="col">Exp2</th>
                     <th scope="col">CP2</th>
                     <th scope="col">CP Differenz</th>
+                    <th scope="col">CP nach EXP</th>
                     <th scope="col">EXP Differenz</th>
                     <th scope="col">Tage</th>
                 </tr>
@@ -594,7 +612,6 @@ function getMemberContent() { ?>
                 str += '<tr ';
                 var lExp = data.exp_diff[i].y;
                 var lCP = data.cp_diff[i].y;
-                console.log("lExp: "+lExp+" lCP: "+lCP+ " wanted: "+Math.trunc(lExp / EXP_REQUIRED_CP));
                 if(lExp >= EXP_MAX_CP && lCP < CP_MAX) {
                     str += 'class="danger"';
                 }else if(lCP < CP_MAX && lCP < (Math.trunc(lExp / EXP_REQUIRED_CP)) ) {
@@ -617,11 +634,11 @@ function getMemberContent() { ?>
         <div class="form-group">
             <label for="memberDate1" class = "col-sm-2 control-label">1. Datum</label>
             <div class="col-xs-10">
-                <input class="form-control datepicker" value="<?=$_SESSION[DATE_FROM]?>" type="date" id="memberDate1">
+                <input class="form-control datepicker" value="<?=$_SESSION[DATE_FROM]?>" type="text" id="memberDate1">
             </div>
             <label for="memberDate2" class = "col-sm-2 control-label">2. Datum</label>
             <div class="col-xs-10">
-                <input class="form-control datepicker" value="<?=$_SESSION[DATE_TO]?>" type="date" id="memberDate2">
+                <input class="form-control datepicker" value="<?=$_SESSION[DATE_TO]?>" type="text" id="memberDate2">
             </div>
             <label for="memberID" class = "col-sm-2 control-label">Account ID</label>
             <div class="col-xs-10">
@@ -686,7 +703,7 @@ function getMSearchContent() { ?>
             var str = '';
             $.each(data,function(i,row){
                 str += '<tr>';
-               str += '<td><a target="_blank" href="http://crossfire.z8games.com/profile/'+row.id+'">' + row.name + '</a></td>';
+               str += '<td><a target="_blank" href="http://crossfire.z8games.com/profile/'+row.id+'">' + escapeHtml(row.name) + '</a></td>';
                 str += '<td>'+row.id+'</td>';
                 str += '<td>' + row.date + '</td>';
                 str += '</tr>';
@@ -761,7 +778,7 @@ function getMiscContent() {    ?>
             var str = '';
             $.each(data,function(i,row){
                 str += '<tr>';
-                str += '<td><a target="_blank" href="http://crossfire.z8games.com/profile/'+row.id+'">' + row.name + '</a></td>';
+                str += '<td><a target="_blank" href="http://crossfire.z8games.com/profile/'+row.id+'">' + escapeHtml(row.name) + '</a></td>';
                 str += '<td><a onclick="showMemberDetails('+row.id+')">'+row.id+'</a></td>';
                 str += '</tr>';
             });
@@ -771,11 +788,11 @@ function getMiscContent() {    ?>
         <div class="form-group">
             <label for="miscDate1" class = "col-sm-2 control-label">1. Datum</label>
             <div class="col-xs-10">
-                <input class="form-control datepicker" value="<?=$_SESSION[DATE_FROM]?>" type="date" id="miscDate1">
+                <input class="form-control datepicker" value="<?=$_SESSION[DATE_FROM]?>" type="text" id="miscDate1">
             </div>
             <label for="miscDate2" class = "col-sm-2 control-label">2. Datum</label>
             <div class="col-xs-10">
-                <input class="form-control datepicker" value="<?=$_SESSION[DATE_TO]?>" type="date" id="miscDate2">
+                <input class="form-control datepicker" value="<?=$_SESSION[DATE_TO]?>" type="text" id="miscDate2">
             </div>
             <div class="btn-group" style="margin-top: 5px;">
                 <button type="button" class="btn btn-submit" data-dismiss="modal" onclick="showMemberJoinLeave()">Zeige Differenz</button>
@@ -832,4 +849,22 @@ function getHead() {?>
 <link rel="stylesheet" href="css/datepicker.css">
 <script src="js/bootstrap-datepicker.js"></script>
 <script src="js/chart.bundle.min.js"></script>
+<style>
+/**
+ * Taken from bootstrap, overrides warning,danger class for tables, so <td> color
+ * has more important then <tr>. Otherwise tr hover would override td coloring.
+ */
+.table>tbody>tr.warning>td,.table>tbody>tr.warning>th,.table>tbody>tr>td.warning,.table>tbody>tr>th.warning,.table>tfoot>tr.warning>td,.table>tfoot>tr.warning>th,.table>tfoot>tr>td.warning,.table>tfoot>tr>th.warning,.table>thead>tr.warning>td,.table>thead>tr.warning>th,.table>thead>tr>td.warning,.table>thead>tr>th.warning {
+ background-color:#fcf8e3 !important;
+}
+.table-hover>tbody>tr.warning:hover>td,.table-hover>tbody>tr.warning:hover>th,.table-hover>tbody>tr:hover>.warning,.table-hover>tbody>tr>td.warning:hover,.table-hover>tbody>tr>th.warning:hover {
+ background-color:#faf2cc !important;
+}
+.table>tbody>tr.danger>td,.table>tbody>tr.danger>th,.table>tbody>tr>td.danger,.table>tbody>tr>th.danger,.table>tfoot>tr.danger>td,.table>tfoot>tr.danger>th,.table>tfoot>tr>td.danger,.table>tfoot>tr>th.danger,.table>thead>tr.danger>td,.table>thead>tr.danger>th,.table>thead>tr>td.danger,.table>thead>tr>th.danger {
+ background-color:#f2dede !important;
+}
+.table-hover>tbody>tr.danger:hover>td,.table-hover>tbody>tr.danger:hover>th,.table-hover>tbody>tr:hover>.danger,.table-hover>tbody>tr>td.danger:hover,.table-hover>tbody>tr>th.danger:hover {
+ background-color:#ebcccc !important;
+}
+</style>
 <?php }

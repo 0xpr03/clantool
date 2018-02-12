@@ -41,10 +41,11 @@ class clanDB extends dbException {
         if ($query = $this->db->prepare ( 'select names.name, m1.id, m2.date as `Date1`, m1.date as  `Date2`, m2.exp as `Exp1`,
         m1.exp as `Exp2`, m2.cp as `CP1`, m1.cp as `CP2`, 
         (CAST(m1.exp as  signed)-CAST(m2.exp as signed)) AS `EXP-Done`, 
-        (`m1`.`cp`-`m2`.`cp`) AS `CP-Done`, DATEDIFF(m1.date,m2.date) AS `days` 
-        from member as m2 right 
-        join member as m1 on m1.id = m2.id 
-        and m1.date LIKE "'.$date2.'%"
+        (`m1`.`cp`-`m2`.`cp`) AS `CP-Done`, DATEDIFF(m1.date,m2.date) AS `days`,
+        cpdiff.`cp_by_exp`
+        FROM member as m2 
+        RIGHT JOIN member AS m1 ON m1.id = m2.id 
+            AND m1.date LIKE "'.$date2.'%" 
         JOIN (SELECT n1.id,n1.`name` FROM 
                 (SELECT id,MAX(updated) as maxdate 
                 FROM member_names 
@@ -53,10 +54,19 @@ class clanDB extends dbException {
                     n1.id = nEndDate.id 
                     AND n1.updated = nEndDate.maxdate 
                 ) 
-        ) names 
-        on m2.id = names.id 
-        where m2.date LIKE "'.$date1.'%" OR ( m2.date >  "'.$date1.'%" AND m2.date NOT LIKE "'.$date2.'%" ) 
-        group by id order by `CP-Done`, `EXP-Done`' )) { // Y-m-d G:i:s Y-m-d h:i:s
+        ) names ON m2.id = names.id 
+        LEFT JOIN (SELECT id, SUM(CASE WHEN cpdiff2.`cp-exp` > '.MAX_CP_DAY.' THEN '.MAX_CP_DAY.' ELSE cpdiff2.`cp-exp` END) AS `cp_by_exp`
+                FROM
+                    (SELECT t1.id,(t1.exp - (SELECT t2.exp FROM member t2
+                        WHERE t2.date < date_sub(t1.date, interval '.MAX_CP_DAY.' hour) AND t2.id=t1.id 
+                        ORDER BY t2.date DESC LIMIT 1) ) DIV '.EXP_TO_CP.' AS `cp-exp`
+                    FROM member t1 
+                    WHERE t1.date between DATE_ADD("'.$date1.'%", INTERVAL 1 DAY) and DATE_ADD("'.$date2.'%", INTERVAL 1 DAY)
+                ) cpdiff2
+                GROUP BY id
+        ) cpdiff ON cpdiff.id = m2.id
+        WHERE m2.date LIKE "'.$date1.'%" OR ( m2.date >  "'.$date1.'%" AND m2.date < "'.$date2.'%" ) 
+        GROUP BY `id` ORDER BY `cp_by_exp`,`CP-Done`, `EXP-Done`' )) { // Y-m-d G:i:s Y-m-d h:i:s
             $query->execute ();
             $result = $query->get_result ();
             
@@ -80,7 +90,8 @@ class clanDB extends dbException {
                                 'id' => $row['id'],
                                 'cp' => $row['CP-Done'],
                                 'exp' => $row['EXP-Done'],
-                                'days' => $row['days']
+                                'days' => $row['days'],
+                                'cp_by_exp' => $row['cp_by_exp']
                             );
                 }
             }
@@ -150,7 +161,7 @@ class clanDB extends dbException {
     }
     
     /**
-     * Get difference table
+     * Get overview data
      * @param string $date1
      * @param string $date2
      * @throws dbException
@@ -158,7 +169,7 @@ class clanDB extends dbException {
     public function getOverview($date1, $date2) {
         $this->escapeData($date1);
         $this->escapeData($date2);
-        if ($query = $this->db->prepare ( 'select date,wins,losses,draws,members from clan where date between "'.$date1.'%" and DATE_ADD("'.$date2.'%" , INTERVAL 1 DAY) ORDER by date' )) { // Y-m-d G:i:s Y-m-d h:i:s
+        if ($query = $this->db->prepare ( 'SELECT `date`,`wins`,`losses`,`draws`,`members`FROM `clan` WHERE `date` BETWEEN "'.$date1.'%" AND DATE_ADD("'.$date2.'%" , INTERVAL 1 DAY) ORDER BY `date`' )) { // Y-m-d G:i:s Y-m-d h:i:s
             $query->execute ();
             $result = $query->get_result ();
             
@@ -215,7 +226,7 @@ class clanDB extends dbException {
     public function getMemberChange($date1, $date2, $memberID) {
         $this->escapeData($date1);
         $this->escapeData($date2);
-        if ($query = $this->db->prepare ( 'select t1.id, t1.date,t1.exp,t1.cp,
+        if ($query = $this->db->prepare ( 'SELECT t1.id, t1.date,t1.exp,t1.cp,
         (t1.exp - (SELECT t2.exp FROM member t2
             WHERE t2.date < date_sub(t1.date, interval 10 hour) AND t2.id=t1.id 
             ORDER BY t2.date DESC LIMIT 1) ) AS `exp-diff`,
@@ -223,8 +234,8 @@ class clanDB extends dbException {
             WHERE t2.date < date_sub(t1.date, interval 10 hour) AND t2.id=t1.id 
             ORDER BY t2.date DESC LIMIT 1) ) AS `cp-diff` 
         FROM member t1 
-        where t1.id = ? 
-        AND t1.date between "'.$date1.'%" and DATE_ADD("'.$date2.'%", INTERVAL 1 DAY) 
+        WHERE t1.id = ? 
+        AND t1.date BETWEEN DATE_ADD("'.$date1.'%", INTERVAL 1 DAY) AND DATE_ADD("'.$date2.'%", INTERVAL 1 DAY) 
         ORDER by id,date' )) { // Y-m-d G:i:s Y-m-d h:i:s
             $query->bind_param ( 'i', $memberID );
             $query->execute ();
@@ -280,7 +291,7 @@ class clanDB extends dbException {
      */
     public function searchForMemberName($key) {
         $key = '%'.$key.'%';
-        if ($query = $this->db->prepare ( 'SELECT name,id,date,updated from member_names WHERE name LIKE ? OR id LIKE ? order by id, date,updated ,name' )) { // Y-m-d G:i:s Y-m-d h:i:s
+        if ($query = $this->db->prepare ( 'SELECT `name`,`id`,`date`,`updated` FROM `member_names` WHERE `name` LIKE ? OR id LIKE ? ORDER BY `id`,`date`,`updated`,`name`' )) { // Y-m-d G:i:s Y-m-d h:i:s
             $query->bind_param ( 'ss', $key, $key );
             $query->execute();
             $result = $query->get_result ();
