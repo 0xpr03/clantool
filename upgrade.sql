@@ -23,3 +23,10 @@ ALTER TABLE `member_names` MODIFY `updated` datetime NOT NULL;
 CREATE TABLE `missing_entries` (
  `date` datetime NOT NULL PRIMARY KEY
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+/*
+ * Exceute on upgrade from 0.1.2/0.1.3
+ * just performance improvement
+ */
+ALTER TABLE member_names ADD KEY(`updated`,`id`);
+

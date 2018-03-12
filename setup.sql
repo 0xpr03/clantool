@@ -32,7 +32,8 @@ CREATE TABLE `member_names` (
  `updated` datetime NOT NULL,
  UNIQUE KEY `id` (`id`,`name`),
  KEY `name` (`name`),
- KEY `updated` (`updated`)
+ KEY `updated` (`updated`),
+ KEY `updated_2` (`updated`,`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
 CREATE TABLE `missing_entries` (
