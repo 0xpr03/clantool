@@ -25,18 +25,23 @@ use REFERER;
 
 use error::Error;
 
+/// Header type for get requests
 pub enum HeaderType {
-    Html, // html browser request
-    Ajax // ajax js request
+    /// Html browser request
+    Html,
+    /// Ajax js request
+    Ajax
 }
 
 /// Does a get request under the provided url
 /// The header varies by the provided HeaderType
 pub fn get(url: &str, htype: HeaderType) -> Result<String,Error>{
     trace!("Starting downloading {}",url);
-    let client = try!(Client::new());
-    let mut builder = client.get(url)?;
+    
+    let client = Client::new();
+    let mut builder = client.get(url);
     let mut res = builder.headers(header(htype)).send()?;
+    
     debug!("Response header: {:?}",res.headers());
     debug!("Response status: {:?}",res.status());
     debug!("Final URL: {:?}",res.headers().get::<Location>());
@@ -50,10 +55,10 @@ pub fn get(url: &str, htype: HeaderType) -> Result<String,Error>{
     debug!("Gzip compressed: {}",gzipped);
     
     if gzipped {
-        let mut decoder = try!(GzDecoder::new(res));
-        try!(decoder.read_to_string(&mut body));
+        let mut decoder = GzDecoder::new(res);
+        decoder.read_to_string(&mut body)?;
     }else{
-        try!(res.read_to_string(&mut body));
+        res.read_to_string(&mut body)?;
     }
     Ok(body)
 }

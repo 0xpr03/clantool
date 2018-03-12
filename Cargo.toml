@@ -1,6 +1,6 @@
 [package]
 name = "clantool"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Aron Heinecke"]
 
 #[profile.release]
@@ -10,25 +10,19 @@ authors = ["Aron Heinecke"]
 name = "clantool"
 
 [dependencies]
-lazy_static = ">= 0.1.15"
+lazy_static = ">= 1.0.0"
 toml = ">= 0.4.5"
-serde = "*"
-serde_derive = "*"
-log = ">= 0.3.8"
-log4rs = ">= 0.7.0"
+serde = ">= 1.0.29"
+serde_derive = ">= 1.0.29"
+log = ">= 0.4.1"
+log4rs = ">= 0.8.0"
 chrono = ">= 0.4.0"
-reqwest = ">= 0.7.3"
-json = ">= 0.11.9"
-flate2 = ">= 0.2.19"
-quick-error = ">= 1.2.0"
-clap = "2.26.2"
-
-[dependencies.timer]
-version = "^ 0.2"
-
-[dependencies.mysql]
-version = ">= 12.0.2"
-
-[dependencies.regex]
-version = ">= 0.2.1"
-#regex_macros = ">= 0.1.26"
+reqwest = ">= 0.8.5"
+json = ">= 0.11.13"
+flate2 = ">= 1.0.1"
+quick-error = ">= 1.2.1"
+clap = ">= 2.31.1"
+sendmail = { git = "https://github.com/0xpr03/rust-sendmail", rev = "f0463869b55b3309d9c82e1b0c86ddad58eb98ef" }
+regex = ">= 0.2.8"
+mysql = ">= 12.0.2"
+timer = ">= 0.2"
