@@ -87,6 +87,16 @@ pub fn get_missing_dates(conn: &mut PooledConn) -> Result<Vec<NaiveDate>,Error> 
     
     let (min,max) = get_min_max_date(conn)?;
     debug!("max:{} min:{}",max,min);
+    
+    if max == min {
+        return Err(Error::Other("Not enough entries in DB, aborting."));
+    }
+    
+    let days = max.signed_duration_since(min).num_days();
+    let step = days / 10;
+    
+    debug!("days: {}",days);
+    
     // {} required, stmt lives too long
     {// create date lookup table
         let mut stmt = conn.prepare("INSERT INTO `t_dates` (`date`) VALUES (?)")?;
@@ -96,6 +106,9 @@ pub fn get_missing_dates(conn: &mut PooledConn) -> Result<Vec<NaiveDate>,Error> 
             stmt.execute((current,))?;
             current = current.succ();
             i += 1;
+            if i % step == 0 {
+                info!("{}%",i * 100 / days);
+            }
         }
         debug!("lookup table size: {}",i);
     }
@@ -122,7 +135,7 @@ pub fn get_missing_dates(conn: &mut PooledConn) -> Result<Vec<NaiveDate>,Error> 
     let mut dates: Vec<NaiveDate> = Vec::new();
     {// now retrieve missing dates for user information
         let mut stmt = conn.prepare(format!(
-            "SELECT date FROM `{}`",TABLE_MISSING_DATES))?;
+            "SELECT date FROM `{}` order by date ASC",TABLE_MISSING_DATES))?;
         
         for row in stmt.execute(())? {
             dates.push(row?.take_opt("date").ok_or(Error::NoValue("date"))??);
@@ -171,7 +184,7 @@ fn get_min_max_date(conn: &mut PooledConn) -> Result<(NaiveDate,NaiveDate),Error
 #[cfg(test)]
 mod test {
     use super::*;
-    use chrono::naive::NaiveDateTime;
+    use chrono::naive::{NaiveDateTime,NaiveTime};
     use chrono::offset::Local;
     use chrono::Duration;
     
@@ -207,7 +220,7 @@ mod test {
             } else {
                 None
             }
-            ).collect(); // collect back to vec
+        ).collect(); // collect back to vec
         
         debug!("\n\nGroups: {:?}\n\n",split_sql);
         
@@ -306,6 +319,59 @@ mod test {
         let time: NaiveDateTime = Local::now().naive_local();
         let (_,mut conn) = setup_db();
         insert_missing_entry(&time,&mut conn).unwrap();
+    }
+    
+    #[test]
+    fn get_min_max_date_test() {
+        let (_,mut conn) = setup_db();
+        // insert data for three dates
+        let data: Vec<Clan> = (0..3).map(|x|
+                Clan {members: x,wins: x as u16 ,losses: x as u16,draws: x as u16})
+                .collect();
+        let parse_fmt = "%Y-%m-%d %H:%M:%S";
+        let min = NaiveDateTime::parse_from_str("2015-09-05 23:56:04", parse_fmt).unwrap();
+        let max = NaiveDateTime::parse_from_str("2017-07-02 08:03:17", parse_fmt).unwrap();
+        let third = NaiveDateTime::parse_from_str("2016-05-01 21:05:08", parse_fmt).unwrap();
+        
+        insert_clan_update(&mut conn,&data[0], &min).unwrap();
+        insert_clan_update(&mut conn,&data[1], &max).unwrap();
+        insert_clan_update(&mut conn,&data[2], &third).unwrap();
+        
+        let(min_r,max_r) = get_min_max_date(&mut conn).unwrap();
+        assert_eq!(min.date(),min_r);
+        assert_eq!(max.date(),max_r);
+    }
+    
+    #[test]
+    fn get_missing_dates_test() {
+        let (_,mut conn) = setup_db();
+        
+        let data: Vec<Clan> = (0..2).map(|x|
+                Clan {members: x,wins: x as u16 ,losses: x as u16,draws: x as u16})
+                .collect();
+        
+        let mut dates: Vec<NaiveDate> = Vec::new();
+        
+        let time = NaiveTime::from_hms_milli(12, 34, 56, 789);
+        let parse_fmt = "%Y-%m-%d";
+        
+        let start = NaiveDate::parse_from_str("2015-09-05", parse_fmt).unwrap();
+        
+        dates.push(start.succ());
+        for _ in 0..3 {
+            let date = dates.last().unwrap().succ();
+            dates.push(date);
+        }
+        
+        insert_clan_update(&mut conn,&data[0],&start.and_time(time)).unwrap();
+        insert_clan_update(&mut conn,&data[1], &dates.last().unwrap().succ().and_time(time)).unwrap();
+        
+        let found = get_missing_dates(&mut conn).unwrap();
+        
+        assert_eq!(dates.len(),found.len());
+        for x in 0..dates.len() {
+            assert_eq!(dates[x],found[x]);
+        }
     }
     
     /// Test clan insertion
