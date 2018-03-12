@@ -73,7 +73,7 @@ fn main() {
         Err(e) => println!("Error on config initialization: {}",e),
         Ok(_) => println!("Initialized log")
     }
-    info!("Clan tools crawler v0.2.0");
+    info!("Clan tools crawler v0.2.1");
         
     let config = Arc::new(config::init_config());
     let pool = match db::new(config.db.ip.clone(),
@@ -87,9 +87,9 @@ fn main() {
     let timer = timer::Timer::new();
     
     let app = App::new("Clantool")
-                    .version("2.0")
+                    .version("2.1")
                     .author("Aron H. <aron.heinecke@t-online.de>")
-                    .about("Gathers statistics about CF-NA clans. Starts a daemon per default")
+                    .about("Gathers statistics about CF-NA clans. Starts as daemon per default")
                     .subcommand(SubCommand::with_name("fcrawl")
                         .about("force run crawl & exit"))
                     .subcommand(SubCommand::with_name("mail-test")
