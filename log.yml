@@ -1,0 +1,42 @@
+# Predefined log configuration which is recommended to adjust
+
+# Scan this file for changes every 30 seconds
+refresh_rate: 30 seconds
+
+appenders:
+  # An appender named "stdout" that writes to stdout
+  stdout:
+    kind: console
+
+  # An appender named "fileappender" that writes to a file with a custom pattern encoder
+  fileappender:
+    kind: file
+    path: "log/log.log"
+    encoder:
+      pattern: "{d(%d-%m-%Y %H:%M:%S)}	{l}	{f}:{L} 	{m}{n}"
+
+# Set the default logging level to "warn" and attach the "stdout" appender to the root
+root:
+  level: warn
+  appenders:
+    - fileappender
+
+loggers:
+  # Raise the maximum log level for events sent to the "app::backend::db" logger to "info"
+#  app::backend::db:
+#    level: info
+
+  # Route log events sent to the "app::requests" logger to the "requests" appender,
+  # and *not* the normal appenders installed at the root
+  tokio_proto:
+    level: info
+  tokio_core:
+    level: info
+  hyper:
+    level: warn
+  mio:
+    level: info
+  mime:
+    level: info
+  reqwest:
+    level: info

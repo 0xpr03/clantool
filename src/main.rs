@@ -314,7 +314,7 @@ fn init_log() -> Result<(),Error> {
     .create(log_dir));
     
     if !metadata(&log_path).is_ok() {
-        let config = include_str!("../log_config.yml");
+        let config = include_str!("../log.yml");
         let mut file = try!(File::create(&log_path));
         try!(file.write_all(config.as_bytes()));
     }
