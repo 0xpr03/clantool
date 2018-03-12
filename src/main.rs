@@ -31,6 +31,7 @@ extern crate timer;
 extern crate serde_derive;
 extern crate serde;
 extern crate clap;
+extern crate sendmail;
 
 mod http;
 mod error;
@@ -47,6 +48,7 @@ use std::io::Write;
 
 use std::sync::Arc;
 
+use sendmail::email;
 
 use chrono::naive::{NaiveTime,NaiveDateTime};
 use chrono::offset::Local;
@@ -88,8 +90,15 @@ fn main() {
                     .version("2.0")
                     .author("Aron H. <aron.heinecke@t-online.de>")
                     .about("Gathers statistics about CF-NA clans. Starts a daemon per default")
-                    .subcommand(SubCommand::with_name("fcrawl"))
-                        .about("force run crawl & exit")
+                    .subcommand(SubCommand::with_name("fcrawl")
+                        .about("force run crawl & exit"))
+                    .subcommand(SubCommand::with_name("mail-test")
+                        .about("Test mail sending")
+                        /*.arg(Arg::with_name("mail")
+                            .help("Required mail address")
+                            .takes_value(true)
+                            .required(true))
+                        */    )
                     .subcommand(SubCommand::with_name("checkdb")
                         .about("checks DB for missing entries or doubles and corrects those")
                         .arg(Arg::with_name("simulate")
@@ -112,6 +121,10 @@ fn main() {
             let local_config = &*config;
             let rt_time = NaiveTime::from_num_seconds_from_midnight(20,0);
             debug!("Result: {:?}",run_update(local_pool,local_config, &rt_time));
+        },
+        ("mail-test", _) => {
+            info!("Sending test mail");
+            send_mail(&*config,"Clantool test mail","This is a manually triggered test mail.");
         },
         _ =>  {
             info!("Entering daemon mode");
@@ -199,6 +212,7 @@ fn run_update(pool: &Pool, config: &Config, retry_time: &NaiveTime) {
         }
         
         if member_success && clan_success {
+            info!("Crawling successfull");
             break;
         } else {
             if x == config.main.retries {
@@ -206,11 +220,31 @@ fn run_update(pool: &Pool, config: &Config, retry_time: &NaiveTime) {
                 match write_missing(&time,pool) {
                     Ok(_) => {},
                     Err(e) => error!("Unable to write missing date! {}",e),
-                }    
+                }
+                
+                if config.main.send_error_mail {
+                    send_mail(config,"Clantool error",
+                        "Error at clantool update execution!");
+                }
             }else{
                 std::thread::sleep(std::time::Duration::from_secs(retry_time.num_seconds_from_midnight().into()));
             }
         }
+    }
+}
+
+/// Send email, catch & log errors
+fn send_mail(config: &Config, subject: &str, message: &str) {
+    match email::send_new::<Vec<&str>>(
+        &config.main.mail_from,
+        config.main.mail.iter().map(|v| &v[..]).collect(),
+        // Subject
+        subject,
+        // Body
+        message
+    ) {
+        Err(e) => error!("Error at mail sending: {}",e),
+        _ => ()
     }
 }
 

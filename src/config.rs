@@ -73,6 +73,9 @@ pub struct MainConfig {
     pub time: String,
     pub retries: u16,
     pub retry_interval: String,
+    pub send_error_mail: bool,
+    pub mail: Vec<String>,
+    pub mail_from: String,
 }
 
 /// DB Config struct
@@ -129,7 +132,8 @@ fn write_config_file(path: &Path, data: &str) -> Result<(),ConfigError> {
 /// Create a new config.
 pub fn default_config() -> String {
     trace!("Creating config..");
-    let toml = r#"[db]
+    let toml = 
+r#"[db]
 user = "user"
 password = "password"
 db = "clantool"
@@ -149,7 +153,12 @@ clan_url = "http://crossfire.z8games.com/clan/68910"
 time = "12:00"
 retries = 4
 retry_interval = "00:05"
-    "#;
+# send mail on failure
+send_error_mail = true
+# list of email address to send errors
+mail = ["root@localhost"]
+mail_from = "noreply@localhost"
+"#;
     
     toml.to_owned()
 }
