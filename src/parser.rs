@@ -160,12 +160,12 @@ mod test {
         var.push(Member {
             name: String::from("Dr.Alptraum"),
             id: 9926942,
-            exp: 7919289,
-            contribution: 4316
+            exp: 10826457,
+            contribution: 6830
         });
-        let (r,t) = parse_all_member(input).unwrap();
+        let (r,total) = parse_all_member(input).unwrap();
         assert_eq!(var,r);
-        assert_eq!(1,t);
+        assert_eq!(56,total);
     }
     
     /// Test parsing of single member function parse_member
@@ -178,8 +178,8 @@ mod test {
         let mem_thomas = Member {
             name: String::from("Dr.Alptraum"),
             id: 9926942,
-            exp: 7919289,
-            contribution: 4316
+            exp: 10826457,
+            contribution: 6830
         };
         assert_eq!(output,Some(mem_thomas));
     }
@@ -209,10 +209,10 @@ mod test {
     fn parse_clan_test() {
         let input = include_str!("test_http_clan.txt");
         let clan = Clan {
-            members: 44,
-            wins: 8475,
-            losses: 5615,
-            draws: 280
+            members: 56,
+            wins: 11169,
+            losses: 6756,
+            draws: 445
         };
         let parsed_clan = parse_clan(input).unwrap();
         assert_eq!(parsed_clan,clan);

@@ -93,7 +93,7 @@ pub fn get_missing_dates(conn: &mut PooledConn) -> Result<Vec<NaiveDate>,Error> 
     }
     
     let days = max.signed_duration_since(min).num_days();
-    let step = days / 10;
+    let step = days / 10 + 1;
     
     debug!("days: {}",days);
     

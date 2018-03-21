@@ -71,7 +71,7 @@ pub struct MainConfig {
     pub clan_ajax_max_sites: u8,
     pub clan_url: String,
     pub time: String,
-    pub retries: u16,
+    pub retries: u32,
     pub retry_interval: String,
     pub send_error_mail: bool,
     pub mail: Vec<String>,
@@ -151,7 +151,8 @@ clan_ajax_max_sites = 10
 clan_url = "http://crossfire.z8games.com/clan/68910"
 # time of the day the crawler should run
 time = "12:00"
-retries = 4
+retries = 5
+# retry number * retry_interval = maximum time waited
 retry_interval = "00:05"
 # send mail on failure
 send_error_mail = true

@@ -121,6 +121,7 @@ fn main() {
             let local_config = &*config;
             let rt_time = NaiveTime::from_num_seconds_from_midnight(20,0);
             debug!("Result: {:?}",run_update(local_pool,local_config, &rt_time));
+            info!("Finished force crawl");
         },
         ("mail-test", _) => {
             info!("Sending test mail");
@@ -196,19 +197,23 @@ fn run_update(pool: &Pool, config: &Config, retry_time: &NaiveTime) {
     let mut member_success  = false;
     let mut clan_success = false;
     
-    for x in 1..config.main.retries+1 {
+    for x in 1..((config.main.retries+1) as u32) {
         let time = Local::now().naive_local();
         
-        match run_update_member(pool,config, &time) {
-            Ok(_) => { debug!("Member crawling successfull."); member_success = true;
-                },
-            Err(e) => error!("Error at member update: {}: {}",x,e),
+        if !member_success {
+            match run_update_member(pool,config, &time) {
+                Ok(_) => { debug!("Member crawling successfull."); member_success = true;
+                    },
+                Err(e) => error!("Error at member update: {}: {}",x,e),
+            }
         }
         
-        match run_update_clan(pool, config, &time) {
-            Ok(_) => { debug!("Clan crawling successfull."); clan_success = true;
-                },
-            Err(e) => error!("Error at clan update: {}: {}",x,e),
+        if !clan_success {
+            match run_update_clan(pool, config, &time) {
+                Ok(_) => { debug!("Clan crawling successfull."); clan_success = true;
+                    },
+                Err(e) => error!("Error at clan update: {}: {}",x,e),
+            }
         }
         
         if member_success && clan_success {
@@ -222,12 +227,16 @@ fn run_update(pool: &Pool, config: &Config, retry_time: &NaiveTime) {
                     Err(e) => error!("Unable to write missing date! {}",e),
                 }
                 
+                let message = format!(
+                        "Error at clantool update execution!\nRetried {} times, waiting {} seconds max.\nMissing Member data: {}. Missing clan data: {}"
+                        ,x,retry_time.num_seconds_from_midnight()*x,!member_success,!clan_success);
+                
                 if config.main.send_error_mail {
-                    send_mail(config,"Clantool error",
-                        "Error at clantool update execution!");
+                    send_mail(config,"Clantool error",&message);
                 }
             }else{
-                std::thread::sleep(std::time::Duration::from_secs(retry_time.num_seconds_from_midnight().into()));
+                let wait_time = retry_time.num_seconds_from_midnight() * x;
+                std::thread::sleep(std::time::Duration::from_secs(wait_time.into()));
             }
         }
     }
