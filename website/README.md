@@ -1,11 +1,11 @@
 # Website Files
 
 This folder contains files for displaying the data in a website.  
-For embedding clantool.php inside your php application the following functions should be called by you:
+For embedding clantool2.php inside your php application the following functions should be called by you:
 
-  - getTitle() return the title
-  - getHead() returns the header required
-    **bootstrap & jquery is expected to be included**
+  - getTitle() returns the title
+  - getHead() returns the required header  
+    **bootstrap3 & jquery is required**
   - getContent()
-    should be called for the body
-  - getAjax() is expected to be called when ajaxCont is set
+    body of website
+  - getAjax() is expected to be called when POST/GET ajaxCont is set

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Aron Heinecke
+Copyright 2017,2018 Aron Heinecke
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,12 +19,15 @@ use chrono::naive::NaiveDate;
 
 use error::Error;
 
+use LeftMember;
 use Member;
 use Clan;
 
 const POOL_MIN_CONN: usize = 0; // minimum amount of running connection per pool
-const POOL_MAX_CONN: usize = 2; // maximum amount of running connections per pool
+const POOL_MAX_CONN: usize = 3; // maximum amount of running connections per pool
 const TABLE_MISSING_DATES: &'static str = "t_missingdates"; // temporary table used to store missing dates
+const DATE_FORMAT: &'static str = "%Y-%m-%d";
+const DATETIME_FORMAT: &'static str = "%Y-%m-%d %H:%M:%S";
 
 /// Create a new db pool with fixed min-max connections
 pub fn new(address: String, port: u16, user: String, password: String, db: String) -> Result<Pool,Error> {
@@ -38,6 +41,24 @@ pub fn new(address: String, port: u16, user: String, password: String, db: Strin
     let opts: Opts = builder.into();
     let pool = try!(Pool::new_manual(POOL_MIN_CONN,POOL_MAX_CONN,opts));
     Ok(pool)
+}
+
+/// Insert log message for current timestamp.
+/// Does not omit errors, logging them as error.
+/// error_msg will be logged with the error itself: {error_msg} {error}
+pub fn log_message(conn: &mut PooledConn, message: &str, error_msg: &str) {
+    info!("db-log: {}",message);
+    match log_message_opt(conn, message) {
+        Ok(_) => (),
+        Err(e) => error!("{} {}",error_msg,e)
+    }
+}
+
+/// Insert log message for current timestamp
+pub fn log_message_opt(conn: &mut PooledConn, message: &str) -> Result<(),Error> {
+    let mut stmt = try!(conn.prepare("INSERT INTO `log` (`date`,`msg`) VALUES (NOW(),?)"));
+    stmt.execute((message,))?;
+    Ok(())
 }
 
 /// Insert a Vec of members under the given Timestamp
@@ -72,9 +93,12 @@ pub fn insert_clan_update(conn: &mut PooledConn,clan: &Clan, timestamp: &NaiveDa
 }
 
 /// Insert datetime into missing entry table
-pub fn insert_missing_entry(datetime: &NaiveDateTime,conn: &mut PooledConn) -> Result<(),Error> {
-    let mut stmt = conn.prepare("INSERT INTO `missing_entries` (`date`) VALUES (?)")?;
-    stmt.execute((datetime,))?;
+/// missing_member set to true if also CP & EXP data of members is missing
+/// which are to be distinct from missing clan data
+pub fn insert_missing_entry(datetime: &NaiveDateTime,conn: &mut PooledConn, missing_member: bool) 
+    -> Result<(),Error> {
+    let mut stmt = conn.prepare("INSERT INTO `missing_entries` (`date`,`member`) VALUES (?,?)")?;
+    stmt.execute((datetime,missing_member))?;
     Ok(())
 }
 
@@ -86,7 +110,7 @@ pub fn get_missing_dates(conn: &mut PooledConn) -> Result<Vec<NaiveDate>,Error> 
     create_temp_date_table(conn,TABLE_MISSING_DATES)?;
     
     let (min,max) = get_min_max_date(conn)?;
-    debug!("max:{} min:{}",max,min);
+    info!("max: {} min: {}",max,min);
     
     if max == min {
         return Err(Error::Other("Not enough entries in DB, aborting."));
@@ -125,7 +149,7 @@ pub fn get_missing_dates(conn: &mut PooledConn) -> Result<Vec<NaiveDate>,Error> 
         ) as t1
         ON t0.date = DATE(t1.date)
         LEFT JOIN `missing_entries` t4
-            ON t0.date = DATE(t4.date)
+            ON t0.date = DATE(t4.date) AND t4.member = true
         WHERE t1.date IS NULL
         AND t4.date IS NULL",TABLE_MISSING_DATES))?;
         
@@ -164,7 +188,7 @@ fn create_temp_date_table(conn: &mut PooledConn, tbl_name: &'static str) -> Resu
     Ok(())
 }
 
-/// Retrieves the oldest date in of `clan` & `member` combined
+/// Retrieves the oldest & newest date `clan` & `member` table combined
 /// Returns (min,max) dates as String
 fn get_min_max_date(conn: &mut PooledConn) -> Result<(NaiveDate,NaiveDate),Error> {
     // full outer join to get all
@@ -181,14 +205,159 @@ fn get_min_max_date(conn: &mut PooledConn) -> Result<(NaiveDate,NaiveDate),Error
     Ok(values)
 }
 
+/// Check whether date has data and is thus valid in member table
+/// Returns datetime if correct
+pub fn check_date_for_data(conn: &mut PooledConn,date: &NaiveDate) -> Result<Option<NaiveDateTime>,Error> {
+    let mut stmt = conn.prepare("SELECT `date` FROM member m
+    WHERE m.date LIKE ? LIMIT 1")?;
+    let mut result = stmt.execute((format!("{}%",date.format(DATE_FORMAT)),))?;
+    match result.next() {
+        None => return Ok(None),
+        Some(v) => {
+            let row = v?;
+            let value = from_row_opt(row)?;
+            Ok(Some(value))
+        }
+    }
+}
+
+/// Get next older date from specified datetime which is not marked as as missing entry
+/// and not older than the specified minimum
+/// returns Result<None> if no older date within range was found
+pub fn get_next_older_date(conn: &mut PooledConn,date: &NaiveDateTime,min: &NaiveDate) -> Result<Option<NaiveDateTime>,Error> {
+    debug!("date: {} min: {}",date,min);
+    let mut stmt = conn.prepare("SELECT MAX(m.`date`) as `date` FROM member m
+    LEFT OUTER JOIN missing_entries mi
+        ON ( DATE(m.date) = DATE(mi.date) AND mi.member = true)
+    WHERE m.date < ? AND m.date >= ? AND mi.date IS NULL")?;
+    let mut result = stmt.execute(
+        (date.format(DATETIME_FORMAT).to_string(),format!("{}%",min.format(DATE_FORMAT)))
+    )?;
+    match result.next() {
+        None => return Ok(None),
+        Some(v) => {
+            let row = v?;
+            let value = from_row_opt(row)?;
+            Ok(value)
+        }
+    }
+}
+
+/// read entry in settings table as string
+pub fn read_string_setting(conn: &mut PooledConn, key: &str) -> Result<Option<String>,Error> {
+    let mut stmt = conn.prepare("SELECT `value` FROM settings WHERE `key` = ?")?;
+    let mut result = stmt.execute((key,))?;
+    match result.next() {
+        None => return Ok(None),
+        Some(v) => {
+            let row = v?;
+            let value = from_row_opt(row)?;
+            Ok(value)
+        }
+    }
+}
+
+/// read entry in settings table as bool
+pub fn read_bool_setting(conn: &mut PooledConn, key: &str) -> Result<Option<bool>,Error> {
+    let mut stmt = conn.prepare("SELECT `value` FROM settings WHERE `key` = ?")?;
+    let mut result = stmt.execute((key,))?;
+    match result.next() {
+        None => return Ok(None),
+        Some(v) => {
+            let row = v?;
+            let row: Option<String> = from_row_opt(row)?;
+            if let Some(v) = row {
+                Ok(Some(
+                    match v.as_str() {
+                        "1" | "true" => true,
+                        _ => false
+                    }
+                ))
+            } else {
+                Ok(None)
+            }
+        }
+    }
+}
+
+/// Get left members from difference betweeen date1 & date2
+/// Expected date1 < date2
+pub fn get_member_left(conn: &mut PooledConn,date1: &NaiveDateTime, date2: &NaiveDateTime) -> Result<Vec<LeftMember>,Error> {
+    if date1 >= date2 {
+        return Err(Error::Other("invalid input, date1 < date2 expected!"));
+    }
+    let mut stmt = conn.prepare("SELECT name,a.id,ms.nr
+    FROM (
+        SELECT m1.id
+        FROM member m1
+            WHERE m1.date = :datetime1
+        UNION DISTINCT
+        SELECT ms.id
+        FROM membership ms
+            WHERE ms.`from` = :date1 AND ms.`to` IS NULL
+    ) a
+    LEFT JOIN `member_names` names ON a.id = names.id AND
+            `names`.updated = (SELECT MAX(n2.updated) 
+                FROM `member_names` n2 
+                WHERE n2.id = a.id
+            )
+    LEFT JOIN `membership` ms ON a.id = ms.id AND ms.to IS NULL
+    WHERE 
+    a.id NOT IN ( 
+        SELECT m2.id FROM member m2 
+        WHERE m2.id = a.id AND m2.date = :datetime2
+    )")?;
+    
+    let result = stmt.execute(params!{
+        // do not use datetime directly, as milliseconds will be given
+        // as there is no match for millseconds precise datetimes
+        "datetime1" => date1.format(DATETIME_FORMAT).to_string(),
+        "datetime2" => date2.format(DATETIME_FORMAT).to_string(),
+        "date1" => date1.date(),
+    })?;
+    let member_left = result.map(|res| {
+        let (name,id,nr) = from_row_opt(res?)?;
+        Ok(LeftMember {
+            id: id,
+            name: name,
+            membership_nr: nr
+        })
+    }).collect();
+    
+    member_left
+}
+
+/// Insert member leave
+/// terminates existing member-trials
+/// insert leave cause as no kick with provided cause
+/// requires existing membership entry
+/// returns affected affected trial entries that were ended
+pub fn insert_member_leave(conn: &mut PooledConn, id: &i32, ms_nr: &i32, date_leave: &NaiveDate, cause: &str) -> Result<(u64),Error> {
+    let trial_affected;
+    {
+    let mut stmt = conn.prepare("UPDATE `membership` SET `to` = ? WHERE `nr` = ?")?;
+    stmt.execute((date_leave,ms_nr))?.affected_rows();
+    }
+    {
+    let mut stmt = conn.prepare("UPDATE `member_trial` SET `to` = ? WHERE `id` = ?")?;
+    trial_affected = stmt.execute((date_leave,id))?.affected_rows();
+    }
+    {
+    let mut stmt = conn.prepare("INSERT INTO `membership_cause` (`nr`,`kicked`,`cause`) VALUES(?,?,?) ON DUPLICATE KEY UPDATE `kicked` = VALUES(`kicked`), `cause` = VALUES(`cause`)")?;
+    stmt.execute((ms_nr, false,cause))?;
+    }
+    Ok(trial_affected)
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
     use chrono::naive::{NaiveDateTime,NaiveTime};
     use chrono::offset::Local;
     use chrono::Duration;
+    use std::collections::HashMap;
     
-    use mysql::{PooledConn,Pool};
+    use mysql::{PooledConn,Pool,from_row};
     
     use error::Error;
     use Member;
@@ -200,6 +369,7 @@ mod test {
     const TEST_PASSWORD: &'static str = "root";
     const TEST_DB: &'static str = "test";
     const TEST_PORT: u16 = 3306;
+    const DATETIME_FORMAT: &'static str = "%Y-%m-%d %H:%M:%S";
     
     /// Get database setup sql
     /// Returns a vector of table setup sql
@@ -247,12 +417,33 @@ mod test {
     
     /// Helper method to connect to the db
     fn connect_db() -> Pool {
-        new("localhost".into(), TEST_PORT,TEST_USER.into(),TEST_PASSWORD.into(),TEST_DB.into()).unwrap()
+        let password;
+        let user = match option_env!("TEST_DB_USER") {
+            Some(u) => {
+                password = option_env!("TEST_DB_PW");
+                u
+            },
+            None => {
+                password = Some(TEST_PASSWORD);
+                TEST_USER
+            }
+        };
+        
+        let mut builder = OptsBuilder::new();
+        builder.ip_or_hostname(Some("foo"))
+            .db_name(Some(TEST_DB))
+            .user(Some(user))
+            .pass(password)
+            .tcp_port(TEST_PORT)
+            .ip_or_hostname(Some("localhost"));
+        let opts: Opts = builder.into();
+        Pool::new(opts).unwrap()
     }
     
     /// Helper method to setup a db connection
-    /// having only temporary tables on the returned connection
-    fn setup_db() -> (Pool,PooledConn) {
+    /// the returned connection has a complete temporary table setup
+    /// new connection retrieved from the pool can't interact with these
+    pub fn setup_db() -> (Pool,PooledConn) {
         let pool = connect_db();
         let mut conn = pool.get_conn().unwrap();
         setup_tables(&mut conn,true).unwrap();
@@ -260,13 +451,350 @@ mod test {
     }
     
     /// Create member struct
-    fn create_member(name: &str, id: u32,exp: u32, contribution: u32) -> Member {
+    fn create_member(name: &str, id: i32,exp: i32, contribution: i32) -> Member {
         Member {
             name: String::from(name),
             id: id,
             exp: exp,
             contribution: contribution
         }
+    }
+    
+    /// Insert full membership with cause
+    fn insert_full_membership(mut conn: &mut PooledConn, id: &i32, join: &NaiveDate, leave: &NaiveDate,cause: &str, kicked: bool) -> i32 {
+        let nr = insert_membership(&mut conn, &id, join,Some(leave));
+        insert_membership_cause(&mut conn, &nr, cause, kicked);
+        nr
+    }
+    
+    /// Insert membership, return nr on success
+    fn insert_membership(conn: &mut PooledConn, id: &i32, join: &NaiveDate, leave: Option<&NaiveDate>) -> i32 {
+        let mut stmt = conn.prepare("INSERT INTO `membership` (`id`,`from`,`to`) VALUES (?,?,?)").unwrap();
+        let res = stmt.execute((id,join,leave)).unwrap();
+        res.last_insert_id() as i32
+    }
+    
+    /// Insert open trial for id
+    fn insert_trial(conn: &mut PooledConn, id: &i32, start: &NaiveDate) {
+        let mut stmt = conn.prepare("INSERT INTO `member_trial` (`id`,`from`,`to`) VALUES (?,?,NULL)").unwrap();
+        stmt.execute((id,start)).unwrap();
+    }
+    
+    /// Insert membership cause
+    fn insert_membership_cause(conn: &mut PooledConn, nr: &i32, cause: &str, kicked: bool) {
+        let mut stmt = conn.prepare("INSERT INTO `membership_cause` (`nr`,`kicked`,`cause`) VALUES (?,?,?)").unwrap();
+        let _ = stmt.execute((nr,kicked,cause)).unwrap();
+    }
+    
+    /// insert key-value entry into settings table
+    fn insert_settings(conn: &mut PooledConn, key: &str, value: &str) {
+        let mut stmt = conn.prepare("INSERT INTO `settings` (`key`,`value`) VALUES(?,?)").unwrap();
+        let _ = stmt.execute((key,value)).unwrap();
+    }
+    
+    /// Test leave detection for member based on membership-entry
+    /// (1-day membership)
+    #[test]
+    fn check_get_member_left_single_join() {
+        let (_,mut conn) = setup_db();
+        
+        let date1 = NaiveDateTime::parse_from_str("2014-01-01 09:12:43",DATETIME_FORMAT).unwrap();
+        let date2 = NaiveDateTime::parse_from_str("2014-01-02 12:34:45",DATETIME_FORMAT).unwrap();
+        
+        let id = 1234;
+        let name = String::from("tester1234");
+        let name_noise = "asc";
+        
+        let mut vec_t = Vec::with_capacity(1);
+        vec_t.push(create_member(&name,id+1,2,3));
+        // insert open membership
+        let ms_nr = insert_membership(&mut conn, &id, &date1.date(), None);
+        
+        // create member which joined on date2 (verify date1&2 are not interchanged
+        // should not be report as left
+        vec_t.push(create_member(name_noise, id+2, 4,6));
+        insert_members(&mut conn, &vec_t, &date2).unwrap();
+        
+        let expected = LeftMember {
+            id: id,
+            name: None,
+            membership_nr: Some(ms_nr)
+        };
+        
+        let left = get_member_left(&mut conn, &date1, &date2).unwrap();
+        assert_eq!(1,left.len());
+        assert_eq!(expected,left[0]);
+    }
+    
+    /// Test leave detection for member based on member-data
+    #[test]
+    fn check_get_member_left_single_data() {
+        let (_,mut conn) = setup_db();
+        
+        let date1 = NaiveDateTime::parse_from_str("2014-01-01 09:12:43",DATETIME_FORMAT).unwrap();
+        let date2 = NaiveDateTime::parse_from_str("2014-01-02 12:34:45",DATETIME_FORMAT).unwrap();
+        
+        let id = 1234;
+        let name = String::from("tester1234");
+        let name_noise = "asc";
+        
+        let mut vec_t = Vec::with_capacity(1);
+        vec_t.push(create_member(&name,id.clone(),2,3));
+        insert_members(&mut conn, &vec_t, &date1).unwrap();
+        // insert open membership
+        let ms_nr = insert_membership(&mut conn, &id, &date1.date(), None);
+        
+        // create member which joined on date2 (verify date1&2 are not interchanged
+        // should not be report as left
+        vec_t.clear();
+        vec_t.push(create_member(name_noise, id+1, 4,6));
+        insert_members(&mut conn, &vec_t, &date2).unwrap();
+        
+        let expected = LeftMember {
+            id: id,
+            name: Some(name),
+            membership_nr: Some(ms_nr)
+        };
+        
+        let left = get_member_left(&mut conn, &date1, &date2).unwrap();
+        assert_eq!(1,left.len());
+        assert_eq!(expected,left[0]);
+    }
+    
+    #[test]
+    fn check_get_member_left_full() {
+        let (_,mut conn) = setup_db();
+        
+        let time = NaiveTime::parse_from_str("00:00:01","%H:%M:%S").unwrap();
+        let date_test_1 = NaiveDate::parse_from_str("2014-03-05",DATE_FORMAT).unwrap();
+        let date_test_2 = NaiveDate::parse_from_str("2014-03-06",DATE_FORMAT).unwrap();
+        let datetime_test_1 = date_test_1.and_time(time);
+        let datetime_test_2 = date_test_2.and_time(time);
+        let date_noise_start = NaiveDate::parse_from_str("2014-03-01",DATE_FORMAT).unwrap();
+        let date_noise_end = NaiveDate::parse_from_str("2014-03-10",DATE_FORMAT).unwrap();
+        
+        
+        let mut offset = 10; // id counter
+        
+        let member_noise: Vec<Member> = (0..offset).map(|x| create_member(&format!("tester {}",x),x,500,1)).collect();
+        
+        { // insert noise data of members
+            let mut current = date_noise_start.clone();
+            while current <= date_noise_end {
+                insert_members(&mut conn, &member_noise, &current.and_time(time)).unwrap();
+                current = current.succ();
+            }
+            for ref mem in member_noise { // open memberships
+                insert_membership(&mut conn, &mem.id,&date_noise_start, None);
+            }
+        }
+        
+        let mut expected: HashMap<i32,LeftMember> = HashMap::new();
+        
+        {// member which has left based on data
+            let name = format!("tester {}",offset);
+            let data_member = create_member(&name, offset.clone(),2,3);
+            
+            let mut vec_t = Vec::new();
+            vec_t.push(data_member);
+            let mut current = date_noise_start.clone();
+            while current < date_test_2 {
+                insert_members(&mut conn, &vec_t, &current.and_time(time)).unwrap();
+                current = current.succ();
+            }
+            
+            // current ms
+            let nr = insert_membership(&mut conn, &offset, &date_test_1,None);
+            
+            let left = LeftMember {
+                id: offset.clone(),
+                name: Some(name),
+                membership_nr: Some(nr)
+            };
+            
+            // insert some earlier memberships
+            insert_full_membership(&mut conn, &left.id, &date_noise_start, &date_test_1.pred(),"asdf",true);
+            
+            expected.insert(left.id.clone(), left);
+        }
+        offset += 1;
+        {// member which has left based on join-data
+         // no data in member table
+            let nr = insert_membership(&mut conn, &offset, &date_test_1,None);
+            
+            let left = LeftMember {
+                id: offset.clone(),
+                name: None,
+                membership_nr: Some(nr)
+            };
+            
+            // insert some earlier memberships
+            insert_full_membership(&mut conn, &left.id, &date_noise_start, &date_test_1.pred(),"asdf",true);
+            
+            expected.insert(left.id.clone(), left);
+        }
+        offset += 1;
+        
+        // test function
+        let found = get_member_left(&mut conn, &datetime_test_1, &datetime_test_2).unwrap();
+        
+        assert_eq!(expected.len(),found.len());
+        
+        for m in found {
+            assert_eq!(expected.get(&m.id),Some(&m));
+        }
+    }
+    
+    /// Check log insertion
+    #[test]
+    fn check_log_insert() {
+        let (_,mut conn) = setup_db();
+        let msg_insert = "asdf";
+        log_message_opt(&mut conn, msg_insert).unwrap();
+        log_message_opt(&mut conn, msg_insert).unwrap();
+        log_message_opt(&mut conn, msg_insert).unwrap();
+        
+        let date_check: NaiveDate = Local::now().naive_local().date();
+        
+        let mut stmt = conn.prepare("SELECT date,msg FROM log").unwrap();
+        
+        let result = stmt.execute(()).unwrap();
+        for row in result {
+            let (date,msg): (NaiveDateTime, String) = from_row(row.unwrap());
+            assert_eq!(date_check,date.date());
+            assert_eq!(msg_insert,msg);
+        }
+    }
+    
+    /// Check date valid with data function
+    #[test]
+    fn check_date_for_data_test() {
+        let date_valid: NaiveDate = NaiveDate::parse_from_str("2015-01-01",DATE_FORMAT).unwrap();
+        let date_invalid: NaiveDate = NaiveDate::parse_from_str("2015-01-02",DATE_FORMAT).unwrap();
+        let (_,mut conn) = setup_db();
+        let datetime = date_valid.and_hms(10,0,0);
+        {// setup valid date data
+            let members: Vec<Member> = (0..5).map(|x| create_member(&format!("tester {}",x),x,500,1)).collect();
+            insert_members(&mut conn,&members,&datetime).unwrap();
+        }
+        assert_eq!(Some(datetime),check_date_for_data(&mut conn,&date_valid).unwrap());
+        assert_eq!(None,check_date_for_data(&mut conn,&date_invalid).unwrap());
+    }
+    
+    #[test]
+    fn read_string_setting_test() {
+        let (_,mut conn) = setup_db();
+        let key = "a";
+        let value = String::from("b");
+        insert_settings(&mut conn, key,&value);
+        insert_settings(&mut conn, "aa","bb");
+        insert_settings(&mut conn, "","c");
+        assert_eq!(Some(value),read_string_setting(&mut conn, key).unwrap());
+        assert_eq!(None,read_string_setting(&mut conn, "asdf").unwrap());
+    }
+    
+    #[test]
+    fn read_bool_setting_test() {
+        let (_,mut conn) = setup_db();
+        let key = "a";
+        let key_2 = "ab";
+        let key_3 = "abc";
+        insert_settings(&mut conn, key,"1");
+        insert_settings(&mut conn, key_2,"true");
+        insert_settings(&mut conn, key_3,"c");
+        assert_eq!(Some(true),read_bool_setting(&mut conn, key).unwrap());
+        assert_eq!(Some(true),read_bool_setting(&mut conn, key_2).unwrap());
+        assert_eq!(Some(false),read_bool_setting(&mut conn, key_3).unwrap());
+        assert_eq!(None,read_bool_setting(&mut conn, "asdf").unwrap());
+    }
+    
+    #[test]
+    fn insert_member_leave_test() {
+        let (_,mut conn) = setup_db();
+        let msg = "my kick message";
+        let id = 123;
+        let join = Local::today().naive_local();
+        let nr = insert_membership(&mut conn, &id, &join, None);
+        let leave = Local::today().naive_local().succ();
+        let trial = insert_member_leave(&mut conn, &id,&nr, &leave,msg).unwrap();
+        assert_eq!(trial,0);
+    }
+    
+    #[test]
+    fn insert_member_leave_test_multiple() {
+        let (_,mut conn) = setup_db();
+        let msg = "my kick message";
+        let id = 123;
+        let join = Local::today().naive_local();
+        insert_trial(&mut conn, &id,&join);
+        insert_trial(&mut conn, &id,&join.succ());
+        let nr = insert_membership(&mut conn, &id, &join, None);
+        let leave = Local::today().naive_local().succ();
+        let trial = insert_member_leave(&mut conn, &id,&nr, &leave,msg).unwrap();
+        assert_eq!(trial,2);
+    }
+    
+    #[test]
+    fn insert_member_leave_test_override() {
+        let (_,mut conn) = setup_db();
+        let msg = "my kick message";
+        let id = 123;
+        let join = Local::today().naive_local();
+        let nr = insert_full_membership(&mut conn, &id, &join, &join, "asd",true);
+        insert_trial(&mut conn, &id,&join);
+        let leave = Local::today().naive_local().succ();
+        let trial = insert_member_leave(&mut conn, &id,&nr, &leave,msg).unwrap();
+        assert_eq!(trial,1);
+    }
+    
+    #[test]
+    fn get_next_older_date_test() {
+        let date_start: NaiveDate =  NaiveDate::parse_from_str("2015-01-01",DATE_FORMAT).unwrap();
+        
+        let (_,mut conn) = setup_db();
+        
+        let members: Vec<Member> = (0..5).map(|x| create_member(&format!("tester {}",x),x,500,1)).collect();
+        let mut date_curr = date_start.clone();
+        for i in 0..10 {
+            date_curr = date_curr.succ();
+            let datetime = date_curr.and_hms(10,i,0);
+            insert_members(&mut conn,&members,&datetime).unwrap();
+        }
+        
+        let correct = date_curr; // 2015-01-11 //10:09:00
+        
+        // add data with missing flags
+        for i in 0..2 {
+            date_curr = date_curr.succ();
+            let datetime = date_curr.and_hms(10,i,0);
+            insert_missing_entry(&datetime,&mut conn, true).unwrap();
+            insert_members(&mut conn,&members,&datetime).unwrap();
+        } //2015-01-13
+        
+        // go 1 days ahead (2 in total), no dataset there
+        let start_test = date_curr.checked_add_signed(Duration::days(1)).unwrap();
+        // 2015-01-14
+        
+        // create a gap
+        date_curr = date_curr.checked_add_signed(Duration::days(30)).unwrap();
+        
+        for i in 1..7 {
+            let datetime = date_curr.and_hms(10,i,0);
+            insert_members(&mut conn,&members,&datetime).unwrap();
+            date_curr = date_curr.succ();
+        }
+        
+        assert_eq!(NaiveDate::parse_from_str("2015-01-11",DATE_FORMAT)
+            .unwrap(),correct);
+        assert_eq!(NaiveDate::parse_from_str("2015-01-14",DATE_FORMAT)
+        .unwrap(),start_test);
+        
+        assert_eq!(Some(correct.and_hms(10,9,0)),get_next_older_date(&mut conn,&start_test.and_hms(10,0,0),&date_start).unwrap());
+        assert_eq!(Some(correct.and_hms(10,9,0)),get_next_older_date(&mut conn,&correct.succ().and_hms(10,0,0),&correct).unwrap());
+        assert_eq!(Some(correct.and_hms(10,9,0)),get_next_older_date(&mut conn,&correct.succ().and_hms(10,0,0),&date_start).unwrap());
+        assert_eq!(Some(date_curr.pred().pred().and_hms(10,5,0)),get_next_older_date(&mut conn,&date_curr.pred().and_hms(10,0,0),&date_start).unwrap());
+        assert_eq!(None, get_next_older_date(&mut conn,&correct.succ().and_hms(10,0,0),&correct.succ()).unwrap());
+        assert_eq!(None, get_next_older_date(&mut conn,&correct.succ().and_hms(10,0,0),&start_test).unwrap());
     }
     
     /// Test connection
@@ -281,7 +809,7 @@ mod test {
         let (_,_) = setup_db();
     }
     
-    /// Setup insert members twice with the same date
+    /// Setup insert members twice with the same datetime
     /// This test should fail
     #[test]
     #[should_panic]
@@ -318,7 +846,9 @@ mod test {
     fn insert_missing_entry_test() {
         let time: NaiveDateTime = Local::now().naive_local();
         let (_,mut conn) = setup_db();
-        insert_missing_entry(&time,&mut conn).unwrap();
+        insert_missing_entry(&time,&mut conn,true).unwrap();
+        let time = time.checked_add_signed(Duration::seconds(5)).unwrap();
+        insert_missing_entry(&time,&mut conn,false).unwrap();
     }
     
     #[test]

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Aron Heinecke
+Copyright 2017,2018 Aron Heinecke
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ extern crate log;
 extern crate log4rs;
 #[macro_use]
 extern crate quick_error;
+#[macro_use]
 extern crate mysql;
 extern crate regex;
 extern crate chrono;
@@ -50,11 +51,12 @@ use std::sync::Arc;
 
 use sendmail::email;
 
-use chrono::naive::{NaiveTime,NaiveDateTime};
+use chrono::naive::{NaiveDate,NaiveTime,NaiveDateTime};
+use chrono::Duration;
 use chrono::offset::Local;
 use chrono::Timelike;
 
-use mysql::Pool;
+use mysql::{Pool,PooledConn};
 
 use error::Error;
 
@@ -67,6 +69,15 @@ const REFERER: &'static str = "http://crossfire.z8games.com/";
 const CONFIG_PATH: &'static str = "config/config.toml";
 const LOG_PATH: &'static str = "config/log.yml";
 const INTERVALL_H: i64 = 24; // execute intervall
+
+const DATE_FORMAT_DAY: &'static str = "%Y-%m-%d";
+
+const LEAVE_MSG_KEY: &'static str = "auto_leave_message";
+const LEAVE_ENABLE_KEY: &'static str = "auto_leave_enable";
+#[allow(dead_code)]
+const TS3_REMOVAL_KEY: &'static str = "ts3_removal_enable";
+#[allow(dead_code)]
+const TS3_WHITELIST_KEY: &'static str = "ts3_whitelist";
 
 fn main() {
     match init_log() {
@@ -88,10 +99,10 @@ fn main() {
     
     let app = App::new("Clantool")
                     .version("2.1")
-                    .author("Aron H. <aron.heinecke@t-online.de>")
+                    .author("Aron Heinecke <aron.heinecke@t-online.de>")
                     .about("Gathers statistics about CF-NA clans. Starts as daemon per default")
                     .subcommand(SubCommand::with_name("fcrawl")
-                        .about("force run crawl & exit"))
+                        .about("force run crawl & exit, no leave detection"))
                     .subcommand(SubCommand::with_name("mail-test")
                         .about("Test mail sending")
                         /*.arg(Arg::with_name("mail")
@@ -99,13 +110,27 @@ fn main() {
                             .takes_value(true)
                             .required(true))
                         */    )
+                    .subcommand(SubCommand::with_name("printconfig")
+                        .about("Print configuration settings in the Database")
+                        )
+                    .subcommand(SubCommand::with_name("check-leave")
+                        .about("Manually run leave detection for given date")
+                        .arg(Arg::with_name("date")
+                            .required(true)
+                            .validator(validator_date)
+                            .takes_value(true)
+                            .help("date to check for: 'YYYY-MM-DD'"))
+                        .arg(Arg::with_name("message")
+                            .short("m")
+                            .long("message")
+                            .takes_value(true)
+                            .help("custom leave message to use")))
                     .subcommand(SubCommand::with_name("checkdb")
                         .about("checks DB for missing entries or doubles and corrects those")
                         .arg(Arg::with_name("simulate")
                             .short("s")
                             .help("simulation mode, leaves DB unchanged")))
                     .get_matches();
-    trace!("{:?}",app);
     
     match app.subcommand() {
         ("checkdb", Some(sub_m)) => {
@@ -120,12 +145,42 @@ fn main() {
             let local_pool = &*pool;
             let local_config = &*config;
             let rt_time = NaiveTime::from_num_seconds_from_midnight(20,0);
-            debug!("Result: {:?}",run_update(local_pool,local_config, &rt_time));
+            debug!("Result: {:?}",schedule_crawl_thread(local_pool,local_config, &rt_time));
             info!("Finished force crawl");
+        },
+        ("printconfig", _) => {
+            let local_pool = &* pool;
+            let local_config = &*config;
+            let mut conn = match local_pool.get_conn() {
+                Err(e) => { error!("Unable to get db conn {}",e); return; },
+                Ok(v) => v,
+            };
+            info!("Leave message: {}",get_leave_message(&mut conn, &local_config));
+            info!("Auto Leave check: {}",get_leave_detection_enabled(&mut conn, &local_config));
         },
         ("mail-test", _) => {
             info!("Sending test mail");
             send_mail(&*config,"Clantool test mail","This is a manually triggered test mail.");
+        },
+        ("check-leave", Some(sub_m)) => {
+            info!("Manually performing leave check");
+            let mut conn = match pool.get_conn() {
+                Ok(v) => v,
+                Err(e) => { error!("DB Exception {}",e); return; }
+            };
+            let date_s = sub_m.value_of("date").unwrap();
+            let date = NaiveDate::parse_from_str(date_s,DATE_FORMAT_DAY).unwrap();
+            let datetime = match db::check_date_for_data(&mut conn, &date) {
+                Ok(Some(v)) => { info!("Using exact dataset {}",v); v },
+                Ok(None) => { error!("No data for specified date!"); return; },
+                Err(e) => { error!("Unable to verify specified date {}",e); return; }
+            };
+            let message: String = match sub_m.value_of("message") {
+                Some(v) => v.to_owned(),
+                None => format!("{} manual check",get_leave_message(&mut conn, &*config)),
+            };
+            run_leave_detection(&*pool, &*config, &datetime, &message);
+            info!("Finished");
         },
         _ =>  {
             info!("Entering daemon mode");
@@ -134,6 +189,14 @@ fn main() {
                 std::thread::sleep(std::time::Duration::from_millis(1000));
             }
         }
+    }
+}
+
+/// verify date input of YYYY-MM-DD
+fn validator_date(input : String) -> Result<(),String> {
+    match NaiveDate::parse_from_str(&input, DATE_FORMAT_DAY) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(format!("Invalid date input: {}",e))
     }
 }
 
@@ -185,21 +248,112 @@ fn run_timer<'a>(pool: Arc<Pool>, config: Arc<Config>, timer: &'a timer::Timer) 
     info!("First execution will be on {}",schedule_time);
     
     let a = timer.schedule(schedule_time,Some(chrono::Duration::hours(INTERVALL_H)), move || {
-        run_update(&*pool, &*config, &retry_time);
+        match schedule_crawl_thread(&*pool,&*config, &retry_time) {
+            Err(e) => error!("Error in crawler thread {}",e),
+            Ok(_) => ()
+        }
     });
     a.ignore();
 }
 
+fn schedule_crawl_thread(pool: &Pool, config: &Config, retry_time: &NaiveTime) -> Result<(),Error> {
+    if let Some(time) = run_update(pool, config, retry_time) {
+        debug!("{}",time);
+        let mut conn = pool.get_conn()?;
+        if get_leave_detection_enabled(&mut conn, config) {
+            debug!("Leave detection enabled");
+            run_leave_detection(pool, config, &time, &get_leave_message(&mut conn,config));
+        } else {
+            info!("Leave detection disabled, skipping");
+        }
+    }
+    Ok(())
+}
+
+/// Read leave-message from DB or default to config value
+fn get_leave_message(conn: &mut PooledConn, config: &Config) -> String {
+    match db::read_string_setting(conn, LEAVE_MSG_KEY) {
+        Ok(Some(v)) => v,
+        Ok(None) => { warn!("No leave message value found in db");
+            config.main.auto_leave_message_default.clone() },
+        Err(e) => { error!("Error retrieving leave message {}",e);  
+            config.main.auto_leave_message_default.clone() }
+    }
+}
+
+/// Read leave detection setting from DB
+fn get_leave_detection_enabled(conn: &mut PooledConn, config: &Config) -> bool {
+    match db::read_bool_setting(conn, LEAVE_ENABLE_KEY) {
+        Ok(Some(v)) => v,
+        Ok(None) => config.main.auto_leave_enabled.clone(),
+        Err(e) => { error!("Error retrieving leave setting {}",e);
+            config.main.auto_leave_enabled.clone() }
+    }
+}
+
+/// Detect leaves & process these
+/// date: current date for which to look back
+fn run_leave_detection(pool: &Pool, config: &Config, date: &NaiveDateTime, leave_cause: &str) {
+    let max_age: NaiveDate = date.date().checked_sub_signed(
+        Duration::days(config.main.auto_leave_max_age as i64)
+    ).unwrap();
+    
+    let mut conn = match pool.get_conn() {
+        Ok(v) => v,
+        Err(e) => { error!("Error on db connection! {}",e); return; }
+    };
+    
+    match db::get_next_older_date(&mut conn, date, &max_age) {
+        Err(e) => {db::log_message(&mut conn,
+                    "Unable to get older dates, skipping leave detection",
+                    "unable to log get_next_older_date error");
+                    error!("Unbale to get older date! {}",e); },
+        Ok(Some(previous_date)) => {
+            debug!("Date1 {} Date2 {}",previous_date,date);
+            match db::get_member_left(&mut conn, &previous_date,date) {
+                Err(e) => { db::log_message(&mut conn,&format!("Unable to query left members! {}",e),
+                    "unable to log message");
+                    error!("Unable to retrieve left members {}",e) },
+                Ok(left) => {
+                    for m in left {
+                        match m.membership_nr {
+                            Some(nr) => {
+                                match db::insert_member_leave(&mut conn,
+                                    &m.id,&nr,&previous_date.date(),leave_cause) {
+                                    Ok(trial) => db::log_message(&mut conn,
+                                        &format!(
+                                        "Detected leave for {} {} nr:{} terminated trials: {}",
+                                            m.get_name(),m.id,nr,trial),
+                                        "Unable to log member leave detection!"),
+                                    Err(e) => error!("Unable to insert member leave! nr:{} {}",nr,e)
+                                }
+                            },
+                            None =>
+                            db::log_message(&mut conn,
+                                &format!("No open membership for {} {}, can't auto-leave!",m.get_name(),m.id),
+                                "Unable to log message")
+                        }
+                    }
+                }
+            }
+        },
+        Ok(None) => { db::log_message(&mut conn,
+                    "No older entries to compare found, skipping leave detection",
+                    "unable to log get_next_older_date miss");
+        }
+    }
+}
+
 /// Performs a complete crawl
-fn run_update(pool: &Pool, config: &Config, retry_time: &NaiveTime) {
+fn run_update(pool: &Pool, config: &Config, retry_time: &NaiveTime) -> Option<NaiveDateTime> {
     trace!("performing crawler");
     
     let mut member_success  = false;
     let mut clan_success = false;
     
+    let mut time = Local::now().naive_local();
+    
     for x in 1..((config.main.retries+1) as u32) {
-        let time = Local::now().naive_local();
-        
         if !member_success {
             match run_update_member(pool,config, &time) {
                 Ok(_) => { debug!("Member crawling successfull."); member_success = true;
@@ -218,11 +372,11 @@ fn run_update(pool: &Pool, config: &Config, retry_time: &NaiveTime) {
         
         if member_success && clan_success {
             info!("Crawling successfull");
-            break;
+            return Some(time);
         } else {
             if x == config.main.retries {
                 warn!("No dataset for this schedule, all retries failed!");
-                match write_missing(&time,pool) {
+                match write_missing(&time,pool,!member_success) {
                     Ok(_) => {},
                     Err(e) => error!("Unable to write missing date! {}",e),
                 }
@@ -237,9 +391,15 @@ fn run_update(pool: &Pool, config: &Config, retry_time: &NaiveTime) {
             }else{
                 let wait_time = retry_time.num_seconds_from_midnight() * x;
                 std::thread::sleep(std::time::Duration::from_secs(wait_time.into()));
+                
+                // refresh time, otherwise leave it, so it's synchronized
+                if !member_success && !clan_success {
+                    time = Local::now().naive_local();
+                }
             }
         }
     }
+    return None;
 }
 
 /// Send email, catch & log errors
@@ -259,8 +419,8 @@ fn send_mail(config: &Config, subject: &str, message: &str) {
 
 /// wrapper to write missing date
 /// allowing for error return
-fn write_missing(timestamp: &NaiveDateTime, pool: &Pool) -> Result<(),Error> {
-    db::insert_missing_entry(timestamp,&mut pool.get_conn()?)?;
+fn write_missing(timestamp: &NaiveDateTime, pool: &Pool, missing_member: bool) -> Result<(),Error> {
+    db::insert_missing_entry(timestamp,&mut pool.get_conn()?,missing_member)?;
     Ok(())
 }
 
@@ -351,9 +511,29 @@ pub struct Clan {
 #[derive(Debug,PartialEq, PartialOrd,Clone)]
 pub struct Member {
     name: String,
-    id: u32,
-    exp: u32,
-    contribution: u32
+    id: i32,
+    exp: i32,
+    contribution: i32
+}
+
+/// Left member data structure
+#[derive(Debug,PartialEq, PartialOrd)]
+pub struct LeftMember {
+    id: i32,
+    // account name, can be None if same day join&leave
+    name: Option<String>,
+    // membership nr which can be closed
+    membership_nr: Option<i32>
+}
+
+impl LeftMember {
+    /// Return account-name of member or spacer if no name found
+    pub fn get_name(&self) -> &str {
+        match self.name {
+            Some(ref v) => v,
+            None => "<unnamed>"
+        }
+    }
 }
 
 #[cfg(test)]
