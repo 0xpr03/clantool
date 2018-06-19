@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Aron Heinecke
+Copyright 2017,2018 Aron Heinecke
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -142,6 +142,6 @@ mod test {
     #[test]
     fn get_ajax() {
         let b_ajax = get("https://httpbin.org/user-agent",HeaderType::Ajax).unwrap();
-        assert_eq!(b_ajax,format!("{{\n  \"user-agent\": \"{}\"\n}}\n", USER_AGENT)); // {{ = {, } = }}
+        assert!(b_ajax.contains(USER_AGENT));
     }
 }

@@ -24,5 +24,5 @@ quick-error = ">= 1.2.1"
 clap = ">= 2.31.1"
 sendmail = { git = "https://github.com/0xpr03/rust-sendmail", rev = "f0463869b55b3309d9c82e1b0c86ddad58eb98ef" }
 regex = ">= 0.2.8"
-mysql = ">= 12.0.2"
+mysql = ">= 13.0.0"
 timer = ">= 0.2"

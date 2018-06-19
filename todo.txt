@@ -1,0 +1,15 @@
+# diff weekly
+ts3 option (ajax?)
+- ts chart: warnung bei 0 identitäten
+
+
+# overview
+- Graph cp summe tag / member tag
+- CW's tag
+- 
+
+# suche
+? vornamen suche einbauen
+
+# menu
+scrolling abschalten -> content scrollt schon alles zusammen

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Aron Heinecke
+Copyright 2017,2018 Aron Heinecke
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -70,6 +70,9 @@ pub struct MainConfig {
     pub clan_ajax_end_row_key: String,
     pub clan_ajax_max_sites: u8,
     pub clan_url: String,
+    pub auto_leave_enabled: bool,
+    pub auto_leave_max_age: u8,
+    pub auto_leave_message_default: String,
     pub time: String,
     pub retries: u32,
     pub retry_interval: String,
@@ -148,7 +151,13 @@ clan_ajax_start_row_key = "%StartRow"
 clan_ajax_end_row_key = "%EndRow"
 # maximum amount of sites, after which to abort
 clan_ajax_max_sites = 10
+# required for referer
 clan_url = "http://crossfire.z8games.com/clan/68910"
+# enable automatic leave handling
+auto_leave_enabled = true
+# max days distance of date to compare to for leave detection
+auto_leave_max_age = 4
+auto_leave_message_default = "auto leave detection"
 # time of the day the crawler should run
 time = "12:00"
 retries = 5

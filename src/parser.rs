@@ -14,6 +14,22 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 use json::JsonValue;
+/*
+Copyright 2017,2018 Aron Heinecke
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 use json;
 
 use regex::Regex;
@@ -22,18 +38,18 @@ use error::Error;
 use Member;
 use Clan;
 
-// https://regex101.com/r/XsoG5T/1
+// https://regex101.com/r/XsoG5T/4
 const REGEX_WINS: &'static str = r#"<div class="match_details">(\d+)<br><span>Wins</span>"#;
 const REGEX_LOSSES: &'static str = r#"<div class="match_details">(\d+)<br><span>Losses</span>"#;
 const REGEX_DRAWS: &'static str = r#"<div class="match_details">(\d+)<br><span>Draws</span>"#;
-const REGEX_MEMBERS: &'static str = r#"<div>(\d+) Clan members"#;
+const REGEX_MEMBERS: &'static str = r#"<div>(\d+).?clan.members"#;
 
 const KEY_MEMBERSHIP: &'static str = "position_title";
 
 /// Parse a raw member json request to a vec of Members
-pub fn parse_all_member(input: &str) -> Result<(Vec<Member>,u32),Error> {//Result<Vec<Member>,Error> {
+pub fn parse_all_member(input: &str) -> Result<(Vec<Member>,i32),Error> {//Result<Vec<Member>,Error> {
     let mut parsed = try!(json::parse(input));
-    let total = get_u32_value(&mut parsed,"Total_Count")?;
+    let total = get_i32_value(&mut parsed,"Total_Count")?;
     let mut pmembers = parsed["members"].take();
 
     let members: Vec<Member> = try!(pmembers.members_mut()
@@ -55,9 +71,9 @@ fn parse_member(input: & mut JsonValue) -> Result<Option<Member>,Error> {
     if check_is_member(input, KEY_MEMBERSHIP) {
         Ok(Some(Member {
             name: try!(get_string_value(input,"name")),
-            id: try!(get_u32_value(input, "USN")),
-            exp: try!(get_u32_value(input, "xp_point")),
-            contribution: try!(get_u32_value(input, "contribution"))
+            id: try!(get_i32_value(input, "USN")),
+            exp: try!(get_i32_value(input, "xp_point")),
+            contribution: try!(get_i32_value(input, "contribution"))
         }))
     } else {
         Ok(None)
@@ -119,8 +135,16 @@ fn get_string_value(input: &mut JsonValue, key: &str) -> Result<String,Error> {
     val.take_string().ok_or(Error::Parser(format!("Value for {} is no string",key)))
 }
 
+/// Helper function to get a i32 from a provided json object
+/// Returns an error if the key is non existent or the value is no i32
+fn get_i32_value(input: &mut JsonValue, key: &str) -> Result<i32,Error> {
+    let val = try!(get_value(input, key));
+    val.as_i32().ok_or(Error::Parser(format!("Value for {} is no i32",key)))
+}
+
 /// Helper function to get a u32 from a provided json object
 /// Returns an error if the key is non existent or the value is no u32
+#[allow(dead_code)]
 fn get_u32_value(input: &mut JsonValue, key: &str) -> Result<u32,Error> {
     let val = try!(get_value(input, key));
     val.as_u32().ok_or(Error::Parser(format!("Value for {} is no u32",key)))
@@ -209,10 +233,10 @@ mod test {
     fn parse_clan_test() {
         let input = include_str!("test_http_clan.txt");
         let clan = Clan {
-            members: 56,
-            wins: 11169,
-            losses: 6756,
-            draws: 445
+            members: 41,
+            wins: 11495,
+            losses: 6872,
+            draws: 449
         };
         let parsed_clan = parse_clan(input).unwrap();
         assert_eq!(parsed_clan,clan);

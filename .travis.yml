@@ -1,0 +1,19 @@
+language: rust
+rust:
+  - stable
+  - beta
+  - nightly
+matrix:
+  allow_failures:
+    - rust: nightly
+  fast_finish: true
+cache: cargo 
+addons:
+  mariadb: '10.2'
+before_install:
+  - mysql -e 'SET GLOBAL max_connections = 200;'
+  - mysql -e 'CREATE DATABASE IF NOT EXISTS test;'
+env:
+  - TEST_DB_USER=root
+before_cache:
+  - rm -f ~/.cargo/registry/lock
