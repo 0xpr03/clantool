@@ -2903,13 +2903,13 @@ function getDifferenceWeeklyView() {
                     return;
                 }
                 var str = '<thead><tr class="tablesorter-ignoreRow"><th colspan=5>Kommentar mit Enter bestätigen!</th>';
-                var secondHeader = '<tr><th>Vorname</th><th>Account</th><th>ID / USN</th><th>VIP</th><th>Kommentar</th>';
+                var secondHeader = '<tr><th class="sorter-text">Vorname</th><th class="sorter-text">Account</th><th class="sorter-digit">ID / USN</th><th class="sorter-text">VIP</th><th class="sorter-text">Kommentar</th>';
                 $.each(data.date, function(i,row) {
                     str += '<th colspan=3 ><a href="'+escapeHtml('<?=DIFFERENCE_URL?>'
                     + '&dateFrom=' + row.start
                     + '&dateTo=' + row.end)
                     + '">' + row.end + '</a></th>';
-                    secondHeader += '<th>Flags</th><th>EXP</th><th>CP</th>';
+                    secondHeader += '<th class="sorter-text">Flags</th><th class="sorter-digit">EXP</th><th class="sorter-digit">CP</th>';
                 });
                 str += '</tr>';
                 secondHeader += '</tr></thead><tbody>';
@@ -2943,11 +2943,17 @@ function getDifferenceWeeklyView() {
                     str += '<td>' + escapeHtml(member.name) + '</td>';
                     str += '<td>'+formatMemberDetailLink(member.id,member.id)+'</td>';
                     
-                    str += '<td>';
-                    if(member.vip == null)
+                    str += '<td data-text='; // provide a data-text attribute for sorting
+                    if(member.vip == null) {
+                        str += '"?">';
                         str += formatMemberDetailLink(member.id,"?");
-                    else
-                        str += member.vip == 1 ? '<i class="fas fa-check" title="VIP Spieler"></i>' : '<i class="fas fa-times" title="Non VIP Spieler"></i>';
+                    } else if (member.vip == 1) {
+                        str += '"1">';
+                        str += '<i class="fas fa-check" title="VIP Spieler"></i>';
+                    } else {
+                        str += '"0">';
+                        str += '<i class="fas fa-times" title="Non VIP Spieler"></i>';
+                    }
                     str += '</td>';
                     
                     str +='<td class="cell-editable cell-wrap" data-id="'+member.id+'">';
@@ -2963,9 +2969,17 @@ function getDifferenceWeeklyView() {
                             } else if(row.cp_by_exp >= 10) {
                                 background = 'class="success"';
                             }
-                            str += '<td ' + background + '>';
+                            var dataText = '';
                             if(row.afk == 1)
-                                str += ' <i class="fas fa-clock" title="AFK"></i>';
+                                dataText += 'afk';
+                            if(row.trial == 1)
+                                dataText += 'trial';
+                            
+                            str += '<td ' + background + ' data-text="'+dataText+'">';
+                            if(row.afk == 1)
+                                str += '<i class="fas fa-clock" title="AFK"></i>';
+                            if(row.afk == 1 && row.trial == 1)
+                                str += ' ';
                             if(row.trial == 1)
                                 str += ' <i class="fas fa-plus" title="Pröbling"></i>';
                             str += '</td>';
@@ -2986,6 +3000,7 @@ function getDifferenceWeeklyView() {
                     str += '</tr>';
                 });
                 str += '</tbody>';
+                console.log(str);
                 $(fixedTableClass).trigger('destroy');
                 $('#difference-table').html(str);
                 swapNonMembers($('#nonMembers').is('checked'));
@@ -3038,20 +3053,7 @@ function getDifferenceWeeklyView() {
         }
         
         function initCustomTableTool() {
-            var myTextExtraction = function(node, table, cellIndex) 
-            {
-                //if(cellIndex == 3){
-                //    return node.innerHTML;
-                //}
-                if(node.innerText != undefined && node.innerText != ''){
-                    return node.innerText; 
-                } else {
-                    return node.innerHTML;
-                }
-            }
-            
             $(fixedTableClass).tablesorter({
-                textExtraction: myTextExtraction,
                 widgets: ["stickyHeaders"],
                 widgetOptions : {
                     stickyHeaders : "fixed-header" // background fix class
@@ -4189,8 +4191,9 @@ function getTitle() {
 //@Override
 function getHead() {?>
 <script defer src="js/moment.min.js" type="text/javascript"></script>
-<script defer src="js/jquery.tablesorter.min.js" type="text/javascript"></script>
-<script defer src="js/jquery.tablesorter.widgets.min.js" type="text/javascript"></script>
+<!--<script defer src="js/jquery.tablesorter.min.js" type="text/javascript"></script>
+<script defer src="js/jquery.tablesorter.widgets.min.js" type="text/javascript"></script>-->
+<script defer src="js/jquery.tablesorter.combined.min.js" type="text/javascript"></script>
 <script defer src="js/Chart.min.js" type="text/javascript"></script>
 <link rel="stylesheet" href="css/clantool.css">
 <script defer src="https://static.proctet.net/js/fontawesome-all.min.js" type="text/javascript"></script>
