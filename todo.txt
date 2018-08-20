@@ -1,15 +1,52 @@
 # diff weekly
-ts3 option (ajax?)
+- laden von rendern unterscheiden
+- zeige nicht member hält sich bei änderung der Zeit nicht an Einstellung
+- evaluation editor widget https://jsfiddle.net/Mottie/s6nj8pcu/ https://mottie.github.io/tablesorter/docs/example-widget-editable.html
+x fix der sortierung
+- evaluation https://www.datatables.net http://www.guriddo.net/demo/bootstrap/
+- ? clear all button für kommentare
+
+?vip clanpunkte könig vergeben mit ts verlinkung
+
+# difference
+- vorbeugen von diffWeekly sortierungs bugs
+
+# ts3 (member)
 - ts chart: warnung bei 0 identitäten
 
+# log
+# prio
+- datumsauswahl kaputt, zeigt immer selbe vorauswahl an
+
+?!
+# afk mäßige Verwarnungstabelle
+in member karteikarte, sichtbar in Diff. Weekly
+
+# acc change
+# prio
+kommentar umändern, dass es am Anfang steht + datum
 
 # overview
 - Graph cp summe tag / member tag
-- CW's tag
-- 
+- ts aktivität (mehrere graphen statt alles zusammen)
+- ts aktivität von nur membern
 
-# suche
-? vornamen suche einbauen
+# away
+- aktive/kommende unterschiedlich einfärben
+
+# memberDetail
+- warnung wenn schon verlinkte TS Identität zugewiesen wird
+- (low prio) editierung einbauen
+- (low prio) fix für menü anordnung suchen, je nach größe test -> 11729973 vs normaler member
 
 # menu
 scrolling abschalten -> content scrollt schon alles zusammen
+
+SELECT m3.date,AVG(m3.diff),COUNT(CASE WHEN m3.diff > 0 THEN 1 ELSE 0 END) AS active,members FROM (
+    SELECT m2.id,m2.date as date,m2.exp - m1.exp AS diff FROM member m2 INNER JOIN member m1 ON m2.id = m1.id AND m1.date = DATE_SUB(m2.date, INTERVAL 1 DAY)
+) m3 GROUP BY m3.date 
+LEFT JOIN clan c ON c.date = m3.date
+
+
+SELECT m2.id,m2.date,m1.date,m2.exp - m1.exp AS diff FROM member m2 INNER JOIN member m1 ON m2.id = m1.id AND m1.date = DATE_SUB(m2.date, INTERVAL 1 DAY)
+WHERE m2.date BETWEEN "2018-05-01" AND "2018-05-5";

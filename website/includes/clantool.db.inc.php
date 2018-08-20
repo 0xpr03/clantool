@@ -1248,11 +1248,12 @@ class clanDB extends dbException {
      */
     public function getMemberByName($key) {
         $key_name = '%'.$key.'%';
-        if ($query = $this->db->prepare ( 'SELECT `name`,`id` FROM `member_names` 
-        WHERE `name` LIKE ? 
-        ORDER BY `id`,`date`,`updated`,`name` 
+        if ($query = $this->db->prepare ( 'SELECT mn.`name`,mn.`id`,ma.`name` as `vname` FROM `member_names` mn
+        JOIN `member_addition` ma ON mn.id = ma.id 
+        WHERE mn.`name` LIKE ? OR ma.`name` LIKE ? 
+        ORDER BY `id`,`date`,`updated`,mn.`name` 
         LIMIT 20' )) {
-            $query->bind_param ( 's', $key_name );
+            $query->bind_param ( 'ss', $key_name, $key_name );
             $query->execute();
             $result = $query->get_result ();
             
@@ -1267,7 +1268,7 @@ class clanDB extends dbException {
                 while ( $row = $result->fetch_assoc () ) {
                     $resultset[] = array(
                         'id' => $row['id'],
-                        'text' => $row['name'] . ' (' . $row['id'] . ')',
+                        'text' => $row['name'] . ' (' . $row['id'] . ') '.$row['vname'],
                     );
                 }
             }
@@ -1302,44 +1303,6 @@ class clanDB extends dbException {
                 $resultset = array ();
                 while ( $row = $result->fetch_assoc () ) {
                     $resultset[] = array(
-                        'name' => $row['name'],
-                        'date' => $row['date'],
-                        'updated' => $row['updated']
-                    );
-                }
-            }
-            $result->close();
-            
-            return $resultset;
-        } else {
-            throw new dbException ( $this->db->error );
-        }
-    }
-    
-    /**
-     * Get member where name/id like key
-     * @param string $key
-     * @throws dbException
-     * @DEPRECATED
-     */
-    public function searchForMemberName($key) {
-        $key = '%'.$key.'%';
-        if ($query = $this->db->prepare ( 'SELECT `name`,`id`,`date`,`updated` FROM `member_names` WHERE `name` LIKE ? OR id LIKE ? ORDER BY `id`,`date`,`updated`,`name`' )) { // Y-m-d G:i:s Y-m-d h:i:s
-            $query->bind_param ( 'ss', $key, $key );
-            $query->execute();
-            $result = $query->get_result ();
-            
-            if (! $result) {
-                throw new dbException ( $this->db->error, 500 );
-            }
-            
-            if ($result->num_rows == 0) {
-                $resultset = null;
-            } else {
-                $resultset = array ();
-                while ( $row = $result->fetch_assoc () ) {
-                    $resultset[] = array(
-                        'id' => $row['id'],
                         'name' => $row['name'],
                         'date' => $row['date'],
                         'updated' => $row['updated']

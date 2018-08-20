@@ -31,3 +31,9 @@ CREATE TABLE `missing_entries` (
 ALTER TABLE member_names ADD KEY(`updated`,`id`);
 ALTER TABLE missing_entries ADD `member` bit(1) DEFAULT TRUE;
 ALTER TABLE missing_entries MODIFY COLUMN `member` bit(1) NOT NULL;
+
+/*
+ * Exceute on upgrade from 0.1.4
+ * performance improvement
+ */
+ALTER TABLE member_addition ADD KEY(`name`);

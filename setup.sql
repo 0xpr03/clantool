@@ -29,7 +29,7 @@ CREATE TABLE `member` (
 
 CREATE TABLE `member_names` (
  `id` int(11) NOT NULL,
- `name` varchar(12) NOT NULL,
+ `name` varchar(12) NOT NULL, /* account name */
  `date` datetime NOT NULL,
  `updated` datetime NOT NULL,
  UNIQUE KEY `id` (`id`,`name`),
@@ -44,11 +44,13 @@ CREATE TABLE `missing_entries` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
 CREATE TABLE `member_addition` (
- `id` int(11) NOT NULL PRIMARY KEY,
- `name` varchar(25) NOT NULL,
+ `id` int(11) NOT NULL,
+ `name` varchar(25) NOT NULL, /* vorname */
  `vip` bit(1) NOT NULL,
  `comment` text,
- `diff_comment` VARCHAR(70)
+ `diff_comment` VARCHAR(70),
+  PRIMARY KEY (`id`),
+  KEY `name` (`name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
 CREATE TABLE `membership_cause` (

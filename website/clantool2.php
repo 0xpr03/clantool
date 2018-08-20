@@ -338,7 +338,7 @@ function getCTTemplate() {
                     url: URL,
                     type: 'get',
                     dataType: 'json',
-                    delay: 500, // ms
+                    delay: 600, // ms
                     data: function(params) {
                         var query = {
                             'site' : VAR_SITE,
