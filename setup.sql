@@ -45,7 +45,7 @@ CREATE TABLE `missing_entries` (
 
 CREATE TABLE `member_addition` (
  `id` int(11) NOT NULL,
- `name` varchar(25) NOT NULL, /* vorname */
+ `name` varchar(25) NOT NULL, /* person first name */
  `vip` bit(1) NOT NULL,
  `comment` text,
  `diff_comment` VARCHAR(70),
