@@ -1014,63 +1014,6 @@ class clanDB extends dbException {
     }
     
     /**
-     * Get members which left / joined between the dates
-     * @param string $date1
-     * @param string $date2
-     * @param $showLeft set to true to show left members, otherwise joined
-     * @throws dbException
-     * @DEPRECATED
-     */
-    public function getMemberDifference($date1, $date2, $showLeft) {
-        $this->escapeData($date1);
-        $this->escapeData($date2);
-        $date_A = $showLeft ? $date1 : $date2;
-        $date_B = $showLeft ? $date2 : $date1;
-        if ($query = $this->db->prepare ( '
-        SELECT names.name, m1.id, m1.date
-        FROM member m1 
-        JOIN (SELECT n1.id,n1.`name` FROM 
-            (SELECT id,MAX(date) as maxdate 
-                FROM member_names 
-            GROUP BY id) as nEndDate 
-            JOIN member_names AS n1 ON ( 
-                n1.id = nEndDate.id 
-                AND n1.date = nEndDate.maxdate 
-            ) 
-        ) names 
-        ON m1.id = names.id
-        WHERE m1.date LIKE "'.$date_A.'%" AND 
-        m1.id NOT IN ( 
-            SELECT id FROM member m2 
-            WHERE m2.id = m1.id AND m2.date LIKE "'.$date_B.'%"
-        )' )) { // Y-m-d G:i:s Y-m-d h:i:s
-            $query->execute();
-            $result = $query->get_result ();
-            
-            if (! $result) {
-                throw new dbException ( $this->db->error, 500 );
-            }
-            
-            if ($result->num_rows == 0) {
-                $resultset = null;
-            } else {
-                $resultset = array ();
-                while ( $row = $result->fetch_assoc () ) {
-                    $resultset[] = array(
-                        'id' => $row['id'],
-                        'name' => $row['name']
-                    );
-                }
-            }
-            $result->close();
-            
-            return $resultset;
-        } else {
-            throw new dbException ( $this->db->error );
-        }
-    }
-    
-    /**
      * Get overview data
      * @param string $date1
      * @param string $date2
@@ -1790,41 +1733,6 @@ class clanDB extends dbException {
                         'days' => $row['days'],
                         'sum_raw' => $row['timeSum'],
                         'avg_raw' => $row['avg'],
-                    );
-                }
-            }
-            $result->close();
-            
-            return $resultset;
-        } else {
-            throw new dbException ( $this->db->error );
-        }
-    }
-    
-    /**
-     * Test function for ts3 data retrieval.
-     * @Deprecated
-     * @param ts3ID int ID
-     * @DEPRECATED
-     */
-    public function getTs3Data($date1,$date2,$ts3ID) {
-        if ($query = $this->db->prepare ( 'SELECT `timestamp` AS `timestamp`, CAST(`online` AS unsigned integer ) AS `online` FROM `'.DB_TS3_DATA_OLD.'` WHERE `client_id` = ? AND `timestamp` BETWEEN ? AND ?')) { // Y-m-d G:i:s Y-m-d h:i:s
-            $query->bind_param ( 'iss',$ts3ID, $date1, $date2 );
-            $query->execute();
-            $result = $query->get_result ();
-            
-            if (! $result) {
-                throw new dbException ( $this->db->error, 500 );
-            }
-            
-            if ($result->num_rows == 0) {
-                $resultset = null;
-            } else {
-                $resultset = array ();
-                while ( $row = $result->fetch_assoc () ) {
-                    $resultset[] = array(
-                        'timestamp' => $row['timestamp'],
-                        'online' => $row['online']
                     );
                 }
             }

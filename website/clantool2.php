@@ -531,34 +531,6 @@ function getAjax(){
                 
                 echo json_encode(true);
                 break;
-            case 'teamspeak-summary': // DEPRECATED
-                $start = $_REQUEST['from'];
-                $end = $_REQUEST['to'];
-                $id = $_REQUEST['id'];
-                
-                $start_d = new DateTime($start);
-                $end_d = new DateTime($end);
-                
-                $diff = $start_d->diff($end_d);
-                $diff = $diff->days;
-                $diff += 1; // +1 because current day inclusive
-                
-                $diff_ok = $diff >= TS_DIFF_MIN;
-
-                $result = null;
-                if($diff_ok){
-                    $result = $clanDB->getMemberTSSummary($start,$end,$id);
-                }
-                
-                echo json_encode(
-                    array(
-                    'from' => $start,
-                    'to' => $end,
-                    'ok' => $diff_ok,
-                    'data' => $result,
-                    'diff' => $diff,
-                ));
-                break;
             case 'difference-weekly':
                 handleDateWeekly();
                 if(isset($_REQUEST['showNonMember'])){
@@ -760,13 +732,6 @@ function getAjax(){
             case 'remove-ts3-relation':
                 $clanDB->removeTSRelation($_REQUEST['id'],$_REQUEST['tsID']);
                 echo json_encode(array('tsID' => $_REQUEST['tsID']));
-                break;
-            case 'misc-json':
-                $res = array(
-                'left' => $clanDB->getMemberDifference($date1,$date2,true),
-                'joined' => $clanDB->getMemberDifference($date1,$date2,false),
-                );
-                echo json_encode($res);
                 break;
             case 'database-json':
                 $res = array(
@@ -2862,7 +2827,6 @@ function getGeneralView() { ?>
             </div>
             <div class="btn-group" style="margin-top: 5px;">
                 <button type="button" class="btn btn-submit" data-dismiss="modal" onclick="showOverviewChart()">Zeige Verlauf</button>
-                <button type="button" class="btn btn-info" id="overview-info" data-toggle="popover" title="Info" data-content="Zeigt den Verlauf des Clans im Ausgewählten Bereich. <?=printDisclaimer()?>">?</button>
             </div>
         </div>
         <canvas id="chart-overview" width="auto" height="auto"></canvas>
@@ -4172,10 +4136,6 @@ function getLogView() {
     });
     </script>
     <?php
-}
-
-function printDisclaimer(){ // DEPRECATED
-    echo 'DISCLAIMER: Bitte das Datum der Datenerhebung sowie die Abhängigkeit von z8-games beachten.';
 }
 
 function checkboxStatus($checked) {
