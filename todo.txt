@@ -8,23 +8,26 @@ x fix der sortierung
 
 ?vip clanpunkte könig vergeben mit ts verlinkung
 
+? ersetzen von select2 durch http://selectize.github.io/selectize.js/
+
 # difference
 - vorbeugen von diffWeekly sortierungs bugs
 
 # ts3 (member)
 - ts chart: warnung bei 0 identitäten
+- max für tage auf 7 setzen
 
 # log
 # prio
 - datumsauswahl kaputt, zeigt immer selbe vorauswahl an
 
+# suche
+aktuellen ingame-namen anzeigen für Vornamenssuche
+(prüfen für IDs)
+
 ?!
 # afk mäßige Verwarnungstabelle
 in member karteikarte, sichtbar in Diff. Weekly
-
-# acc change
-# prio
-kommentar umändern, dass es am Anfang steht + datum
 
 # overview
 - Graph cp summe tag / member tag

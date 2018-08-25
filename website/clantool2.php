@@ -649,11 +649,12 @@ function getAjax(){
                 break;
             case 'membership-edit':
                 $nr = $_REQUEST['nr'];
-            case 'membership-add': // NO break
+            case 'membership-add': // NO break, for memberDetail editing, not join form!
                 $id = $_REQUEST['id'];
                 $from = $_REQUEST['from'];
                 
                 $kick = isset($_REQUEST['kicked']);
+                
                 if(isset($_REQUEST['to'])){
                     $cause = $_REQUEST['cause'];
                     $to = $_REQUEST['to'];
