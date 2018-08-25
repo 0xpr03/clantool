@@ -882,27 +882,27 @@ function getAjax(){
                 
                     // add entry in comment section of both accounts
                     // and copy over name & vip from old to new ID
-                    $oldAddition = $clanDB->getMemberAddition($oldID);
-                    $newAddition = $clanDB->getMemberAddition($newID);
+                    $additionOldAcc = $clanDB->getMemberAddition($oldID);
+                    $additionNewAcc = $clanDB->getMemberAddition($newID);
                     
                     $newline = "\n";
+                    $dateStr = date('Y-m-d', strtotime('now'));
                     
-                    $comment_new = '';
-                    if ($newAddition != null) {
-                        $comment_new = $newAddition['comment'];
-                        if ($comment_new != '') {
+                    $comment_new = $dateStr.' Account Changed from ' . $oldID;
+                    if ($additionNewAcc != null) { // new account could be non existing in DB
+                        if ($additionNewAcc['comment'] != '') {
                             $comment_new .= $newline;
+                            $comment_new .= $additionNewAcc['comment'];
                         }
                     }
-                    $comment_new .= 'Account Changed from ' . $oldID;
-                    $clanDB->setMemberAddition($newID,$oldAddition['name'],$comment_new,$oldAddition['vip']);
+                    $clanDB->setMemberAddition($newID,$additionOldAcc['name'],$comment_new,$additionOldAcc['vip']);
                     
-                    $comment_old = $oldAddition['comment'];
-                    if ($comment_old != '') {
+                    $comment_old = $dateStr.' Account Changed to ' . $newID;
+                    if ($additionOldAcc['comment'] != '') {
                         $comment_old .= $newline;
+                        $comment_old .= $additionOldAcc['comment'];
                     }
-                    $comment_old .= 'Account Changed to ' . $newID;
-                    $clanDB->setMemberAddition($oldID,$oldAddition['name'],$comment_old,$oldAddition['vip']);
+                    $clanDB->setMemberAddition($oldID,$additionOldAcc['name'],$comment_old,$additionOldAcc['vip']);
                     
                     $today = date('Y-m-d', strtotime('now'));
                     
