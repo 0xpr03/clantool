@@ -1186,7 +1186,7 @@ class clanDB extends dbException {
     /**
      * Get member matching name in member_names
      * @param key Key to search, name like Key, id = key
-     * @return Select2 compatible list {max 20 entries}
+     * @return Select2 compatible grouped list {with limit}
      * @throws dbException
      */
     public function getMemberByName($key) {
@@ -1195,7 +1195,7 @@ class clanDB extends dbException {
         JOIN `member_addition` ma ON mn.id = ma.id 
         WHERE mn.`name` LIKE ? OR ma.`name` LIKE ? 
         ORDER BY `id`,`date`,`updated`,mn.`name` 
-        LIMIT 20' )) {
+        LIMIT 100' )) {
             $query->bind_param ( 'ss', $key_name, $key_name );
             $query->execute();
             $result = $query->get_result ();
@@ -1208,12 +1208,23 @@ class clanDB extends dbException {
                 $resultset = array();
             } else {
                 $resultset = array ();
+                
+                $groupID = -1;
+                $groupArray = array();
                 while ( $row = $result->fetch_assoc () ) {
-                    $resultset[] = array(
+                    if ($row['id'] !== $groupID) {
+                        $resultset[] = $groupArray;
+                        $groupID = $row['id'];
+                        $groupArray = array(
+                            'text' => $row['id'] .' '. $row['vname'],
+                            'children' => array());
+                    }
+                    $groupArray['children'][] = array(
                         'id' => $row['id'],
                         'text' => $row['name'] . ' (' . $row['id'] . ') '.$row['vname'],
                     );
                 }
+                $resultset[] = $groupArray;
             }
             $result->close();
             
