@@ -946,6 +946,11 @@ function getAjax(){
                 $date = date('Y-m-d', strtotime('now'));
                 $clanDB->startTransaction();
                 
+                $comment = ""; // retrieve existing comment
+                $additions = $clanDB->getMemberAddition($id);
+                if ($additions !== null) {
+                    $comment = $additions['comment'];
+                }
                 
                 $nr = $clanDB->checkForMemberShipNr($id,$date);
                 if($nr != null) {
@@ -954,7 +959,7 @@ function getAjax(){
                 $openMemberships = count($clanDB->getOpenMembership($id));
                 $clanDB->insertJoin($id,$date);
                 $clanDB->insertTSRelation($id,$tsID);
-                $clanDB->setMemberAddition($id,$name,"",$vip);
+                $clanDB->setMemberAddition($id,$name,$comment,$vip);
                 $clanDB->setMemberTrial($id,$date,null);
                 
                 $clanDB->endTransaction();
