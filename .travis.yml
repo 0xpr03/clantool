@@ -11,9 +11,18 @@ cache: cargo
 addons:
   mariadb: '10.2'
 before_install:
-  - mysql -e 'SET GLOBAL max_connections = 200;'
-  - mysql -e 'CREATE DATABASE IF NOT EXISTS test;'
+  - mysql -e 'SET GLOBAL max_connections = 400;'
+  - mysql -e 'DROP DATABASE IF EXISTS test;'
+  - mysql -e 'CREATE DATABASE test;'
 env:
   - TEST_DB_USER=root
 before_cache:
   - rm -f ~/.cargo/registry/lock
+  - rm -r target/debug/config
+  - rm -r target/debug/log
+script:
+  - cargo build --verbose
+  - mysql -e 'DROP DATABASE IF EXISTS test;'
+  - mysql -e 'CREATE DATABASE test;'
+  - RUST_BACKTRACE=1 cargo test -- --test-threads=1
+  - mysql -e 'DROP DATABASE IF EXISTS test;'

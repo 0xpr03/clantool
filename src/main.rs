@@ -14,6 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+#[macro_use]
+extern crate lazy_static;
 extern crate reqwest;
 extern crate json;
 extern crate flate2;
@@ -33,15 +35,18 @@ extern crate serde_derive;
 extern crate serde;
 extern crate clap;
 extern crate sendmail;
+extern crate csv;
 
 mod http;
 mod error;
 mod parser;
 mod db;
 mod config;
+mod import;
 
 use http::HeaderType;
 
+use std::path::PathBuf;
 use std::fs::{File,metadata};
 use std::env::current_exe;
 use std::fs::DirBuilder;
@@ -64,6 +69,7 @@ use config::Config;
 
 use clap::{Arg,App,SubCommand};
 
+const VERSION: &'static str = "0.3.0";
 const USER_AGENT: &'static str = "Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:55.0) Gecko/20100101 Firefox/55.0";
 const REFERER: &'static str = "http://crossfire.z8games.com/";
 const CONFIG_PATH: &'static str = "config/config.toml";
@@ -84,7 +90,7 @@ fn main() {
         Err(e) => println!("Error on config initialization: {}",e),
         Ok(_) => println!("Initialized log")
     }
-    info!("Clan tools crawler v0.2.1");
+    info!("Clan tools crawler v{}",VERSION);
         
     let config = Arc::new(config::init_config());
     let pool = match db::new(config.db.ip.clone(),
@@ -98,7 +104,7 @@ fn main() {
     let timer = timer::Timer::new();
     
     let app = App::new("Clantool")
-                    .version("2.1")
+                    .version(VERSION)
                     .author("Aron Heinecke <aron.heinecke@t-online.de>")
                     .about("Gathers statistics about CF-NA clans. Starts as daemon per default")
                     .subcommand(SubCommand::with_name("fcrawl")
@@ -111,8 +117,30 @@ fn main() {
                             .required(true))
                         */    )
                     .subcommand(SubCommand::with_name("printconfig")
-                        .about("Print configuration settings in the Database")
-                        )
+                        .about("Print configuration settings in the Database"))
+                    .subcommand(SubCommand::with_name("init")
+                        .about("Initialize database on first execution"))
+                    .subcommand(SubCommand::with_name("import")
+                        .about("Import CSV data, expects id,name,vname,vip,comment\nThe first line has to be a header.")
+                        .arg(Arg::with_name("file")
+                            .required(true)
+                            .short("f")
+                            .validator(validator_path)
+                            .takes_value(true)
+                            .help("file to parse"))
+                        .arg(Arg::with_name("simulate")
+                            .short("s")
+                            .help("simulation mode, leaves DB unchanged"))
+                        .arg(Arg::with_name("comment")
+                            .short("c")
+                            .default_value(&import::DEFAULT_IMPORT_COMMENT)
+                            .takes_value(true)
+                            .help("file to parse"))
+                        .arg(Arg::with_name("date-format")
+                            .short("d")
+                            .default_value(import::DATE_DEFAULT_FORMAT)
+                            .takes_value(true)
+                            .help("date parse format")))
                     .subcommand(SubCommand::with_name("check-leave")
                         .about("Manually run leave detection for given date")
                         .arg(Arg::with_name("date")
@@ -182,6 +210,79 @@ fn main() {
             run_leave_detection(&*pool, &*config, &datetime, &message);
             info!("Finished");
         },
+        ("init",_) => {
+            info!("Setting up tables..");
+            if let Err(e) = db::init_tables(&pool) {
+                error!("Unable to initialize tables: {}",e);
+                return;
+            }
+            info!("Initialized tables");
+        },
+        ("import", Some(sub_m)) =>  {
+            let simulate = sub_m.is_present("simulate");
+            let membership = sub_m.is_present("membership");
+            let comment = sub_m.value_of("comment").unwrap();
+            let date_format = sub_m.value_of("date-format").unwrap();
+            let path = get_path_for_existing_file(sub_m.value_of("file").unwrap()).unwrap();
+            info!("CSV Import of File {:?}",path);
+            if simulate {
+                info!("Simulation mode");
+            }
+            if membership {
+                info!("Importing membership data");
+                panic!("Unsupported");
+            } else {
+                info!("Importing account data");
+                
+                let default_time = NaiveDateTime::parse_from_str("1970-01-01 00:00:01", "%Y-%m-%d %H:%M:%S").unwrap();
+                let importer = match import::ImportParser::new(&path, default_time,&date_format) {
+                    Ok(v) => v,
+                    Err(e) => { error!("Error at importer: {}",e); return; }
+                };
+                       
+                
+                let mut inserter = match db::ImportAccountInserter::new(&*pool, comment) {
+                    Ok(v) => v,
+                    Err(e) => { error!("Error at preparing insertion: {}",e); return;}
+                };
+                
+                let mut imported = 0;
+                let mut ms_imported = 0;
+                let mut ms_total = 0;
+                for entry in importer {
+                    match entry {
+                        Ok(v) => {
+                            if simulate {
+                                trace!("Entry: {:?}",v);
+                            }
+                            match inserter.insert_account(&v) {
+                                Err(e) => {
+                                    error!("Error on import: {}",e);
+                                    return;
+                                },
+                                Ok((total,imported)) => {
+                                    ms_imported += imported;
+                                    ms_total += total;
+                                }
+                            }
+                        },
+                        Err(e) => {
+                            error!("Error at parsing entry: {}",e); return;
+                        }
+                    }
+                    imported += 1;
+                }
+                if simulate {
+                    info!("Found {} correct entries to import, {}/{} memberships can be used",imported,ms_imported,ms_total);
+                } else {
+                    if let Err(e) = inserter.commit() {
+                        error!("Unable to commit import: {}",e);
+                        return;
+                    }
+                    info!("Imported {} accounts & {}/{} memberships",imported,ms_imported,ms_total);
+                }
+            }
+        },
         _ =>  {
             info!("Entering daemon mode");
             run_timer(pool.clone(), config.clone(),&timer);
@@ -190,6 +291,37 @@ fn main() {
             }
         }
     }
+}
+
+/// validate path input
+fn validator_path(input: String) -> Result<(),String> {
+    match get_path_for_existing_file(&input) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(e)
+    }
+}
+
+/// Get path for input if possible
+fn get_path_for_existing_file(input: &str) -> Result<PathBuf,String> {
+    let path_o = PathBuf::from(input);
+    let path;
+    if path_o.parent().is_some() && path_o.parent().unwrap().is_dir() {
+        path = path_o;
+    } else {
+        let mut path_w = std::env::current_dir().unwrap();
+        path_w.push(input);
+        path = path_w;
+    }
+    
+    if path.is_dir() {
+        return Err(format!("Specified file is a directory {:?}",path));
+    }
+    
+    if !path.exists() {
+        return Err(format!("Specified file not existing {:?}",path));
+    }
+
+    Ok(path)
 }
 
 /// verify date input of YYYY-MM-DD

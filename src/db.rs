@@ -13,18 +13,20 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-use mysql::{from_row_opt,Row,Opts, OptsBuilder,Pool,PooledConn};
+use mysql::{from_row_opt,Row,Opts,OptsBuilder,Pool,PooledConn,Transaction};
 use chrono::naive::NaiveDateTime;
 use chrono::naive::NaiveDate;
+use regex;
 
 use error::Error;
 
 use LeftMember;
+use import;
 use Member;
 use Clan;
 
-const POOL_MIN_CONN: usize = 0; // minimum amount of running connection per pool
-const POOL_MAX_CONN: usize = 3; // maximum amount of running connections per pool
+const POOL_MIN_CONN: usize = 1; // minimum amount of running connection per pool
+const POOL_MAX_CONN: usize = 100; // maximum amount of running connections per pool
 const TABLE_MISSING_DATES: &'static str = "t_missingdates"; // temporary table used to store missing dates
 const DATE_FORMAT: &'static str = "%Y-%m-%d";
 const DATETIME_FORMAT: &'static str = "%Y-%m-%d %H:%M:%S";
@@ -349,6 +351,116 @@ pub fn insert_member_leave(conn: &mut PooledConn, id: &i32, ms_nr: &i32, date_le
     Ok(trial_affected)
 }
 
+/// Import account data inserter
+pub struct ImportAccountInserter<'a> {
+    transaction: Transaction<'a>,
+    comment_addition: &'a str
+}
+
+impl<'a> ImportAccountInserter<'a> {
+    /// New Import Account Inserter
+    /// comment_addition: appended to comment on insertion (`imported account`)
+    /// date_name_insert: date to use for name insertion & update field
+    pub fn new(pool: &'a Pool, comment_addition: &'a str) -> Result<ImportAccountInserter<'a>,Error> {
+        Ok(ImportAccountInserter {
+            transaction: pool.start_transaction(false,None,None)?,
+            comment_addition
+        })
+    }
+    
+    /// Commit account import
+    pub fn commit(self) -> Result<(),Error> {
+        self.transaction.commit()?;
+        Ok(())
+    }
+    
+    /// Format comment with addition
+    pub fn get_formated_comment(&self,account: &import::ImportMembership) -> String {
+        format!("{}\n{}",&self.comment_addition,account.comment)
+    }
+    
+    /// Insert account data
+    /// return total amount memberships,inserted for account
+    pub fn insert_account(&mut self, acc: &import::ImportMembership) -> Result<(usize,usize),Error> {
+        self.transaction.prep_exec(
+            "INSERT IGNORE INTO `member_names` (`id`,`name`,`date`,`updated`) VALUES (?,?,?,?)",
+            (acc.id,&acc.name,acc.date_name,acc.date_name)
+        )?;
+        let comment = self.get_formated_comment(acc);
+        self.transaction.prep_exec(
+            "INSERT IGNORE INTO `member_addition` (`id`,`name`,`vip`,`comment`) VALUES (?,?,?,?)
+            ON DUPLICATE KEY UPDATE comment=CONCAT(comment,\"\n\",VALUES(`comment`))",
+            (acc.id,&acc.vname,acc.vip,comment)
+        )?;
+        let membership_total = acc.memberships.len();
+        let mut membership_inserted = 0;
+        
+        for membership in &acc.memberships {
+            let nr;
+            {
+                let result = self.transaction.prep_exec(
+                    "INSERT IGNORE INTO `membership` (`id`,`from`,`to`) VALUES (?,?,?)",
+                    (acc.id,membership.from,membership.to)
+                )?;
+                nr = result.last_insert_id() as i32;
+            }
+            
+            if nr != 0 {
+                self.transaction.prep_exec(
+                    "INSERT INTO `membership_cause` (`nr`,`kicked`,`cause`) VALUES (?,?,?)",
+                    (nr,false,import::IMPORT_MEMBERSHIP_CAUSE)
+                )?;
+                trace!("membership id:{} nr:{} {:?}",acc.id,nr,membership);
+                membership_inserted += 1;
+            } else {
+                warn!("Duplicate membership for id:{} {:?}",acc.id,membership);
+            }
+        }
+        Ok((membership_total,membership_inserted))
+    }
+}
+
+/// Initialize tables on first try, error if existing
+/// Undos everything on failure
+pub fn init_tables(pool: &Pool) -> Result<(),Error> {
+    let tables = get_db_create_sql();
+    
+    let mut transaction = pool.start_transaction(false,None,None)?;
+    
+    for table in tables {
+        transaction.prep_exec(table,())?;
+    }
+    
+    transaction.commit()?;
+    Ok(())
+}
+
+/// Get database setup sql
+/// Returns a vector of table setup sql
+fn get_db_create_sql<'a>() -> Vec<String> {
+    let raw_sql = include_str!("../setup.sql");
+    
+    let reg = regex::Regex::new(r"(/\*(.|\s)*?\*/)").unwrap(); // https://regex101.com/r/bG6aF2/6, replace `\/` with `/`
+    let raw_sql = reg.replace_all(raw_sql, "");
+    
+    let raw_sql = raw_sql.replace("\n","");
+    let raw_sql = raw_sql.replace("\r","");
+    
+    debug!("\n\nSQL: {}\n\n",raw_sql);
+    
+    let split_sql:Vec<String> = raw_sql.split(";").filter_map(|x| // split at `;`, filter_map on iterator
+        if x != "" { // check if it's an empty group (last mostly)
+            Some(x.to_owned()) // &str to String
+        } else {
+            None
+        }
+    ).collect(); // collect back to vec
+    
+    debug!("\n\nGroups: {:?}\n\n",split_sql);
+    
+    split_sql
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -365,54 +477,55 @@ mod test {
     
     use regex;
     
+    // change these settings to connect to another DB
+    // Please note: the TEST_DB has to be empty (no tables)!
     const TEST_USER: &'static str = "root";
     const TEST_PASSWORD: &'static str = "root";
     const TEST_DB: &'static str = "test";
     const TEST_PORT: u16 = 3306;
+    const TEST_IP: &'static str = "127.0.0.1";
     const DATETIME_FORMAT: &'static str = "%Y-%m-%d %H:%M:%S";
     
-    /// Get database setup sql
-    /// Returns a vector of table setup sql
-    fn get_db_create_sql<'a>() -> Vec<String> {
-        let raw_sql = include_str!("../setup.sql");
-        
-        let reg = regex::Regex::new(r"(/\*(.|\s)*?\*/)").unwrap(); // https://regex101.com/r/bG6aF2/6, replace `\/` with `/`
-        let raw_sql = reg.replace_all(raw_sql, "");
-        
-        let raw_sql = raw_sql.replace("\n","");
-        let raw_sql = raw_sql.replace("\r","");
-        
-        debug!("\n\nSQL: {}\n\n",raw_sql);
-        
-        let split_sql:Vec<String> = raw_sql.split(";").filter_map(|x| // split at `;`, filter_map on iterator
-            if x != "" { // check if it's an empty group (last mostly)
-                Some(x.to_owned()) // &str to String
-            } else {
-                None
-            }
-        ).collect(); // collect back to vec
-        
-        debug!("\n\nGroups: {:?}\n\n",split_sql);
-        
-        split_sql
+    /// Cleanup guard for tests removing it's database content afterwards
+    struct CleanupGuard {
+        pub pool: Pool,
+        pub tables: Vec<String>
     }
     
-    /// Setup db tables, does crash if tabes are existing
-    /// Created as temporary if specified (valid for the current connection)
-    /// If a temporary creation is required no permanent table of the same name
-    /// can exist
-    fn setup_tables(conn: &mut PooledConn, temp: bool) -> Result<(),Error> {
-        let tables = get_db_create_sql();
-        for a in tables {
-            conn.query(
-                if temp {
-                    a.replace("CREATE TABLE","CREATE TEMPORARY TABLE")
-                } else {
-                    a
-                }
-            ).unwrap();
+    impl CleanupGuard {
+        pub fn new(pool: Pool) -> CleanupGuard {
+            CleanupGuard {
+                pool,
+                tables: Vec::new()
+            }
         }
-        Ok(())
+    }
+    
+    impl Drop for CleanupGuard {
+        fn drop(&mut self) {
+            for table in &self.tables {
+                self.pool.prep_exec(format!("DROP TABLE IF EXISTS `{}`;",table),()).unwrap();
+                println!("dropped {}",table);
+            }
+        }
+    }
+    
+    /// Setup db tables, does crash if tables are existing
+    /// Created as temporary if specified, using the u32 as name suffix: myTable{},u32
+    /// Returns all table names which got created
+    fn setup_tables(pool: Pool) -> Result<CleanupGuard,Error> {
+        let tables = get_db_create_sql();
+        let reg = regex::Regex::new(r"CREATE TABLE `([\-_a-zA-Z]+)` \(").unwrap();
+        let mut guard = CleanupGuard::new(pool);
+        for a in tables {
+            let table = reg.captures(&a).unwrap()[1].to_string();
+            guard.pool.prep_exec(format!("DROP TABLE IF EXISTS `{}`;",&table),())?;
+            guard.tables.push(table);
+            guard.pool.prep_exec(
+                a,()
+            )?;
+        }
+        Ok(guard)
     }
     
     /// Helper method to connect to the db
@@ -435,19 +548,20 @@ mod test {
             .user(Some(user))
             .pass(password)
             .tcp_port(TEST_PORT)
-            .ip_or_hostname(Some("localhost"));
+            .ip_or_hostname(Some(TEST_IP))
+            .prefer_socket(false);
         let opts: Opts = builder.into();
-        Pool::new(opts).unwrap()
+        Pool::new_manual(POOL_MIN_CONN,POOL_MAX_CONN,opts).unwrap() // min 6, check_import_account_insert will deadlock otherwise
     }
     
     /// Helper method to setup a db connection
     /// the returned connection has a complete temporary table setup
     /// new connection retrieved from the pool can't interact with these
-    pub fn setup_db() -> (Pool,PooledConn) {
+    fn setup_db() -> (PooledConn,CleanupGuard) {
         let pool = connect_db();
-        let mut conn = pool.get_conn().unwrap();
-        setup_tables(&mut conn,true).unwrap();
-        (pool,conn)
+        let conn = pool.get_conn().unwrap();
+        let guard = setup_tables(pool).unwrap();
+        (conn,guard)
     }
     
     /// Create member struct
@@ -492,11 +606,114 @@ mod test {
         let _ = stmt.execute((key,value)).unwrap();
     }
     
+    /// Get first member_names entry for specified id, return (id,name,date,updated)
+    fn get_member_name(conn: &mut PooledConn, id: &i32) -> (i32,String,NaiveDateTime,NaiveDateTime) {
+        let mut stmt = conn.prepare("SELECT `id`,`name`,`date`,`updated` FROM `member_names` WHERE `id` = ? LIMIT 1").unwrap();
+        let mut result = stmt.execute((id,)).unwrap();
+        let result = result.next().unwrap().unwrap();
+        from_row(result)
+    }
+    
+    /// Get member_addition for specified id return (id,name,vip,comment)
+    fn get_member_addition(conn: &mut PooledConn, id: &i32) -> (i32,String,bool,String) {
+        let mut stmt = conn.prepare("SELECT `id`,`name`,CAST(`vip` AS INT) as `vip`,`comment` FROM `member_addition` WHERE `id` = ?").unwrap();
+        let mut result = stmt.execute((id,)).unwrap();
+        let result = result.next().unwrap().unwrap();
+        from_row(result)
+    }
+    
+    /// Test import for account with existing comments
+    #[test]
+    fn check_import_account_insert_comment_existing() {
+        let (_,guard) = setup_db();
+        
+        let date1 = NaiveDateTime::parse_from_str("2014-01-01 09:12:43",DATETIME_FORMAT).unwrap();
+        let account = import::ImportMembership {
+            name: String::from("Alptraum"),
+            id: 9926942,
+            vip: true,
+            vname: String::from("Thomas"),
+            comment: String::from("Ein Kommentar"),
+            date_name: date1.clone(),
+            memberships: Vec::new()
+        };
+        
+        let orig_name = "Current Name".to_string();
+        let orig_comment = "original comment";
+        let orig_vip = false;
+        // insert comment into member_addition
+        guard.pool.prep_exec("INSERT INTO `member_addition` (`id`,`name`,`vip`,`comment`) VALUES (?,?,?,?)",(&account.id,&orig_name,&orig_vip,&orig_comment)).unwrap();
+        
+        let comment = "stuff";
+        
+        let mut importer = ImportAccountInserter::new(&guard.pool, &comment).unwrap();
+        assert_eq!((0,0),importer.insert_account(&account).unwrap());
+        
+        let exp_comment = format!("{}\n{}",orig_comment,importer.get_formated_comment(&account));
+        importer.commit().unwrap();
+        
+        // first insert, empty db, should succeed
+        let mut conn = guard.pool.get_conn().unwrap();
+        let (id,vname,vip,comment) = get_member_addition(&mut conn,&account.id);
+        assert_eq!(account.id,id);
+        assert_eq!(orig_name,vname);
+        assert_eq!(orig_vip,vip);
+        assert_eq!(exp_comment,comment); // expect original + imported comment
+    }
+    
+    /// Test import account insertion
+    #[test]
+    fn check_import_account_insert() {
+        let (_,guard) = setup_db();
+        
+        let comment = "stuff";
+        let date1 = NaiveDateTime::parse_from_str("2014-01-01 09:12:43",DATETIME_FORMAT).unwrap();
+        let account = import::ImportMembership {
+            name: String::from("Alptraum"),
+            id: 9926942,
+            vip: true,
+            vname: String::from("Thomas"),
+            comment: String::from("Ein Kommentar"),
+            date_name: date1.clone(),
+            memberships: Vec::new()
+        };
+        
+        let mut importer = ImportAccountInserter::new(&guard.pool, &comment).unwrap();
+        importer.insert_account(&account).unwrap();
+        
+        let exp_comment = importer.get_formated_comment(&account);
+        importer.commit().unwrap();
+        
+        // first insert, empty db, should succeed
+        let mut conn = guard.pool.get_conn().unwrap();
+        let (id,vname,vip,comment) = get_member_addition(&mut conn,&account.id);
+        assert_eq!(account.id,id);
+        assert_eq!(account.vname,vname);
+        assert_eq!(account.vip,vip);
+        assert_eq!(exp_comment,comment);
+        let (id,name,date,updated) = get_member_name(&mut conn,&account.id);
+        assert_eq!(account.id,id);
+        assert_eq!(account.name,name);
+        assert_eq!(date1,date);
+        assert_eq!(date1,updated);
+        
+        let mut importer = ImportAccountInserter::new(&guard.pool, &comment).unwrap();
+        // existing entries now, should insert IGNORE
+        importer.insert_account(&account).unwrap();
+    }
+    
+    /// Test ImportAccountInserter creation
+    #[test]
+    fn check_import_account_init() {
+        let (_,guard) = setup_db();
+        ImportAccountInserter::new(&guard.pool, "").unwrap();
+    }
+    
     /// Test leave detection for member based on membership-entry
     /// (1-day membership)
     #[test]
     fn check_get_member_left_single_join() {
-        let (_,mut conn) = setup_db();
+        let (mut conn,_guard) = setup_db();
         
         let date1 = NaiveDateTime::parse_from_str("2014-01-01 09:12:43",DATETIME_FORMAT).unwrap();
         let date2 = NaiveDateTime::parse_from_str("2014-01-02 12:34:45",DATETIME_FORMAT).unwrap();
@@ -529,7 +746,7 @@ mod test {
     /// Test leave detection for member based on member-data
     #[test]
     fn check_get_member_left_single_data() {
-        let (_,mut conn) = setup_db();
+        let (mut conn,_guard) = setup_db();
         
         let date1 = NaiveDateTime::parse_from_str("2014-01-01 09:12:43",DATETIME_FORMAT).unwrap();
         let date2 = NaiveDateTime::parse_from_str("2014-01-02 12:34:45",DATETIME_FORMAT).unwrap();
@@ -544,7 +761,7 @@ mod test {
         // insert open membership
         let ms_nr = insert_membership(&mut conn, &id, &date1.date(), None);
         
-        // create member which joined on date2 (verify date1&2 are not interchanged
+        // create member which joined on date2 (verify date1&2 are not interchanged)
         // should not be report as left
         vec_t.clear();
         vec_t.push(create_member(name_noise, id+1, 4,6));
@@ -563,7 +780,7 @@ mod test {
     
     #[test]
     fn check_get_member_left_full() {
-        let (_,mut conn) = setup_db();
+        let (mut conn,_guard) = setup_db();
         
         let time = NaiveTime::parse_from_str("00:00:01","%H:%M:%S").unwrap();
         let date_test_1 = NaiveDate::parse_from_str("2014-03-05",DATE_FORMAT).unwrap();
@@ -633,7 +850,7 @@ mod test {
             
             expected.insert(left.id.clone(), left);
         }
-        offset += 1;
+        //offset += 1;
         
         // test function
         let found = get_member_left(&mut conn, &datetime_test_1, &datetime_test_2).unwrap();
@@ -648,7 +865,7 @@ mod test {
     /// Check log insertion
     #[test]
     fn check_log_insert() {
-        let (_,mut conn) = setup_db();
+        let (mut conn,_guard) = setup_db();
         let msg_insert = "asdf";
         log_message_opt(&mut conn, msg_insert).unwrap();
         log_message_opt(&mut conn, msg_insert).unwrap();
@@ -671,7 +888,7 @@ mod test {
     fn check_date_for_data_test() {
         let date_valid: NaiveDate = NaiveDate::parse_from_str("2015-01-01",DATE_FORMAT).unwrap();
         let date_invalid: NaiveDate = NaiveDate::parse_from_str("2015-01-02",DATE_FORMAT).unwrap();
-        let (_,mut conn) = setup_db();
+        let (mut conn,_guard) = setup_db();
         let datetime = date_valid.and_hms(10,0,0);
         {// setup valid date data
             let members: Vec<Member> = (0..5).map(|x| create_member(&format!("tester {}",x),x,500,1)).collect();
@@ -683,7 +900,7 @@ mod test {
     
     #[test]
     fn read_string_setting_test() {
-        let (_,mut conn) = setup_db();
+        let (mut conn,_guard) = setup_db();
         let key = "a";
         let value = String::from("b");
         insert_settings(&mut conn, key,&value);
@@ -695,7 +912,7 @@ mod test {
     
     #[test]
     fn read_bool_setting_test() {
-        let (_,mut conn) = setup_db();
+        let (mut conn,_guard) = setup_db();
         let key = "a";
         let key_2 = "ab";
         let key_3 = "abc";
@@ -710,7 +927,7 @@ mod test {
     
     #[test]
     fn insert_member_leave_test() {
-        let (_,mut conn) = setup_db();
+        let (mut conn,_guard) = setup_db();
         let msg = "my kick message";
         let id = 123;
         let join = Local::today().naive_local();
@@ -722,7 +939,7 @@ mod test {
     
     #[test]
     fn insert_member_leave_test_multiple() {
-        let (_,mut conn) = setup_db();
+        let (mut conn,_guard) = setup_db();
         let msg = "my kick message";
         let id = 123;
         let join = Local::today().naive_local();
@@ -736,7 +953,7 @@ mod test {
     
     #[test]
     fn insert_member_leave_test_override() {
-        let (_,mut conn) = setup_db();
+        let (mut conn,_guard) = setup_db();
         let msg = "my kick message";
         let id = 123;
         let join = Local::today().naive_local();
@@ -751,7 +968,7 @@ mod test {
     fn get_next_older_date_test() {
         let date_start: NaiveDate =  NaiveDate::parse_from_str("2015-01-01",DATE_FORMAT).unwrap();
         
-        let (_,mut conn) = setup_db();
+        let (mut conn,_guard) = setup_db();
         
         let members: Vec<Member> = (0..5).map(|x| create_member(&format!("tester {}",x),x,500,1)).collect();
         let mut date_curr = date_start.clone();
@@ -806,7 +1023,7 @@ mod test {
     /// Test table setup
     #[test]
     fn setup_tables_test() {
-        let (_,_) = setup_db();
+        let (_conn,_guard) = setup_db();
     }
     
     /// Setup insert members twice with the same datetime
@@ -815,7 +1032,7 @@ mod test {
     #[should_panic]
     fn insert_members_duplicate_test() {
         let time: NaiveDateTime = Local::now().naive_local();
-        let (_,mut conn) = setup_db();
+        let (mut conn,_guard) = setup_db();
         let members: Vec<Member> = (0..5).map(|x| create_member(&format!("tester {}",x),x,500,1)).collect();
         insert_members(&mut conn,&members,&time).unwrap();
         let members_2: Vec<Member> = (0..5).map(|x| create_member(&format!("tester {}",x),x,500*x,1*x)).collect();
@@ -826,7 +1043,7 @@ mod test {
     #[test]
     fn insert_members_test() {
         let mut time: NaiveDateTime = Local::now().naive_local();
-        let (_,mut conn) = setup_db();
+        let (mut conn,_guard) = setup_db();
         let members: Vec<Member> = (0..5).map(|x| create_member(&format!("tester {}",x),x,500,1)).collect();
         insert_members(&mut conn,&members,&time).unwrap();
         time = time.checked_add_signed(Duration::seconds(1)).unwrap();
@@ -837,7 +1054,7 @@ mod test {
     /// Test temporary date lookup table creation
     #[test]
     fn create_temp_date_table_test() {
-        let (_,mut conn) = setup_db();
+        let (mut conn,_guard) = setup_db();
         create_temp_date_table(&mut conn, TABLE_MISSING_DATES).unwrap();
     }
     
@@ -845,7 +1062,7 @@ mod test {
     #[test]
     fn insert_missing_entry_test() {
         let time: NaiveDateTime = Local::now().naive_local();
-        let (_,mut conn) = setup_db();
+        let (mut conn,_guard) = setup_db();
         insert_missing_entry(&time,&mut conn,true).unwrap();
         let time = time.checked_add_signed(Duration::seconds(5)).unwrap();
         insert_missing_entry(&time,&mut conn,false).unwrap();
@@ -853,7 +1070,7 @@ mod test {
     
     #[test]
     fn get_min_max_date_test() {
-        let (_,mut conn) = setup_db();
+        let (mut conn,_guard) = setup_db();
         // insert data for three dates
         let data: Vec<Clan> = (0..3).map(|x|
                 Clan {members: x,wins: x as u16 ,losses: x as u16,draws: x as u16})
@@ -874,7 +1091,7 @@ mod test {
     
     #[test]
     fn get_missing_dates_test() {
-        let (_,mut conn) = setup_db();
+        let (mut conn,_guard) = setup_db();
         
         let data: Vec<Clan> = (0..2).map(|x|
                 Clan {members: x,wins: x as u16 ,losses: x as u16,draws: x as u16})
@@ -908,7 +1125,7 @@ mod test {
     #[test]
     fn insert_clan_test() {
         let time: NaiveDateTime = Local::now().naive_local();
-        let (_,mut conn) = setup_db();
+        let (mut conn,_guard) = setup_db();
         let clan = Clan {
             members: 4,
             wins: 1,

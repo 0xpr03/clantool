@@ -36,6 +36,8 @@ You can override the login with the following ENV variables:
 `TEST_DB_PW`  
 Specifying only the user is interpreted as paswordless login.
 
+Tests have to run as `cargo test -- --test-threads=1` as the DB doesn't allow for parallel tests.
+
 ## Copyright
 Aron Heinecke 2017,2018 under the  
 Apache License, Version 2.0

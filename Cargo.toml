@@ -1,6 +1,6 @@
 [package]
 name = "clantool"
-version = "0.2.1"
+version = "0.3.0"
 authors = ["Aron Heinecke"]
 
 #[profile.release]
@@ -20,9 +20,10 @@ chrono = ">= 0.4.0"
 reqwest = ">= 0.8.5"
 json = ">= 0.11.13"
 flate2 = ">= 1.0.1"
-quick-error = ">= 1.2.1"
+quick-error = ">= 1.2.2"
 clap = ">= 2.31.1"
 sendmail = { git = "https://github.com/0xpr03/rust-sendmail", rev = "f0463869b55b3309d9c82e1b0c86ddad58eb98ef" }
 regex = ">= 0.2.8"
-mysql = ">= 13.0.0"
+mysql = ">= 14"
 timer = ">= 0.2"
+csv = "1"

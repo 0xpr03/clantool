@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Aron Heinecke
+Copyright 2017,2018 Aron Heinecke
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 use std::io;
+use chrono;
 use reqwest;
 use json;
 use mysql;
@@ -21,6 +22,7 @@ use log4rs;
 use regex;
 use std;
 use toml;
+use csv;
 
 quick_error! {
     #[derive(Debug)]
@@ -59,9 +61,15 @@ quick_error! {
             display("regex error: {}",err)
             cause(err)
         }
-        ParseError(err: std::num::ParseIntError) {
+        IntParseError(err: std::num::ParseIntError) {
             from()
-            description("parse error")
+            description("int parse error")
+            display("parse error: {}",err)
+            cause(err)
+        }
+        DateParseError(err: chrono::ParseError) {
+            from()
+            description(err.description())
             display("parse error: {}",err)
             cause(err)
         }
@@ -92,6 +100,12 @@ quick_error! {
         NoValue(descr: &'static str) {
             description(descr)
             display("no value {}",descr)
+        }
+        CSV(err: csv::Error) {
+            from()
+            description("csv error")
+            display("csv error: {}",err)
+            cause(err)
         }
         Other(descr: &'static str) {
             description(descr)
