@@ -17,9 +17,10 @@ appenders:
 
 # Set the default logging level to "warn" and attach the "stdout" appender to the root
 root:
-  level: info
+  level: warn
   appenders:
     - fileappender
+    - stdout
 
 loggers:
   # Raise the maximum log level for events sent to the "app::backend::db" logger to "info"
@@ -28,17 +29,5 @@ loggers:
 
   # Route log events sent to the "app::requests" logger to the "requests" appender,
   # and *not* the normal appenders installed at the root
-  tokio_proto:
-    level: info
-  tokio_core:
-    level: info
-  tokio-threadpool:
-    level: info
-  hyper:
-    level: warn
-  mio:
-    level: info
-  mime:
-    level: info
-  reqwest:
-    level: info
+  clantool:
+    level: trace
