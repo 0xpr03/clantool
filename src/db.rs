@@ -32,14 +32,14 @@ const DATE_FORMAT: &'static str = "%Y-%m-%d";
 const DATETIME_FORMAT: &'static str = "%Y-%m-%d %H:%M:%S";
 
 /// Create a new db pool with fixed min-max connections
-pub fn new(address: String, port: u16, user: String, password: String, db: String) -> Result<Pool,Error> {
+pub fn new(address: String, port: u16, user: String, password: Option<String>, db: String) -> Result<Pool,Error> {
     let mut builder = OptsBuilder::new();
     builder.ip_or_hostname(Some(address))
     .db_name(Some(db))
     .tcp_port(port)
     .prefer_socket(false)
     .user(Some(user))
-    .pass(Some(password));
+    .pass(password);
     let opts: Opts = builder.into();
     let pool = try!(Pool::new_manual(POOL_MIN_CONN,POOL_MAX_CONN,opts));
     Ok(pool)

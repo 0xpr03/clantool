@@ -85,7 +85,7 @@ pub struct MainConfig {
 #[derive(Debug, Deserialize)]
 pub struct DBConfig {
     pub user: String,
-    pub password: String,
+    pub password: Option<String>,
     pub port: u16,
     pub db: String,
     pub ip: String,
@@ -138,6 +138,7 @@ pub fn default_config() -> String {
     let toml = 
 r#"[db]
 user = "user"
+#comment out to login without password
 password = "password"
 db = "clantool"
 port = 3306
