@@ -1742,7 +1742,7 @@ function getMemberDetailView() { ?>
     }
     
     function formatCautionEntry(from,to,cause) {
-        return '<li class="list-group-item" id="'+CAUTION_ENTRY+from+'-'+to+'">'
+        return '<li class="list-group-item" id="'+CAUTION_ENTRY+from+'">'
             + '<a href="#" data-from="'+from+'" data-to="'+to+'" style="float: right;"> <i class="fas fa-trash"></i> Delete</a>'
             + from + ' - ' + to + '<br>'
             + cause
@@ -2226,7 +2226,7 @@ function getMemberDetailView() { ?>
                     'cause' : cautionCause.val(),
                 }
             }).done(function(data){
-                var elem = $('#'+CAUTION_ENTRY+data.from+'-'+data.to);
+                var elem = $('#'+CAUTION_ENTRY+data.from);
                 if(elem.length){
                     elem.remove();
                 }
@@ -2258,7 +2258,7 @@ function getMemberDetailView() { ?>
                     'to' : to,
                 }
             }).done(function(data){
-                $('#'+CAUTION_ENTRY+data.from+'-'+data.to).remove();
+                $('#'+CAUTION_ENTRY+data.from).remove();
                 errorDiv.hide();
                 loadingDiv.hide();
             }).fail(function(data){
