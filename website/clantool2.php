@@ -3154,6 +3154,8 @@ function getDifferenceWeeklyView() {
                                     str += ' ';
                                 if(row.trial == 1)
                                     str += ' <i class="fas fa-plus" title="Pröbling"></i>';
+                                if(row.caution == 1)
+                                    str += ' <i class="fas fa-exclamation-triangle" title="Verwarnung"></i>';
                                 str += '</td>';
                                 
                                 var possible = row.days * CP_MAX;

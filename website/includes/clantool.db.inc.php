@@ -167,6 +167,7 @@ class clanDB extends dbException {
         if ($query = $this->db->prepare ( 'select ma.name as `vname`,
         ma.vip,ma.`diff_comment` as `comment`,
         afk.`from` IS NOT NULL as `is_afk`,
+        caution.`from` IS NOT NULL as `is_caution`,
         trial.`from` IS NOT NULL as `is_trial`,
         names.name, m1.id, 
         (CAST(m1.exp as  signed)-CAST(m2.exp as signed)) AS `EXP-Done`, 
@@ -198,6 +199,9 @@ class clanDB extends dbException {
         LEFT JOIN `afk` AS afk ON m2.id = afk.id AND 
             afk.`from` <= "'.$date2.'" AND /* start <= $ende */
             afk.`to` >= "'.$date1.'" /* ende >= $start */ 
+        LEFT JOIN `caution` AS caution ON m2.id = caution.id AND 
+            caution.`from` <= "'.$date2.'" AND /* start <= $ende */
+            caution.`to` >= "'.$date1.'" /* ende >= $start */ 
         LEFT JOIN `member_trial` trial ON 
             trial.id = m2.id AND (
                 (trial.`to` IS NULL)
@@ -219,6 +223,7 @@ class clanDB extends dbException {
                 $resultset = array ();
                 while ( $row = $result->fetch_assoc () ) {
                     $resultset [] = array(
+                        'caution' => $row['is_caution'],
                         'afk' => $row['is_afk'],
                         'trial' => $row['is_trial'],
                         'vname' => $row['vname'],
