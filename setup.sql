@@ -98,6 +98,18 @@ CREATE TABLE `afk` (
  KEY `to` (`to`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
+CREATE TABLE `caution` (
+  `id` int(11) NOT NULL,
+  `from` date NOT NULL,
+  `to` date NOT NULL,
+  `added` datetime NOT NULL,
+  `cause` text,
+  PRIMARY KEY (`id`,`from`),
+  KEY `id` (`id`),
+  KEY `from` (`from`),
+  KEY `to` (`to`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
 CREATE TABLE `member_trial` (
  `id` int(11) NOT NULL,
  `from` date NOT NULL,

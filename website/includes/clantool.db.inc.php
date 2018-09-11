@@ -350,12 +350,89 @@ class clanDB extends dbException {
     }
     
     /**
-     * Get afks for specified date
+     * Get member caution entries
+     * @param id Member ID
+     * @return [{from,to,cause}]
+     * @throws dbException
+     */
+    public function getCautions($id) {
+        if ($query = $this->db->prepare ( 'SELECT `from`,`to`,`cause` FROM `caution`
+        WHERE `id` = ? ORDER BY `from`')) {
+            $query->bind_param('i',$id);
+            if(!$query->execute()){
+                throw new dbException($this->db->error);
+            }
+            $result = $query->get_result ();
+            
+            if (! $result) {
+                throw new dbException ( $this->db->error, 500 );
+            }
+            
+            $resultset = array ();
+            while ( $row = $result->fetch_assoc () ) {
+                $resultset[] = array(
+                    'from' => $row['from'],
+                    'to' => $row['to'],
+                    'cause' => $row['cause']
+                );
+            }
+            $result->close();
+            
+            return $resultset;
+        } else {
+            throw new dbException ( $this->db->error );
+        }
+    }
+    
+    /**
+     * Insert member caution entry
+     * @param id account ID
+     * @param from from date
+     * @param to to date
+     * @param cause cause of caution entry
+     * @throws dbException
+     */
+    public function insertCaution($id,$from,$to,$cause) {
+        if($query = $this->db->prepare (
+            'INSERT INTO `caution` (`id`,`from`,`to`,`cause`,`added`) VALUES(?,?,?,?, CURRENT_TIMESTAMP) ON DUPLICATE KEY UPDATE `cause` = VALUES(`cause`), `to` = VALUES(`to`)')) {
+            $query->bind_param('isss',$id,$from,$to,$cause);
+            if(!$query->execute()){
+                throw new dbException($this->db->error);
+            }
+        } else {
+            throw new dbException ( $this->db->error );
+        }
+    }
+    
+    /**
+     * Delete member caution entry
+     * @param id account ID
+     * @param from from date
+     * @param to to date
+     * @throws dbException
+     */
+    public function deleteCaution($id,$from) {
+        if($query = $this->db->prepare (
+            'DELETE FROM `caution` WHERE `id` = ? AND `from` = ?')) {
+            $query->bind_param('is',$id,$from);
+            if(!$query->execute()){
+                throw new dbException($this->db->error);
+            }
+        } else {
+            throw new dbException ( $this->db->error );
+        }
+    }
+    
+    /**
+     * Get active/future afks for specified date
      * @param date date for affected afks
+     * @param current true to get currently active, false to get future AFKs
      * @return [{name,account name,id,from,to,cause}]
      * @throws dbException
      */
-    public function getCurrentAFK($date) {
+    public function getActiveFutureAFK($date,$current) {
+        $whereClause = $current ? '(`from` <= ? AND `to` >= ?)' : '`from` > ?';
+        
         if ($query = $this->db->prepare ( 'SELECT IFNULL(ad.name,?) as vname,IFNULL(names.name,?) as `name`,afk.`id`,`from`,`to`,`cause`
         FROM `afk` afk
         LEFT JOIN `member_names` names ON afk.id = names.id AND
@@ -364,10 +441,14 @@ class clanDB extends dbException {
                 WHERE n2.id = afk.id
             )
         LEFT JOIN `member_addition` ad ON afk.id = ad.id
-        WHERE (`from` <= ? AND `to` >= ?)  OR `from` > ?
+        WHERE '.$whereClause.'
         GROUP BY `id`
         ORDER BY `from`,`to`')) {
-            $query->bind_param('sssss',$this->name_default,$this->name_default,$date,$date,$date);
+            if ($current) {
+                $query->bind_param('ssss',$this->name_default,$this->name_default,$date,$date);
+            } else {
+                $query->bind_param('sss',$this->name_default,$this->name_default,$date);
+            }
             if(!$query->execute()){
                 throw new dbException($this->db->error);
             }
@@ -398,7 +479,7 @@ class clanDB extends dbException {
     
     /**
      * Get member afks
-     * @param id Member IDs
+     * @param id Member ID
      * @return [{from,to,cause}]
      * @throws dbException
      */
@@ -432,7 +513,7 @@ class clanDB extends dbException {
     }
     
     /**
-     * Insert member afke entry
+     * Insert member afk entry
      * @param id account ID
      * @param from from date
      * @param to to date
@@ -443,6 +524,25 @@ class clanDB extends dbException {
         if($query = $this->db->prepare (
             'INSERT INTO `afk` (`id`,`from`,`to`,`cause`,`added`) VALUES(?,?,?,?, CURRENT_TIMESTAMP) ON DUPLICATE KEY UPDATE `cause` = VALUES(`cause`)')) {
             $query->bind_param('isss',$id,$from,$to,$cause);
+            if(!$query->execute()){
+                throw new dbException($this->db->error);
+            }
+        } else {
+            throw new dbException ( $this->db->error );
+        }
+    }
+    
+    /**
+     * Delete member afk entry
+     * @param id account ID
+     * @param from from date
+     * @param to to date
+     * @throws dbException
+     */
+    public function deleteAFK($id,$from,$to) {
+        if($query = $this->db->prepare (
+            'DELETE FROM `afk` WHERE `id` = ? AND `from` = ? AND `to` = ?')) {
+            $query->bind_param('iss',$id,$from,$to);
             if(!$query->execute()){
                 throw new dbException($this->db->error);
             }
@@ -464,26 +564,6 @@ class clanDB extends dbException {
         if($query = $this->db->prepare (
             'UPDATE `member_addition` SET `diff_comment` = ? WHERE `id` = ?')) {
             $query->bind_param('si',$comment,$id);
-            if(!$query->execute()){
-                throw new dbException($this->db->error);
-            }
-        } else {
-            throw new dbException ( $this->db->error );
-        }
-    }
-    
-    /**
-     * Delete member afke entry
-     * @param id account ID
-     * @param from from date
-     * @param to to date
-     * @param cause cause of afk
-     * @throws dbException
-     */
-    public function deleteAFK($id,$from,$to) {
-        if($query = $this->db->prepare (
-            'DELETE FROM `afk` WHERE `id` = ? AND `from` = ? AND `to` = ?')) {
-            $query->bind_param('iss',$id,$from,$to);
             if(!$query->execute()){
                 throw new dbException($this->db->error);
             }
@@ -1502,6 +1582,15 @@ class clanDB extends dbException {
      */
     public function getAFKCount() {
         return $this->getCountByID('afk');
+    }
+    
+    /**
+     * Get amount of caution entries
+     * @throws dbException
+     * @return integer/null
+     */
+    public function getCautionCount() {
+        return $this->getCountByID('caution');
     }
     
     /**

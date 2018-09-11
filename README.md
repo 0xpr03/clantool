@@ -12,6 +12,7 @@ Full featured management tool for CF NA groups.
 - per-individual comments for notes in the weekly view, for decision making
 - reports over recent membership changes
 - auto leave detection
+- import of older sheets
 - [ ] auto leave ts permission removal
 
 [Screenshots](/doc)

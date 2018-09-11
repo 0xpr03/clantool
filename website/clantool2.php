@@ -189,6 +189,7 @@ function getCTTemplate() {
         const URL = "<?=URL?>"; // sites URL to do ajax on (relative)
         const DATE_FORMAT = "YYYY-MM-DD";
         const P_ACC_ID = 'id';
+        const TS_DIFF_MIN = <?=TS_DIFF_MIN?>;
         var charts = []; // keep track of charts for cleanup
         const MONTH_NAMES = [
             "January",
@@ -643,6 +644,7 @@ function getAjax(){
                     'vip' => $addition['vip'],
                     'secAccs' => $clanDB->getSecondAccounts($id),
                     'afk' => $clanDB->getAFKs($id),
+                    'caution' => $clanDB->getCautions($id),
                     'names' => $clanDB->getAccountNames($id)
                 );
                 echo json_encode($res);
@@ -705,6 +707,27 @@ function getAjax(){
                 $clanDB->removeSecondAccount($_REQUEST['id'],$_REQUEST['secID']);
                 echo json_encode(array('secID' => $_REQUEST['secID']));
                 break;
+            case 'add-caution':
+                $cause = $_REQUEST['cause']; // NO break!
+            case 'delete-caution':
+                $id = $_REQUEST['id'];
+                $from = $_REQUEST['from'];
+                $to = $_REQUEST['to'];
+                $res = array(
+                    'id' => $id,
+                    'from' => $from,
+                    'to' => $to
+                ); 
+                
+                if($_REQUEST['type'] == "delete-caution"){
+                    $clanDB->deleteCaution($id,$from);
+                } else {
+                    $clanDB->insertCaution($id,$from,$to,$cause);
+                    $res['cause'] = $cause;
+                }
+                
+                echo json_encode($res);
+                break;
             case 'add-afk':
                 $cause = $_REQUEST['cause']; // NO break!
             case 'delete-afk':
@@ -741,6 +764,7 @@ function getAjax(){
                     'ids' => $clanDB->getDBIDCount(),
                     'realnames' => $clanDB->getRealNameCount(),
                     'afks' => $clanDB->getAFKCount(),
+                    'cautions' => $clanDB->getCautionCount(),
                     'joins' => $clanDB->getJoinCount(),
                     'leaves' => $clanDB->getLeaveCount(),
                     'secondAccs' => $clanDB->getSecondAccCount(),
@@ -797,7 +821,7 @@ function getAjax(){
                     
                     foreach($daterange as $date) {
                         $chunkstart = $date->format($FORMAT);
-                        $chunkend = $date->modify('+6 day')->format($FORMAT); // go till (inclusive) sunday
+                        $chunkend = $date->modify('+'.(TS_DIFF_MIN-1).' day')->format($FORMAT); // go till (inclusive) sunday
                         
                         $chunk = $clanDB->getMemberTSSummary($chunkstart,
                         $chunkend,$id);
@@ -1114,24 +1138,52 @@ function getMSChangesView() {
     <?php
 }
 
-function getAwayView() { ?>
+function getAwayView() {
+    require 'includes/clantool.db.inc.php';
+    $clanDB = new clanDB();
+    ?>
     <h3>Aktuelle Abmeldungen</h3>
     <table class="table table-striped table-bordered table-hover">
         <thead>
             <tr>
-                <th>Vorname</th>
-                <th>Account</th>
-                <th>Von</th>
-                <th>Bis</th>
-                <th>Grund</th>
+                <th class="sorter-text">Vorname</th>
+                <th class="sorter-text">Account</th>
+                <th class="sorter-text">Von</th>
+                <th class="sorter-text">Bis</th>
+                <th class="sorter-text">Grund</th>
             </tr>
         </thead>
         <tbody>
-            <?php
-            require 'includes/clantool.db.inc.php';
-            $clanDB = new clanDB();
+            <?php            
+            $res = $clanDB->getActiveFutureAFK(date('Y-m-d', strtotime('now')),true);
             
-            $res = $clanDB->getCurrentAFK(date('Y-m-d', strtotime('now')));
+            foreach($res as &$elem){ ?>
+                <tr>
+                    <td><?=htmlspecialchars($elem['vname'])?></td>
+                    <td><?=htmlspecialchars($elem['name'])?> <a href="?site=<?=SITE?>&view=<?=SITE_MEMBER?>&id=<?=$elem['id']?>">(<?=$elem['id']?>)</a></td>
+                    <td><?=$elem['from']?></td>
+                    <td><?=$elem['to']?></td>
+                    <td><?=htmlspecialchars($elem['cause'])?></td>
+                </tr>
+            <?php
+            }
+            ?>
+        </tbody>
+    </table>
+    <h3>Kommende Abmeldungen</h3>
+    <table class="table table-striped table-bordered table-hover">
+        <thead>
+            <tr>
+                <th class="sorter-text">Vorname</th>
+                <th class="sorter-text">Account</th>
+                <th class="sorter-text">Von</th>
+                <th class="sorter-text">Bis</th>
+                <th class="sorter-text">Grund</th>
+            </tr>
+        </thead>
+        <tbody>
+            <?php            
+            $res = $clanDB->getActiveFutureAFK(date('Y-m-d', strtotime('now')),false);
             
             foreach($res as &$elem){ ?>
                 <tr>
@@ -1166,7 +1218,7 @@ function getMemberDetailView() { ?>
        <div id="loading" style="position: fixed; display: none;z-index: 10; background: rgba(255,255,255,0.5); width: 100%; height: 100%;">
                 <div style="position: fixed; left: 50%; top: 50%;">
                     <i class="fas fa-spinner fa-pulse fa-3x"></i><br>
-                    Loading...
+                    <div id="loading-content">Loading...</div>
                 </div>
         </div>
         <form class="form-horizontal" id="additionalForm" action="" method="post">
@@ -1294,6 +1346,49 @@ function getMemberDetailView() { ?>
                             </div>
                             <div class="col-xs-offset-2 col-xs-10">
                                 <button type="button" id="msNewCancel" class="btn btn-danger"><i class="fas fa-times"> </i> Abbrechen</button>
+                            </div>
+                        </div>
+                    </form>
+                </li>
+            </ul>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xs-11">
+        <div class="panel panel-default">
+            <div class="panel-heading"><i class="fas fa-exclamation-triangle"></i> Verwarnungen</div>
+            <ul class="list-group">
+                <div id="caution">
+                </div>
+                <li class="list-group-item">
+                    <div id="cautionAddDiv" class="form-horizontal">
+                        <div class="form-group">
+                            <div class="col-xs-offset-2 col-xs-10">
+                                <button type="submit" id="cautionAdd" class="btn btn-primary"><i class="fas fa-plus"></i> Neuer Eintrag</button>
+                            </div>
+                        </div>
+                    </div>
+                    <form id="cautionForm" style="display: none;" class="form-horizontal" action="" method="post">
+                        <div class="form-group">
+                            <label for="cautionFrom" class="control-label col-xs-2">Von</label>
+                            <div class="col-xs-10">
+                                <input id="cautionFrom" required="true" type="text" class="form-control" />
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="cautionTo" class="control-label col-xs-2">Bis</label>
+                            <div class="col-xs-10">
+                                <input id="cautionTo" required="true" type="text" class="form-control" />
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="inputCautionCause" class="control-label col-xs-2">Grund</label>
+                            <div class="col-xs-10">
+                                <input type="text" name="name" autocomplete="off" required="true" class="form-control" id="inputCautionCause" placeholder="Grund">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <div class="col-xs-offset-2 col-xs-10">
+                                <button type="submit" id="cautionAddSubmit" class="btn btn-primary"><i class="fas fa-plus"></i> Eintrag Hinzufügen</button>
                             </div>
                         </div>
                     </form>
@@ -1439,17 +1534,6 @@ function getMemberDetailView() { ?>
                         </div>
                     </form>
                 </li>
-                <!--<div id="loading-ts" style="position: fixed; display: none;z-index: 10; background: rgba(255,255,255,0.5); width: 100%; height: 100%;">
-                    <div style="position: fixed; left: 50%; top: 50%;">
-                        <i class="fas fa-spinner fa-pulse fa-3x"></i><br>
-                        Loading...
-                    </div>
-                </div>
-                <table class="table" id="ts-summary">
-                    <tbody>
-                        
-                    </tbody>
-                </table>-->
             </ul>
         </div>
     </div>
@@ -1460,8 +1544,13 @@ function getMemberDetailView() { ?>
     <script type="text/javascript">
     const TS3_ENTRY = "ts3-";
     const AFK_ENTRY = "afk-";
+    const CAUTION_ENTRY = "caution-";
     const MS_ENTRY = "ms-";
     const TRIAL_ENTRY = "trial-";
+    
+    function setLoadingMsg(msg){
+        $('#loading-content').text(msg);
+    }
     
     function loadData(id) {
         if(getUrlParameter('id') != id) {
@@ -1482,30 +1571,35 @@ function getMemberDetailView() { ?>
                 'type' : 'member-data',
             }
         }).done(function(data){
-            $('#inputName').val(data.name);
-            $('#inputComment').val(data.comment);
-            if(data.vip == null){
-                $('#missingDataDiv').show();
-            } else {
-                $('#inputVIP').prop('checked',data.vip);
-                $('#missingDataDiv').hide();
-            }
-            $('#showDifference').attr('href',"<?=MEMBER_DIFF_URL?>"+data.id);
-            $('#showZ8Account').attr('href',"<?=Z8PROFILE?>"+data.id);
-            $('#showTSChart').attr('href',"<?=MEMBER_TS_URL?>"+data.id);
-            renderMembership(data.membership);
-            renderTs3(data.ts3);
-            renderTrial(data.trial);
-            renderTrialsList(data.trials);
-            renderSecondsAccounts(data.secAccs);
-            renderAFK(data.afk);
-            renderNames(data.names);
-            $('#error').hide();
-            disable(false);
-            resetMS();
-            resetAfk();
-            resetTrials();
-            $('#loading').hide();
+            setLoadingMsg('Rendering..');
+            setTimeout(function() {
+                $('#inputName').val(data.name);
+                $('#inputComment').val(data.comment);
+                if(data.vip == null){
+                    $('#missingDataDiv').show();
+                } else {
+                    $('#inputVIP').prop('checked',data.vip);
+                    $('#missingDataDiv').hide();
+                }
+                $('#showDifference').attr('href',"<?=MEMBER_DIFF_URL?>"+data.id);
+                $('#showZ8Account').attr('href',"<?=Z8PROFILE?>"+data.id);
+                $('#showTSChart').attr('href',"<?=MEMBER_TS_URL?>"+data.id);
+                renderMembership(data.membership);
+                renderTs3(data.ts3);
+                renderTrial(data.trial);
+                renderTrialsList(data.trials);
+                renderSecondsAccounts(data.secAccs);
+                renderAFK(data.afk);
+                renderCaution(data.caution);
+                renderNames(data.names);
+                $('#error').hide();
+                disable(false);
+                resetMS();
+                resetAfk();
+                resetTrials();
+                $('#loading').hide();
+                setLoadingMsg('Loading...');
+            },0);
         }).fail(function(data){
             $('#error').html(formatErrorData(data));
             $('#error').show();
@@ -1574,6 +1668,17 @@ function getMemberDetailView() { ?>
         $('#names tbody').html(elements);
     }
     
+    function renderCaution(data) {
+        var elements = "";
+        if(data != null){
+            for(var i = 0; i < data.length; i++) {
+                var elem = data[i];
+                elements += formatCautionEntry(elem.from,elem.to,elem.cause);
+            }
+        }
+        $('#caution').html(elements);
+    }
+    
     function renderAFK(data) {
         var elements = "";
         if(data != null){
@@ -1636,6 +1741,14 @@ function getMemberDetailView() { ?>
             + '</tr>';
     }
     
+    function formatCautionEntry(from,to,cause) {
+        return '<li class="list-group-item" id="'+CAUTION_ENTRY+from+'-'+to+'">'
+            + '<a href="#" data-from="'+from+'" data-to="'+to+'" style="float: right;"> <i class="fas fa-trash"></i> Delete</a>'
+            + from + ' - ' + to + '<br>'
+            + cause
+            + '</li>';
+    }
+    
     function formatAFKEntry(from,to,cause) {
         return '<li class="list-group-item" id="'+AFK_ENTRY+from+'-'+to+'">'
             + '<a href="#" data-from="'+from+'" data-to="'+to+'" style="float: right;"> <i class="fas fa-trash"></i> Delete</a>'
@@ -1665,7 +1778,8 @@ function getMemberDetailView() { ?>
         var lst = ['#ts3Input','#ts3submit','#submitMember','#inputName',
         '#membershipSubmit','#inputVIP','#msNewBtn','#showDifference',
         '#AccsSubmit','#AccsID','#accsSearch','#afkAdd','#afkAddSubmit',
-        '#trialAddSubmit','#trialAdd','#showZ8Account','#inputComment', '#showTSChart'];
+        '#trialAddSubmit','#trialAdd','#showZ8Account','#inputComment',
+        '#showTSChart','#cautionAdd','#cautionAddSubmit'];
         for(var i = 0; i < lst.length; i++) {
             $(lst[i]).prop('disabled', disable);
         }
@@ -1740,6 +1854,11 @@ function getMemberDetailView() { ?>
         $('#afkForm').hide();
     }
     
+    function resetCaution(){
+        $('#cautionAddDiv').show();
+        $('#cautionForm').hide();
+    }
+    
     function resetTrials(){
         $('#trialsListForm').hide();
         $('#trialAdd').show();
@@ -1792,6 +1911,13 @@ function getMemberDetailView() { ?>
         var afkAddDiv = $('#afkAddDiv');
         var afkCause = $('#inputAFKCause');
         
+        var cautionFrom = $('#cautionFrom');
+        var cautionTo = $('#cautionTo');
+        var cautionForm = $('#cautionForm');
+        var cautionAdd = $('#cautionAdd');
+        var cautionAddDiv = $('#cautionAddDiv');
+        var cautionCause = $('#inputCautionCause');
+        
         var trialsFrom = $('#trialFrom');
         var trialsTo = $('#trialTo');
         var trialsMemberChk = $('#trialMember');
@@ -1837,6 +1963,15 @@ function getMemberDetailView() { ?>
             useCurrent: true,
         });
         afkFrom.datetimepicker({
+            format: DATE_FORMAT,
+            useCurrent: true,
+        });
+        
+        cautionTo.datetimepicker({
+            format: DATE_FORMAT,
+            useCurrent: true,
+        });
+        cautionFrom.datetimepicker({
             format: DATE_FORMAT,
             useCurrent: true,
         });
@@ -1909,6 +2044,11 @@ function getMemberDetailView() { ?>
         afkAdd.click(function() {
             afkAddDiv.hide();
             afkForm.show();
+        });
+        
+        cautionAdd.click(function() {
+            cautionAddDiv.hide();
+            cautionForm.show();
         });
         
         // handle edit/delete on membership
@@ -2060,6 +2200,65 @@ function getMemberDetailView() { ?>
                 }
             }).done(function(data){
                 $('#trial').hide();
+                errorDiv.hide();
+                loadingDiv.hide();
+            }).fail(function(data){
+                errorDiv.html(formatErrorData(data));
+                errorDiv.show();
+                loadingDiv.hide();
+            });
+            e.preventDefault();
+        });
+        
+        cautionForm.submit(function(e) {
+            loadingDiv.show();
+            $.ajax({
+                url: URL,
+                type: 'post',
+                dataType: "json",
+                data: {
+                    'site' : VAR_SITE,
+                    'ajaxCont' : 'data',
+                    'type' : 'add-caution',
+                    'id' : $('#inputID').val(),
+                    'from' : cautionFrom.val(),
+                    'to' : cautionTo.val(),
+                    'cause' : cautionCause.val(),
+                }
+            }).done(function(data){
+                var elem = $('#'+CAUTION_ENTRY+data.from+'-'+data.to);
+                if(elem.length){
+                    elem.remove();
+                }
+                $('#caution').append(formatCautionEntry(data.from,data.to,data.cause));
+                errorDiv.hide();
+                loadingDiv.hide();
+            }).fail(function(data){
+                errorDiv.html(formatErrorData(data));
+                errorDiv.show();
+                loadingDiv.hide();
+            });
+            e.preventDefault();
+        });
+        
+        $('#caution').on('click', 'a', function (e) {
+            loadingDiv.show();
+            var from = $(this).attr('data-from');
+            var to = $(this).attr('data-to');
+            $.ajax({
+                url: URL,
+                type: 'post',
+                dataType: "json",
+                data: {
+                    'site' : VAR_SITE,
+                    'ajaxCont' : 'data',
+                    'type' : 'delete-caution',
+                    'id' : $('#inputID').val(),
+                    'from' : from,
+                    'to' : to,
+                }
+            }).done(function(data){
+                $('#'+CAUTION_ENTRY+data.from+'-'+data.to).remove();
                 errorDiv.hide();
                 loadingDiv.hide();
             }).fail(function(data){
@@ -2680,6 +2879,7 @@ function getDatabaseView() {
                 createCol(sw,'Member (real) Names',data.realnames);
                 createCol(sw,'Exp & CP entries',data.rows);
                 createCol(sw,'AFKs',data.afks);
+                createCol(sw,'Cautions',data.cautions);
                 createCol(sw,'Unlinked ts IDs',data.unlinkedTS);
                 createCol(sw,'TS Names',data.tsIDs);
                 createCol(sw,'TS Data',data.tsdata);
@@ -2852,7 +3052,7 @@ function getDifferenceWeeklyView() {
             var vTo = end.format(DATE_FORMAT);
             setURLParameter({'dateFromW' : vFrom, 'dateToW': vTo});
 
-            $('#loading').show();
+            showLoading();
             $('#difference-table tbody').empty();
             $.ajax({
                 url: URL,
@@ -2866,121 +3066,124 @@ function getDifferenceWeeklyView() {
                     'dateToW' : vTo,
                 }
             }).done(function(data){
-                if (data == null){
-                    $("#loading").hide();
-                    $('#dateInfo').show();
-                    updateTableTool();
-                    return;
-                }
-                var str = '<thead><tr class="tablesorter-ignoreRow"><th colspan=5>Kommentar mit Enter bestätigen!</th>';
-                var secondHeader = '<tr><th class="sorter-text">Vorname</th><th class="sorter-text">Account</th><th class="sorter-digit">ID / USN</th><th class="sorter-text">VIP</th><th class="sorter-text">Kommentar</th>';
-                $.each(data.date, function(i,row) {
-                    str += '<th colspan=3 ><a href="'+escapeHtml('<?=DIFFERENCE_URL?>'
-                    + '&dateFrom=' + row.start
-                    + '&dateTo=' + row.end)
-                    + '">' + row.end + '</a></th>';
-                    secondHeader += '<th class="sorter-text">Flags</th><th class="sorter-digit">EXP</th><th class="sorter-digit">CP</th>';
-                });
-                str += '</tr>';
-                secondHeader += '</tr></thead><tbody>';
-                str += secondHeader;
-                nonMembers = [];
-                $.each(data.data,function(i,acc){
-                    var member = acc[Object.keys(acc)[0]];
-                                        
-                    var rid = "acc-"+member.id;
-                    
-                    str += '<tr id="';
-                    str += rid;
-                    str += '"><td>';
-                    
-                    rid = '#'+rid;
-                    
-                    // no member = no entry for last date
-                    if(acc[data.date[data.date.length-1].end] == undefined || 
-                        (acc[data.date[data.date.length-2].end] != undefined &&
-                           acc[data.date[data.date.length-1].end].days < 7 ))
-                    {
-                        nonMembers.push(rid);
+                $('#loading-text').text("Rendering..");
+                setTimeout(function() {
+                    if (data == null){
+                        $("#loading").hide();
+                        $('#dateInfo').show();
+                        updateTableTool();
+                        return;
                     }
-                    
-                    if(member.vname == null)
-                        str += formatMemberDetailLink(member.id,"?");
-                    else
-                        str += escapeHtml(member.vname);
-                    str += '</td>';
-                    
-                    str += '<td>' + escapeHtml(member.name) + '</td>';
-                    str += '<td>'+formatMemberDetailLink(member.id,member.id)+'</td>';
-                    
-                    str += '<td data-text='; // provide a data-text attribute for sorting
-                    if(member.vip == null) {
-                        str += '"?">';
-                        str += formatMemberDetailLink(member.id,"?");
-                    } else if (member.vip == 1) {
-                        str += '"1">';
-                        str += '<i class="fas fa-check" title="VIP Spieler"></i>';
-                    } else {
-                        str += '"0">';
-                        str += '<i class="fas fa-times" title="Non VIP Spieler"></i>';
-                    }
-                    str += '</td>';
-                    
-                    str +='<td class="cell-editable cell-wrap" data-id="'+member.id+'">';
-                    str += escapeHtml(member.comment);
-                    str +='</td>';// kommentar
-                    
-                    $.each(data.date,function(i,key) {
-                        if(acc[key.end] != undefined) {
-                            var row = acc[key.end];
-                            var background = '';
-                            if(row.cp == 0 && row.exp == 0 && row.days > 6) {
-                                background = 'class="warning"';
-                            } else if(row.cp_by_exp >= 10) {
-                                background = 'class="success"';
-                            }
-                            var dataText = '';
-                            if(row.afk == 1)
-                                dataText += 'afk';
-                            if(row.trial == 1)
-                                dataText += 'trial';
-                            
-                            str += '<td ' + background + ' data-text="'+dataText+'">';
-                            if(row.afk == 1)
-                                str += '<i class="fas fa-clock" title="AFK"></i>';
-                            if(row.afk == 1 && row.trial == 1)
-                                str += ' ';
-                            if(row.trial == 1)
-                                str += ' <i class="fas fa-plus" title="Pröbling"></i>';
-                            str += '</td>';
-                            
-                            var possible = row.days * CP_MAX;
-                            if(row.cp != row.cp_by_exp && row.cp <= possible){
-                                str += '<td class = "danger">';
-                            } else {
-                                str += '<td '+ background + '>';
-                            }
-                            
-                            str += row.exp + '</td>';
-                            str += '<td ' + background + '>' + row.cp_by_exp + '</td>';
-                        } else {
-                            str += '<td colspan=3></td>';
-                        }
+                    var str = '<thead><tr class="tablesorter-ignoreRow"><th colspan=5>Kommentar mit Enter bestätigen!</th>';
+                    var secondHeader = '<tr><th class="sorter-text">Vorname</th><th class="sorter-text">Account</th><th class="sorter-digit">ID / USN</th><th class="sorter-text">VIP</th><th class="sorter-text">Kommentar</th>';
+                    $.each(data.date, function(i,row) {
+                        str += '<th colspan=3 ><a href="'+escapeHtml('<?=DIFFERENCE_URL?>'
+                        + '&dateFrom=' + row.start
+                        + '&dateTo=' + row.end)
+                        + '">' + row.end + '</a></th>';
+                        secondHeader += '<th class="sorter-text">Flags</th><th class="sorter-digit">EXP</th><th class="sorter-digit">CP</th>';
                     });
                     str += '</tr>';
-                });
-                str += '</tbody>';
-                console.log(str);
-                $(fixedTableClass).trigger('destroy');
-                $('#difference-table').html(str);
-                swapNonMembers($('#nonMembers').is('checked'));
-                $('#amountNonMember').text(nonMembers.length);
-                
-                $('#dateInfo').hide();
-                $("#loading").hide();
-                $('#erromsg').hide();
-                initCustomTableTool();
-                $('.cell-editable').makeEditable(updateDiffComment,<?=MAX_DIFF_COMMENT_CHAR?>);
+                    secondHeader += '</tr></thead><tbody>';
+                    str += secondHeader;
+                    nonMembers = [];
+                    $.each(data.data,function(i,acc){
+                        var member = acc[Object.keys(acc)[0]];
+                        
+                        var rid = "acc-"+member.id;
+                        
+                        str += '<tr id="';
+                        str += rid;
+                        str += '"><td>';
+                        
+                        rid = '#'+rid;
+                        
+                        // no member = no entry for last date
+                        if(acc[data.date[data.date.length-1].end] == undefined || 
+                            (acc[data.date[data.date.length-2].end] != undefined &&
+                            acc[data.date[data.date.length-1].end].days < 7 ))
+                        {
+                            nonMembers.push(rid);
+                        }
+                        
+                        if(member.vname == null)
+                            str += formatMemberDetailLink(member.id,"?");
+                        else
+                            str += escapeHtml(member.vname);
+                        str += '</td>';
+                        
+                        str += '<td>' + escapeHtml(member.name) + '</td>';
+                        str += '<td>'+formatMemberDetailLink(member.id,member.id)+'</td>';
+                        
+                        str += '<td data-text='; // provide a data-text attribute for sorting
+                        if(member.vip == null) {
+                            str += '"?">';
+                            str += formatMemberDetailLink(member.id,"?");
+                        } else if (member.vip == 1) {
+                            str += '"1">';
+                            str += '<i class="fas fa-check" title="VIP Spieler"></i>';
+                        } else {
+                            str += '"0">';
+                            str += '<i class="fas fa-times" title="Non VIP Spieler"></i>';
+                        }
+                        str += '</td>';
+                        
+                        str +='<td class="cell-editable cell-wrap" data-id="'+member.id+'">';
+                        str += escapeHtml(member.comment);
+                        str +='</td>';// kommentar
+                        
+                        $.each(data.date,function(i,key) {
+                            if(acc[key.end] != undefined) {
+                                var row = acc[key.end];
+                                var background = '';
+                                if(row.cp == 0 && row.exp == 0 && row.days > 6) {
+                                    background = 'class="warning"';
+                                } else if(row.cp_by_exp >= 10) {
+                                    background = 'class="success"';
+                                }
+                                var dataText = '';
+                                if(row.afk == 1)
+                                    dataText += 'afk';
+                                if(row.trial == 1)
+                                    dataText += 'trial';
+                                
+                                str += '<td ' + background + ' data-text="'+dataText+'">';
+                                if(row.afk == 1)
+                                    str += '<i class="fas fa-clock" title="AFK"></i>';
+                                if(row.afk == 1 && row.trial == 1)
+                                    str += ' ';
+                                if(row.trial == 1)
+                                    str += ' <i class="fas fa-plus" title="Pröbling"></i>';
+                                str += '</td>';
+                                
+                                var possible = row.days * CP_MAX;
+                                if(row.cp != row.cp_by_exp && row.cp <= possible){
+                                    str += '<td class = "danger">';
+                                } else {
+                                    str += '<td '+ background + '>';
+                                }
+                                
+                                str += row.exp + '</td>';
+                                str += '<td ' + background + '>' + row.cp_by_exp + '</td>';
+                            } else {
+                                str += '<td colspan=3></td>';
+                            }
+                        });
+                        str += '</tr>';
+                    });
+                    str += '</tbody>';
+                    console.log(str);
+                    $(fixedTableClass).trigger('destroy');
+                    $('#difference-table').html(str);
+                    $('#amountNonMember').text(nonMembers.length);
+                    swapNonMembers($('#nonMembers').prop('checked'));
+                    
+                    $('#dateInfo').hide();
+                    $("#loading").hide();
+                    $('#erromsg').hide();
+                    initCustomTableTool();
+                    $('.cell-editable').makeEditable(updateDiffComment,<?=MAX_DIFF_COMMENT_CHAR?>);
+                },0);
             }).fail(function(data){
                 $('#erromsg').html(formatErrorData(data));
                 $("#loading").hide();
@@ -2988,8 +3191,13 @@ function getDifferenceWeeklyView() {
             }); 
         }
         
-        function updateDiffComment(element,comment){
+        function showLoading() {
             $('#loading').show();
+            $('#loading-text').text("Loading..");
+        }
+        
+        function updateDiffComment(element,comment){
+            showLoading();
             $.ajax({
                 url: URL,
                 type: 'post',
@@ -3108,7 +3316,7 @@ function getDifferenceWeeklyView() {
             <div id="loading" style="position: fixed; display: none;z-index: 10; background: rgba(255,255,255,0.5); width: 100%; height: 100%;">
                     <div style="position: fixed; left: 50%; top: 50%;">
                         <i class="fas fa-spinner fa-pulse fa-3x"></i><br>
-                        Loading...
+                        <div id="loading-text">Loading...</div>
                     </div>
             </div>
             <table id="difference-table" class="table table-bordered table-hover table_nowrap fixed-table">
@@ -3136,6 +3344,7 @@ function getDifferenceView() {
                     'Last 14 Days': [moment().subtract(14, 'days'), moment()],
                     'Last 3 Weeks': [moment().subtract(21, 'days'), moment()],
                     'Last 4 Weeks': [moment().subtract(28, 'days'), moment()],
+                    'Last 6 Weeks': [moment().subtract(6, 'week'), moment()],
                     'This Month': [moment().startOf('month'), moment()],
                     'Last Month': [moment().subtract(1, 'month').startOf('month'), moment().subtract(1, 'month').endOf('month')]
                 },"locale": {
@@ -3328,20 +3537,20 @@ function getDifferenceView() {
             <table id="difference-table" class="table table-striped table-bordered table-hover table_nowrap fixed-table" data-cols-number="2">
                 <thead>
                     <tr>
-                        <th scope="col">Vorname</th>
-                        <th scope="col">Account</th>
-                        <th scope="col">ID / USN</th>
-                        <th scope="col">VIP</th>
-                        <th scope="col">Date1</th>
-                        <th scope="col">Exp1</th>
-                        <th scope="col">CP1</th>
-                        <th scope="col">Date2</th>
-                        <th scope="col">Exp2</th>
-                        <th scope="col">CP2</th>
-                        <th scope="col">CP Differenz</th>
-                        <th scope="col">CP nach EXP</th>
-                        <th scope="col">EXP Differenz</th>
-                        <th scope="col">Tage</th>
+                        <th scope="col" class="sorter-text">Vorname</th>
+                        <th scope="col" class="sorter-text">Account</th>
+                        <th scope="col" class="sorter-digit">ID / USN</th>
+                        <th scope="col" class="sorter-text">VIP</th>
+                        <th scope="col" class="sorter-text">Date1</th>
+                        <th scope="col" class="sorter-digit">Exp1</th>
+                        <th scope="col" class="sorter-digit">CP1</th>
+                        <th scope="col" class="sorter-digit">Date2</th>
+                        <th scope="col" class="sorter-digit">Exp2</th>
+                        <th scope="col" class="sorter-digit">CP2</th>
+                        <th scope="col" class="sorter-digit">CP Differenz</th>
+                        <th scope="col" class="sorter-digit">CP nach EXP</th>
+                        <th scope="col" class="sorter-digit">EXP Differenz</th>
+                        <th scope="col" class="sorter-digit">Tage</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -3413,6 +3622,7 @@ function getTSView() {
                 "ranges": {
                     'Last Week': [moment().subtract(7, 'days'), moment()],
                     'Last 4 Weeks': [moment().subtract(4, 'weeks'), moment()],
+                    'Last 6 Weeks': [moment().subtract(6, 'week'), moment()],
                     'Last 8 Weeks': [moment().subtract(8, 'weeks'), moment()],
                     'Last 16 Weeks': [moment().subtract(16, 'weeks'), moment()],
                     'This Month': [moment().startOf('month'), moment()],
@@ -3567,6 +3777,7 @@ function getTSView() {
                         }],yAxes: [{
                             ticks: {
                                 min: 0,
+                                max: TS_DIFF_MIN,
                                 stepSize: 1,
                                 beginAtZero: true,
                             },
@@ -3701,6 +3912,7 @@ function getMemberDifferenceView() {
                     'Last 14 Days': [moment().subtract(14, 'days'), moment()],
                     'Last 3 Weeks': [moment().subtract(21, 'days'), moment()],
                     'Last 4 Weeks': [moment().subtract(28, 'days'), moment()],
+                    'Last 6 Weeks': [moment().subtract(6, 'week'), moment()],
                     'This Month': [moment().startOf('month'), moment()],
                     'Last Month': [moment().subtract(1, 'month').startOf('month'), moment().subtract(1, 'month').endOf('month')]
                 },"locale": {
@@ -4107,8 +4319,8 @@ function getLogView() {
                     'site' : VAR_SITE,
                     'ajaxCont' : 'data',
                     'type' : 'log',
-                    dateFrom : vFrom,
-                    dateTo : vTo,
+                    [dateFrom] : vFrom,
+                    [dateTo] : vTo,
                 }
             }).done(function(data){
                 console.log(data);

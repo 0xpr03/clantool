@@ -37,3 +37,19 @@ ALTER TABLE missing_entries MODIFY COLUMN `member` bit(1) NOT NULL;
  * performance improvement
  */
 ALTER TABLE member_addition ADD KEY(`name`);
+
+/*
+ * Execute on upgrade from 0.1.5
+ * adding caution table
+ */
+CREATE TABLE `caution` (
+  `id` int(11) NOT NULL,
+  `from` date NOT NULL,
+  `to` date NOT NULL,
+  `added` datetime NOT NULL,
+  `cause` text,
+  PRIMARY KEY (`id`,`from`),
+  KEY `id` (`id`),
+  KEY `from` (`from`),
+  KEY `to` (`to`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;

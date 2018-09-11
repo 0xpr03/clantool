@@ -1,6 +1,6 @@
 # diff weekly
 - laden von rendern unterscheiden
-- zeige nicht member hält sich bei änderung der Zeit nicht an Einstellung
+X zeige nicht member hält sich bei änderung der Zeit nicht an Einstellung
 - evaluation editor widget https://jsfiddle.net/Mottie/s6nj8pcu/ https://mottie.github.io/tablesorter/docs/example-widget-editable.html
 x fix der sortierung
 - evaluation https://www.datatables.net http://www.guriddo.net/demo/bootstrap/
@@ -11,19 +11,18 @@ x fix der sortierung
 ? ersetzen von select2 durch http://selectize.github.io/selectize.js/
 
 # difference
-- vorbeugen von diffWeekly sortierungs bugs
+X vorbeugen von diffWeekly sortierungs bugs
 
 # ts3 (member)
 - ts chart: warnung bei 0 identitäten
-- max für tage auf 7 setzen
+X max für tage auf 7 setzen
+- auf 6W default setzen
+
+# ts3-toplist
+- Vorname -> Name
 
 # log
-# prio
-- datumsauswahl kaputt, zeigt immer selbe vorauswahl an
-
-# suche
-aktuellen ingame-namen anzeigen für Vornamenssuche
-(prüfen für IDs)
+X datumsauswahl kaputt, zeigt immer selbe vorauswahl an
 
 ?!
 # afk mäßige Verwarnungstabelle
@@ -35,7 +34,10 @@ in member karteikarte, sichtbar in Diff. Weekly
 - ts aktivität von nur membern
 
 # away
-- aktive/kommende unterschiedlich einfärben
+X aktive/kommende unterschiedlich einfärben
+
+# member cp view
+- negative CP werte erlauben
 
 # memberDetail
 - warnung wenn schon verlinkte TS Identität zugewiesen wird
