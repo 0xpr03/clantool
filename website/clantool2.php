@@ -39,7 +39,7 @@ define('TS_DIFF_MIN',7);
 
 define('SITE', 'clantool2'); // site value
 define('VIEW','view'); // view key for requests
-define('DEFAULT_VIEW','difference');
+define('DEFAULT_VIEW','changes');
 define('SITE_MEMBER','memberDetail');
 define('DATE_MIN','2016-11-31'); // minimum date for EXP/CP
 define('HOUR_MIN',10); // hour of crawl per day, selecting previous day if time < HOUR_MIN
@@ -99,7 +99,7 @@ function getCTTemplate() {
     ?>
     <div class="column col-sm-3 col-xs-1 sidebar-offcanvas" id="sidebar">
         <ul class="nav" id="menu">
-            <?=generateViewLink(DEFAULT_VIEW,'fas fa-table fa-lg','Difference')?>
+            <?=generateViewLink('difference','fas fa-table fa-lg','Difference')?>
             <?=generateViewLink('differenceWeekly','fas fa-th-list fa-lg','Difference Weekly')?>
             <?=generateViewLink('memberDiff','fas fa-chart-area fa-lg', 'Member Difference')?>
             <?=generateViewLink('memberJoin','fas fa-user-plus fa-lg','Member Join')?>
@@ -124,7 +124,7 @@ function getCTTemplate() {
         $view = $_GET[VIEW];
         $ok_view = true;
         switch($_GET[VIEW]){
-            case DEFAULT_VIEW:
+            case 'difference':
                 getDifferenceView();
                 break;
             case 'differenceWeekly':
@@ -161,7 +161,7 @@ function getCTTemplate() {
             case 'ts3':
                 getTSView();
                 break;
-            case 'changes':
+            case DEFAULT_VIEW:
                 getMSChangesView();
                 break;
             case 'log':
