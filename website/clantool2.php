@@ -1037,7 +1037,7 @@ function getTSTopView() {
     <table class="table table-striped table-bordered table-hover">
         <thead>
             <tr>
-                <th>Vorname</th>
+                <th>Name</th>
                 <th>Tage Aktiv</th>
                 <th>Durchschnittliche Zeit</th>
                 <th>Total</th>
@@ -1725,7 +1725,7 @@ function getMemberDetailView() { ?>
     function formatTrialEntry(from,to){
         var str = '<li class="list-group-item" id="'+TRIAL_ENTRY+from+'">'
             + from
-            + '<a href="#" data-from="'+from+'" data-to="'+to+'" style="float: right;"> <i class="fas fa-trash"></i> Delete</a>'
+            + '<a href="#" class="critical" data-from="'+from+'" data-to="'+to+'" style="float: right;"> <i class="fas fa-trash"></i> Delete</a>'
         if(to == null){
             str += ' open';
         }else{
@@ -1743,7 +1743,7 @@ function getMemberDetailView() { ?>
     
     function formatCautionEntry(from,to,cause) {
         return '<li class="list-group-item" id="'+CAUTION_ENTRY+from+'">'
-            + '<a href="#" data-from="'+from+'" data-to="'+to+'" style="float: right;"> <i class="fas fa-trash"></i> Delete</a>'
+            + '<a href="#" class="critical" data-from="'+from+'" data-to="'+to+'" style="float: right;"> <i class="fas fa-trash"></i> Delete</a>'
             + from + ' - ' + to + '<br>'
             + cause
             + '</li>';
@@ -1751,7 +1751,7 @@ function getMemberDetailView() { ?>
     
     function formatAFKEntry(from,to,cause) {
         return '<li class="list-group-item" id="'+AFK_ENTRY+from+'-'+to+'">'
-            + '<a href="#" data-from="'+from+'" data-to="'+to+'" style="float: right;"> <i class="fas fa-trash"></i> Delete</a>'
+            + '<a href="#" class="critical" data-from="'+from+'" data-to="'+to+'" style="float: right;"> <i class="fas fa-trash"></i> Delete</a>'
             + from + ' - ' + to + '<br>'
             + cause
             + '</li>';
@@ -1759,7 +1759,7 @@ function getMemberDetailView() { ?>
     
     function formatTS3Entry(name,id) {
         return '<li class="list-group-item" id="'+TS3_ENTRY+id+'">'
-            + '<a href="#" data-id="'+id+'" style="float: right;"> <i class="fas fa-trash"></i> Remove</a>'
+            + '<a href="#" class="critical" data-id="'+id+'" style="float: right;"> <i class="fas fa-trash"></i> Remove</a>'
             + name
             + '</li>';
     }
@@ -1769,7 +1769,7 @@ function getMemberDetailView() { ?>
         if(name != null && name != "")
             vname = name;
         return '<li class="list-group-item" id="accs-'+id+'">'
-            + '<a href="#" data-id="'+id+'" style="float: right;"> <i class="fas fa-trash"></i> Remove</a>'
+            + '<a href="#" class="critical" data-id="'+id+'" style="float: right;"> <i class="fas fa-trash"></i> Remove</a>'
             + vname +' ('+formatMemberDetailLink(id,id)+')'
             + '</li>';
     }    
@@ -1814,7 +1814,7 @@ function getMemberDetailView() { ?>
         ret += escapeHtml(data.cause)+'" data-kicked="'+kicked+'" data-member="'+member+'">';
         ret += '<i class="fas fa-pencil-alt"></i> Edit </a>';
         
-        ret += '<a href="#" data-id="'+data.nr+'" data-action="'+msDelete+'" style="float: right;"> <i class="fas fa-trash"></i> Delete </a>';
+        ret += '<a href="#" class="critical" data-id="'+data.nr+'" data-action="'+msDelete+'" style="float: right;"> <i class="fas fa-trash"></i> Delete </a>';
 
         
         if(data.to == null){

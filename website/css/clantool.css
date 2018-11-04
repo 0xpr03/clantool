@@ -15,13 +15,24 @@
  background-color:#ebcccc !important;
 }
 
+/** critical delete operations **/
+a.critical:hover {
+    color: #FF3232;
+}
+a.critical {
+    color: #c9302c;
+}
+
 /** fix for fixed headers being opaque **/
 .fixed-header {
     background: white;
 }
 
-/** fix for diff tables **/
+/** table wrapping fixes **/
+/* no wrap class */
 .table_nowrap td  {white-space: nowrap;}
+/* nowrap overrider selectively allowing wraps */
+.cell-wrap {white-space: normal!important; }
 
 /** fix for membership view **/
 span.avoidwrap { display:inline-block; }
@@ -110,7 +121,7 @@ html, body {
     }
     
     #main {
-        width: 1%;
+        /*width: 1%; breaks mobile view*/
         left: 0;
     }
     
