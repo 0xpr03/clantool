@@ -3146,6 +3146,8 @@ function getDifferenceWeeklyView() {
                                     dataText += 'afk';
                                 if(row.trial == 1)
                                     dataText += 'trial';
+                                if(row.caution == 1)
+                                    dataText += 'caution';
                                 
                                 str += '<td ' + background + ' data-text="'+dataText+'">';
                                 if(row.afk == 1)
