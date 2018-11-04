@@ -5,21 +5,25 @@ X zeige nicht member hält sich bei änderung der Zeit nicht an Einstellung
 x fix der sortierung
 - evaluation https://www.datatables.net http://www.guriddo.net/demo/bootstrap/
 - ? clear all button für kommentare
+- warning: wird nicht in sortierung beachtet: data-text eintrag fehlt
 
 ?vip clanpunkte könig vergeben mit ts verlinkung
 
 ? ersetzen von select2 durch http://selectize.github.io/selectize.js/
 
+- ts3 connection: testen ob personen in einer member gruppe aber nicht im system zugeordnet
+
 # difference
 X vorbeugen von diffWeekly sortierungs bugs
+- sortierung ändern, sodass kicks/leaves in Datumsreihenfolge stehen
 
 # ts3 (member)
 - ts chart: warnung bei 0 identitäten
 X max für tage auf 7 setzen
-- auf 6W default setzen
+- auf 6W default -setzen
 
 # ts3-toplist
-- Vorname -> Name
+X Vorname -> Name
 
 # log
 X datumsauswahl kaputt, zeigt immer selbe vorauswahl an
@@ -35,6 +39,10 @@ in member karteikarte, sichtbar in Diff. Weekly
 
 # away
 X aktive/kommende unterschiedlich einfärben
+- umbauen in "Aktuelles": verwarnungen mit einbauen
+
+# status
+- Exp -> EXP
 
 # member cp view
 - negative CP werte erlauben
