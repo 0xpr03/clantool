@@ -1856,12 +1856,12 @@ class clanDB extends dbException {
      * @throw dbException
      */
     public function searchTs3ID($key) {
-        $key = '%'.$key.'%';
+        $keyName = '%'.$key.'%';
         if ($query = $this->db->prepare ( 'SELECT `name`,`client_id` 
         FROM `'.DB_TS3_NAMES.'` 
-        WHERE `name` LIKE ? 
+        WHERE `name` LIKE ? OR `client_id` = ?
         LIMIT 20')) {
-            $query->bind_param ( 's', $key );
+            $query->bind_param ( 'si', $keyName, $key );
             $query->execute();
             $result = $query->get_result ();
             
