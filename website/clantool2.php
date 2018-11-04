@@ -3176,7 +3176,7 @@ function getDifferenceWeeklyView() {
                         str += '</tr>';
                     });
                     str += '</tbody>';
-                    console.log(str);
+                    //console.log(str);
                     $(fixedTableClass).trigger('destroy');
                     $('#difference-table').html(str);
                     $('#amountNonMember').text(nonMembers.length);
@@ -4373,8 +4373,6 @@ function getTitle() {
 //@Override
 function getHead() {?>
 <script defer src="js/moment.min.js" type="text/javascript"></script>
-<!--<script defer src="js/jquery.tablesorter.min.js" type="text/javascript"></script>
-<script defer src="js/jquery.tablesorter.widgets.min.js" type="text/javascript"></script>-->
 <script defer src="js/jquery.tablesorter.combined.min.js" type="text/javascript"></script>
 <script defer src="js/Chart.min.js" type="text/javascript"></script>
 <link rel="stylesheet" href="css/clantool.css">
