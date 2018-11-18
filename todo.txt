@@ -1,11 +1,11 @@
 # diff weekly
-- laden von rendern unterscheiden
+X laden von rendern unterscheiden
 X zeige nicht member hält sich bei änderung der Zeit nicht an Einstellung
-- evaluation editor widget https://jsfiddle.net/Mottie/s6nj8pcu/ https://mottie.github.io/tablesorter/docs/example-widget-editable.html
+X evaluation editor widget https://jsfiddle.net/Mottie/s6nj8pcu/ https://mottie.github.io/tablesorter/docs/example-widget-editable.html
 x fix der sortierung
-- evaluation https://www.datatables.net http://www.guriddo.net/demo/bootstrap/
-- ? clear all button für kommentare
+X evaluation https://www.datatables.net http://www.guriddo.net/demo/bootstrap/
 - warning: wird nicht in sortierung beachtet: data-text eintrag fehlt
+X fehlerhafte Ansicht von AFKs: in der Woche (So-Sa, d.h. keine Überlappung) wird in nächster Angezeigt?
 
 ?vip clanpunkte könig vergeben mit ts verlinkung
 
@@ -30,12 +30,13 @@ X datumsauswahl kaputt, zeigt immer selbe vorauswahl an
 
 ?!
 # afk mäßige Verwarnungstabelle
-in member karteikarte, sichtbar in Diff. Weekly
+X in member karteikarte, sichtbar in Diff. Weekly
 
 # overview
+- graph für Activity kommt mit 07.11.18 nicht klar, da daten ~12 uhr statt 9 uhr
 - Graph cp summe tag / member tag
-- ts aktivität (mehrere graphen statt alles zusammen)
-- ts aktivität von nur membern
+- eigener Datumskey, mit 6 Wochen auswahl
+X ts aktivität (mehrere graphen statt alles zusammen)
 
 # away
 X aktive/kommende unterschiedlich einfärben
@@ -45,7 +46,7 @@ X aktive/kommende unterschiedlich einfärben
 - Exp -> EXP
 
 # member cp view
-- negative CP werte erlauben
+- negative CP werte in berechnung berücksichten
 
 # memberDetail
 - warnung wenn schon verlinkte TS Identität zugewiesen wird
@@ -53,13 +54,4 @@ X aktive/kommende unterschiedlich einfärben
 - (low prio) fix für menü anordnung suchen, je nach größe test -> 11729973 vs normaler member
 
 # menu
-scrolling abschalten -> content scrollt schon alles zusammen
-
-SELECT m3.date,AVG(m3.diff),COUNT(CASE WHEN m3.diff > 0 THEN 1 ELSE 0 END) AS active,members FROM (
-    SELECT m2.id,m2.date as date,m2.exp - m1.exp AS diff FROM member m2 INNER JOIN member m1 ON m2.id = m1.id AND m1.date = DATE_SUB(m2.date, INTERVAL 1 DAY)
-) m3 GROUP BY m3.date 
-LEFT JOIN clan c ON c.date = m3.date
-
-
-SELECT m2.id,m2.date,m1.date,m2.exp - m1.exp AS diff FROM member m2 INNER JOIN member m1 ON m2.id = m1.id AND m1.date = DATE_SUB(m2.date, INTERVAL 1 DAY)
-WHERE m2.date BETWEEN "2018-05-01" AND "2018-05-5";
+- scrolling abschalten -> content scrollt schon alles zusammen
