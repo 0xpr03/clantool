@@ -32,9 +32,12 @@ define('C_DIFFERENCE', 'clantool_c_overview');
 define('C_DATE1', 'clantool_c_date1');
 define('C_DATE2', 'clantool_c_date2');
 
+// Maximum CP per day possible
 define('MAX_CP_DAY', 10);
+// EXP per CP
 define('EXP_TO_CP', 500);
 
+// ts diff minimum for display (privacy)
 define('TS_DIFF_MIN',7);
 // ignore ts client_id on statistics in General view [bot]
 define('TS_IGNORE_ID', 18106);
@@ -3618,6 +3621,7 @@ function getDifferenceView() {
                 
             }).fail(function(data){
                 $('#erromsg').html('Error!<br>'+formatErrorData(data));
+                $('#erromsg').show();
                 $("#loading").hide();
                 updateTableTool();
             });
