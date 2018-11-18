@@ -36,6 +36,8 @@ define('MAX_CP_DAY', 10);
 define('EXP_TO_CP', 500);
 
 define('TS_DIFF_MIN',7);
+// ignore ts client_id on statistics in General view [bot]
+define('TS_IGNORE_ID', 18106);
 
 define('SITE', 'clantool2'); // site value
 define('VIEW','view'); // view key for requests
@@ -99,6 +101,7 @@ function getCTTemplate() {
     ?>
     <div class="column col-sm-3 col-xs-1 sidebar-offcanvas" id="sidebar">
         <ul class="nav" id="menu">
+            <?=generateViewLink('general','fas fa-chart-bar fa-lg','General')?>
             <?=generateViewLink('difference','fas fa-table fa-lg','Difference')?>
             <?=generateViewLink('differenceWeekly','fas fa-th-list fa-lg','Difference Weekly')?>
             <?=generateViewLink('memberDiff','fas fa-chart-area fa-lg', 'Member Difference')?>
@@ -115,7 +118,7 @@ function getCTTemplate() {
             <?=generateViewLink('settings','fas fa-sliders-h fa-lg','System Settings')?>
             <?php
             if(hasPermission(PERM_CLANTOOL_TEST)) { // alpha/beta views
-                echo generateViewLink('general','fas fa-chart-bar fa-lg','General');
+                //echo generateViewLink('general','fas fa-chart-bar fa-lg','General');
             }?>
         </ul>
     </div>
@@ -155,7 +158,7 @@ function getCTTemplate() {
                 getTSTopView();
                 break;
             case 'general':
-                if(hasPermission(PERM_CLANTOOL_TEST))
+                //if(hasPermission(PERM_CLANTOOL_TEST))
                     getGeneralView();
                 break;
             case 'ts3':
@@ -596,6 +599,13 @@ function getAjax(){
                 handleDateDifference();
                 
                 echo json_encode($clanDB->getMemberChange($_SESSION[DATE_FROM],$_SESSION[DATE_TO],$_REQUEST['id']));
+                
+                break;
+            case 'overview-graph':
+            
+                handleDateDifference();
+                
+                echo json_encode($clanDB->getOverview($_SESSION[DATE_FROM],$_SESSION[DATE_TO]));
                 
                 break;
             case 'member-search-select2':
@@ -2904,33 +2914,73 @@ function getDatabaseView() {
     </script>
 <?php }
 
-function getGeneralView() { ?>
+function getGeneralView() {
+    handleDateDifference();?>
     <div id="overview-ajax">
         <script type="text/javascript">
         $(document).ready(function() {
-            showOverviewChart();
-            $('#overview-info').popover({ trigger: "hover",container: 'body' });
-            /*$('.active .datepicker').datepicker({
-                format: DATE_FORMAT,
-            });*/
+            $('#dateDiff').daterangepicker({
+                "ranges": {
+                    'Last 7 Days': [moment().subtract(7, 'days'), moment()],
+                    'Last 14 Days': [moment().subtract(14, 'days'), moment()],
+                    'Last 4 Weeks': [moment().subtract(28, 'days'), moment()],
+                    'Last 6 Weeks': [moment().subtract(6, 'week'), moment()],
+                    'This Year': [moment().startOf('year'), moment()],
+                },"locale": {
+                    "format": DATE_FORMAT,
+                    "separator": " - ",
+                    "applyLabel": "Apply",
+                    "cancelLabel": "Cancel",
+                    "fromLabel": "From",
+                    "toLabel": "To",
+                    "customRangeLabel": "Custom",
+                    "weekLabel": "W",
+                    "daysOfWeek": DAYS_OF_WEEK,
+                    "monthNames": MONTH_NAMES,
+                },
+                "minDate": moment('<?=DATE_MIN?>',DATE_FORMAT),
+                "maxDate": moment(),
+                "autoUpdateInput": true
+            }, function(start, end, label) {
+                var vFrom = start.format(DATE_FORMAT);
+                var vTo = end.format(DATE_FORMAT);
+                setURLParameter({'dateFrom' : vFrom, 'dateTo': vTo});
+                showOverviewChart(start,end);
+            });
+            
+            var start = moment('<?=$_SESSION[DATE_FROM]?>',DATE_FORMAT);
+            var end = moment('<?=$_SESSION[DATE_TO]?>',DATE_FORMAT);
+            
+            $('#dateDiff').data('daterangepicker').setStartDate(start);
+            $('#dateDiff').data('daterangepicker').setEndDate(end);
+                        
+            showOverviewChart(start,end);
         });
-        function showOverviewChart() {
+        function showOverviewChart(start,end) {
+            $("#loading").show();
+            var vFrom = start.format(DATE_FORMAT);
+            var vTo = end.format(DATE_FORMAT);
+            setURLParameter({'dateFrom' : vFrom, 'dateTo': vTo});
             $.ajax({
                 url: URL,
-                type: 'post',
+                type: 'get',
                 dataType: "json",
                 data: {
                     'site' : VAR_SITE,
                     'ajaxCont' : 'data',
-                    'type' : 'overview-json',
-                    'dateFrom' : $('#overDate1').val(),
-                    'dateTo' : $('#overDate2').val(),
+                    'type' : 'overview-graph',
+                    'dateFrom' : vFrom,
+                    'dateTo' : vTo,
                 }
             }).done(function(data){
-                drawOverviewChart(data.graph);
+                drawOverviewChart(data);
                 drawMissingOverviewEntries(data.missing);
+                $("#loading").hide();
+                $('#erromsg').hide();
             }).fail(function(data){
-                console.error(data);
+                $('#erromsg').html('Error!<br>'+formatErrorData(data));
+                $("#loading").hide();
+                $('#erromsg').show();
             });
         }
         function drawMissingOverviewEntries(data) {
@@ -2945,98 +2995,160 @@ function getGeneralView() { ?>
             }
         }
         function drawOverviewChart(data) {
-            cleanupCharts();
-            var ctx = document.getElementById("chart-overview");
-            charts.push(new Chart(ctx, {
-                type: 'line',
-                data: {
-                    datasets: [{
-                        borderColor: 'rgba(255, 0, 0,0.5)',
-                        backgroundColor: 'rgba(255, 0, 0,0.2)',
-                        label: 'Wins',
-                        data: data.wins,
-                        borderWidth: 1,
-                        yAxisID: "y-axis-1"
-                    },{
-                        borderColor: 'rgba(0, 255, 0,0.5)',
-                        backgroundColor: 'rgba(0, 255, 0,0.2)',
-                        label: 'Draws',
-                        data: data.draws,
-                        borderWidth: 1,
-                        yAxisID: "y-axis-2"
-                    },{
-                        borderColor: 'rgba(0, 0, 255,0.5)',
-                        backgroundColor: 'rgba(0, 0, 255,0.2)',
-                        label: 'Losses',
-                        data: data.losses,
-                        borderWidth: 1,
-                        yAxisID: "y-axis-3"
-                    },{
-                        label: 'Member',
-                        data: data.member,
-                        borderWidth: 1,
-                        yAxisID: "y-axis-4"
-                    }]
+            var mode; // performance safer
+            if ( data.x.length < 2000 ) {
+                mode = 'lines+markers';
+            } else {
+                mode = 'lines';
+            }
+            var online = {
+                x: data.x,
+                y: data.ts_count,
+                fill: 'tonexty',
+                type: 'scatter',
+                mode: mode,
+                name: 'Identities in TS',
+                yaxis: 'y'
+            };
+
+            var time_avg = {
+                x: data.x, 
+                y: data.ts_time_avg, 
+                fill: 'tozeroy',
+                type: 'scatter',
+                name: 'Avg TS Time',
+                mode: mode,
+                yaxis: 'y2'
+            };
+            
+            var member = {
+                x: data.x, 
+                y: data.member, 
+                fill: 'tozeroy',
+                type: 'scatter',
+                name: 'Member',
+                mode: mode,
+                yaxis: 'y',
+            };
+            
+            var wins = {
+                x: data.x, 
+                y: data.wins, 
+                type: 'scatter',
+                name: 'Wins CW',
+                mode: mode,
+                yaxis: 'y2',
+            };
+            
+            var losses = {
+                x: data.x, 
+                y: data.losses, 
+                type: 'scatter',
+                name: 'Losses CW',
+                mode: mode,
+                yaxis: 'y3',
+            };
+            
+            var draws = {
+                x: data.x, 
+                y: data.draws, 
+                type: 'scatter',
+                name: 'Draws CW',
+                mode: mode,
+                yaxis: 'y4',
+            };
+            
+            layout = {
+                title: 'Clan Stats',
+                xaxis: {
+                    title: 'Day'
                 },
-                options: {
-                    scales: {xAxes: [{
-                        type: "time",
-                        display: true,
-                        scaleLabel: {
-                            display: true,
-                            labelString: 'Date'
-                        }
-                    }],
-                    yAxes: [{
-                        type: "linear",
-                        display: false,
-                        position: "left",
-                        id: "y-axis-1",
-                    },{
-                        type: "linear",
-                        display: false,
-                        position: "right",
-                        id: "y-axis-2",
-                        gridLines: {
-                            drawOnChartArea: true,
-                        },
-                    },{
-                        type: "linear",
-                        display: false,
-                        position: "right",
-                        id: "y-axis-3",
-                        gridLines: {
-                            drawOnChartArea: true,
-                        },
-                    },{
-                        type: "linear",
-                        display: false,
-                        position: "right",
-                        id: "y-axis-4",
-                        gridLines: {
-                            drawOnChartArea: true,
-                        },
-                    }]
-                    }
-                }
-            }));
+                yaxis: {
+                    title: 'Member',
+                    type: 'line',
+                    side: 'left',
+                    autorange: true,
+                    hoverformat: 'd',
+                    anchor: 'free',
+                },yaxis2: {
+                    title: 'Wins',
+                    type: 'line',
+                    overlaying: 'y',
+                    visible: false,
+                    hoverformat: 'd',
+                    autorange: true,
+                    anchor: 'free',
+                },yaxis3: {
+                    title: 'Loss',
+                    type: 'line',
+                    overlaying: 'y',
+                    visible: false,
+                    autorange: true,
+                    hoverformat: 'd',
+                    anchor: 'free',
+                },yaxis4: {
+                    title: 'Draws',
+                    type: 'line',
+                    overlaying: 'y',
+                    visible: false,
+                    hoverformat: 'd',
+                    autorange: true,
+                    anchor: 'free',
+                },
+                autosize: true,
+            };
+            
+            layout_ts = {
+                title: 'TS Stats',
+                xaxis: {
+                    title: 'Day'
+                },
+                yaxis: {
+                    title: 'Online Identities',
+                    type: 'line',
+                    side: 'left'
+                },
+                yaxis2: {
+                    title: 'Average online Time',
+                    type: 'date',
+                    side: 'right',
+                    overlaying: 'y',
+                    tickformat: '%H:%M:%S'
+                },
+                yaxis3: {
+                    title: 'Members',
+                    type: 'line',
+                    overlaying: 'y'
+                },
+                autosize: true,
+            };
+            
+            Plotly.newPlot('chart-overview',[member, wins, losses, draws],layout,{responsive: true, modeBarButtonsToRemove: ['sendDataToCloud', 'autoScale2d', 'resetScale2d'] ,displaylogo: false, showTips:false});
+            
+            Plotly.newPlot('chart-ts',[online,time_avg],layout_ts,{responsive: true, modeBarButtonsToRemove: ['sendDataToCloud', 'autoScale2d', 'resetScale2d'] ,displaylogo: false, showTips:false});
+
         }
         </script>
-        <div class="form-group">
-            <label for="overDate1" class = "col-sm-2 control-label">1. Datum</label>
-            <div class="col-xs-10">
-                <input class="form-control datepicker" value="<?=$_SESSION[DATE_FROM]?>" type="text" id="overDate1">
-            </div>
-            <label for="overDate2" class = "col-sm-2 control-label">2. Datum</label>
-            <div class="col-xs-10">
-                <input class="form-control datepicker" value="<?=$_SESSION[DATE_TO]?>" type="text" id="overDate2">
-            </div>
-            <div class="btn-group" style="margin-top: 5px;">
-                <button type="button" class="btn btn-submit" data-dismiss="modal" onclick="showOverviewChart()">Zeige Verlauf</button>
+        <div class="form-horizontal">
+            <div class="form-group">
+                <label for="dateDiff" class="control-label col-xs-2">Date Range</label>
+                <div class="col-xs-10">
+                    <input type="text" id="dateDiff" class="form-control" name="daterange" value="01/01/2015 - 01/31/2015" />
+                </div>
             </div>
         </div>
-        <canvas id="chart-overview" width="auto" height="auto"></canvas>
-        <div id="missing-overview" width="auto" height="auto"></div>
+        <div id="container" style="display: none;" class="alert alert-danger fade in"></div>
+            <div id="loading" style="position: fixed; display: none;z-index: 10; background: rgba(255,255,255,0.5); width: 100%; height: 100%;">
+                    <div style="position: fixed; left: 50%; top: 50%;">
+                        <i class="fas fa-spinner fa-pulse fa-3x"></i><br>
+                        <div id="loading-text">Loading...</div>
+                    </div>
+            </div>
+            <div id="chart-overview"></div>
+            <div id="chart-ts"></div>
+            <div id="erromsg" class="alert alert-danger fade in" style="display: none;"></div>
+            <div id="missing-overview" width="auto" height="auto"></div>
+        </div>
     </div>
     <?php
 }
@@ -4375,6 +4487,7 @@ function getHead() {?>
 <script defer src="js/moment.min.js" type="text/javascript"></script>
 <script defer src="js/jquery.tablesorter.combined.min.js" type="text/javascript"></script>
 <script defer src="js/Chart.min.js" type="text/javascript"></script>
+<script defer src="js/plotly-basic.min.js"></script>
 <link rel="stylesheet" href="css/clantool.css">
 <script defer src="https://static.proctet.net/js/fontawesome-all.min.js" type="text/javascript"></script>
 <script defer src="js/daterangepicker.js" type="text/javascript"></script>

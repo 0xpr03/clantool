@@ -14,7 +14,8 @@
 // This file relies also on the defines in clantool2.php !
 define('DB_TS3_DATA','mDSStats2_6243');
 define('DB_TS3_NAMES','mDSNames_6243');
-
+// used to trick seconds -> datetime to display values as time
+define('PLOTLY_START_DATE','1970-01-01 ');
 define('ER_DUP_ENTRY',23000);
  
 class dbException extends Exception {
@@ -1108,7 +1109,17 @@ class clanDB extends dbException {
     public function getOverview($date1, $date2) {
         $this->escapeData($date1);
         $this->escapeData($date2);
-        if ($query = $this->db->prepare ( 'SELECT `date`,`wins`,`losses`,`draws`,`members`FROM `clan` WHERE `date` BETWEEN "'.$date1.'%" AND DATE_ADD("'.$date2.'%" , INTERVAL 1 DAY) ORDER BY `date`' )) { // Y-m-d G:i:s Y-m-d h:i:s
+        $ignoreid = TS_IGNORE_ID;
+        $this->escapeData($ignoreid);
+        // get clan stuff & get TS stuff, but
+        if ($query = $this->db->prepare ( 'SELECT `clan`.`date`,`wins`,`losses`,`draws`,`members`,COUNT(ts_data.`client_id`) as ts_count, SEC_TO_TIME(AVG(ts_data.time)) as ts_time_avg
+        FROM `clan`
+        LEFT JOIN `'.DB_TS3_DATA.'` ts_data
+        ON ts_data.date = DATE(DATE_ADD(`clan`.`date`, INTERVAL -1 DAY)) AND ts_data.client_id != 
+        '.$ignoreid.'
+        WHERE `clan`.`date` BETWEEN "'.$date1.'%" AND DATE_ADD("'.$date2.'%" , INTERVAL 1 DAY)
+        GROUP BY `clan`.`date`
+        ORDER BY `clan`.`date`' )) { // Y-m-d G:i:s Y-m-d h:i:s
             $query->execute ();
             $result = $query->get_result ();
             
@@ -1120,32 +1131,28 @@ class clanDB extends dbException {
                 $resultset = null;
             } else {
                 $resultset = array ();
+                $dates = array();
                 $wins = array();
                 $losses = array();
                 $draws = array();
                 $member = array();
+                $tsCount = array();
                 while ( $row = $result->fetch_assoc () ) {
-                    $wins[] = array(
-                        'x' => $row['date'],
-                        'y' => $row['wins']
-                    );
-                    $losses[] = array(
-                        'x' => $row['date'],
-                        'y' => $row['losses']
-                    );
-                    $draws[] = array(
-                        'x' => $row['date'],
-                        'y' => $row['draws']
-                    );
-                    $member[] = array(
-                        'x' => $row['date'],
-                        'y' => $row['members']
-                    );
+                    $dates[] = $row['date'];
+                    $wins[] = $row['wins'];
+                    $losses[] = $row['losses'];
+                    $draws[] = $row['draws'];
+                    $member[] = $row['members'];
+                    $tsCount[] = $row['ts_count'];
+                    $tsTimeAvg[] = PLOTLY_START_DATE.$row['ts_time_avg'];
                 }
+                $resultset['x'] = $dates;
                 $resultset['wins'] = $wins;
                 $resultset['losses'] = $losses;
                 $resultset['draws'] = $draws;
                 $resultset['member'] = $member;
+                $resultset['ts_count'] = $tsCount;
+                $resultset['ts_time_avg'] = $tsTimeAvg;
             }
             $result->close();
             
