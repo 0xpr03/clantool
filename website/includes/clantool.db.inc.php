@@ -197,17 +197,21 @@ class clanDB extends dbException {
                 GROUP BY id
         ) cpdiff ON cpdiff.id = m2.id
         LEFT JOIN `member_addition` AS ma ON m2.id = ma.id
-        LEFT JOIN `afk` AS afk ON m2.id = afk.id AND 
-            afk.`from` <= "'.$date2.'" AND /* start <= $ende */
-            afk.`to` >= "'.$date1.'" /* ende >= $start */ 
+        LEFT JOIN `afk` AS afk ON m2.id = afk.id AND /* from has date -1 day because of overlapping */
+            ((afk.`from` BETWEEN "'.$date1.'" AND DATE_ADD("'.$date2.'", INTERVAL -1 DAY) ) OR
+            (afk.`to` BETWEEN "'.$date1.'" AND "'.$date2.'" ) OR
+            (afk.`from` <= "'.$date1.'" AND afk.`to` >= "'.$date2.'"))
         LEFT JOIN `caution` AS caution ON m2.id = caution.id AND 
-            caution.`from` <= "'.$date2.'" AND /* start <= $ende */
-            caution.`to` >= "'.$date1.'" /* ende >= $start */ 
+            ((caution.`from` BETWEEN "'.$date1.'" AND DATE_ADD("'.$date2.'", INTERVAL -1 DAY) ) OR
+            (caution.`to` BETWEEN "'.$date1.'" AND "'.$date2.'" ) OR
+            (caution.`from` <= "'.$date1.'" AND caution.`to` >= "'.$date2.'"))
         LEFT JOIN `member_trial` trial ON 
             trial.id = m2.id AND (
                 (trial.`to` IS NULL)
                 OR 
-                ( trial.`from` <= "'.$date2.'" AND trial.`to` >= "'.$date1.'" )
+                ((trial.`from` BETWEEN "'.$date1.'" AND DATE_ADD("'.$date2.'", INTERVAL -1 DAY) ) OR
+                (trial.`to` BETWEEN "'.$date1.'" AND "'.$date2.'" ) OR
+                (trial.`from` <= "'.$date1.'" AND trial.`to` >= "'.$date2.'"))
             )
         WHERE m2.date LIKE "'.$date1.'%" OR ( m2.date >  "'.$date1.'%" AND m2.date < "'.$date2.'%" ) 
         GROUP BY `id` ORDER BY `cp_by_exp`,`CP-Done`, `EXP-Done`' )) { // Y-m-d G:i:s Y-m-d h:i:s
@@ -288,14 +292,17 @@ class clanDB extends dbException {
                 GROUP BY id
         ) cpdiff ON cpdiff.id = m2.id
         LEFT JOIN `member_addition` AS ma ON m2.id = ma.id
-        LEFT JOIN `afk` AS afk ON m2.id = afk.id AND 
-            afk.`from` <= "'.$date2.'" AND /* start <= $ende */
-            afk.`to` >= "'.$date1.'" /* ende >= $start */ 
+        LEFT JOIN `afk` AS afk ON m2.id = afk.id AND
+            ((afk.`from` BETWEEN "'.$date1.'" AND DATE_ADD("'.$date2.'", INTERVAL -1 DAY) ) OR
+            (afk.`to` BETWEEN "'.$date1.'" AND "'.$date2.'" ) OR
+            (afk.`from` <= "'.$date1.'" AND afk.`to` >= "'.$date2.'"))
         LEFT JOIN `member_trial` trial ON 
             trial.id = m2.id AND (
                 (trial.`to` IS NULL)
                 OR 
-                ( trial.`from` <= "'.$date2.'" AND trial.`to` >= "'.$date1.'" )
+                ((trial.`from` BETWEEN "'.$date1.'" AND DATE_ADD("'.$date2.'", INTERVAL -1 DAY) ) OR
+                (trial.`to` BETWEEN "'.$date1.'" AND "'.$date2.'" ) OR
+                (trial.`from` <= "'.$date1.'" AND trial.`to` >= "'.$date2.'"))
             )
         WHERE m2.date LIKE "'.$date1.'%" OR ( m2.date >  "'.$date1.'%" AND m2.date < "'.$date2.'%" ) 
         GROUP BY `id` ORDER BY `cp_by_exp`,`CP-Done`, `EXP-Done`' )) { // Y-m-d G:i:s Y-m-d h:i:s
