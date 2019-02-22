@@ -17,7 +17,7 @@ limitations under the License.
 use std::fs::File;
 use std::io::BufReader;
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use error::Error;
 
@@ -30,9 +30,95 @@ use chrono::naive::{NaiveDate, NaiveDateTime, NaiveTime};
 use chrono::offset::Local;
 use chrono::Duration;
 
+use mysql::Pool;
+
+use db;
+
 lazy_static! {
     pub static ref DEFAULT_IMPORT_COMMENT: String =
         format!("imported on {}", format_datetime(&Local::now().naive_utc()));
+}
+
+/// Import commando handler
+pub fn import_cmd(
+    simulate: bool,
+    membership: bool,
+    comment: &str,
+    date_format: &str,
+    path: PathBuf,
+    pool: &Pool,
+) {
+    info!("CSV Import of File {:?}", path);
+    if simulate {
+        info!("Simulation mode");
+    }
+    if membership {
+        info!("Importing membership data");
+        panic!("Unsupported");
+    } else {
+        info!("Importing account data");
+
+        let default_time =
+            NaiveDateTime::parse_from_str("1970-01-01 00:00:01", "%Y-%m-%d %H:%M:%S").unwrap();
+        let importer = match ImportParser::new(&path, default_time, &date_format) {
+            Ok(v) => v,
+            Err(e) => {
+                error!("Error at importer: {}", e);
+                return;
+            }
+        };
+
+        let mut inserter = match db::ImportAccountInserter::new(pool, comment) {
+            Ok(v) => v,
+            Err(e) => {
+                error!("Error at preparing insertion: {}", e);
+                return;
+            }
+        };
+
+        let mut imported = 0;
+        let mut ms_imported = 0;
+        let mut ms_total = 0;
+        for entry in importer {
+            match entry {
+                Ok(v) => {
+                    if simulate {
+                        trace!("Entry: {:?}", v);
+                    }
+                    match inserter.insert_account(&v) {
+                        Err(e) => {
+                            error!("Error on import: {}", e);
+                            return;
+                        }
+                        Ok((total, imported)) => {
+                            ms_imported += imported;
+                            ms_total += total;
+                        }
+                    }
+                }
+                Err(e) => {
+                    error!("Error at parsing entry: {}", e);
+                    return;
+                }
+            }
+            imported += 1;
+        }
+        if simulate {
+            info!(
+                "Found {} correct entries to import, {}/{} memberships can be used",
+                imported, ms_imported, ms_total
+            );
+        } else {
+            if let Err(e) = inserter.commit() {
+                error!("Unable to commit import: {}", e);
+                return;
+            }
+            info!(
+                "Imported {} accounts & {}/{} memberships",
+                imported, ms_imported, ms_total
+            );
+        }
+    }
 }
 
 const DATETIME_FORMAT_COMMENT: &'static str = "%Y-%m-%d %H:%M:%S";

@@ -258,78 +258,7 @@ fn main() {
             let comment = sub_m.value_of("comment").unwrap();
             let date_format = sub_m.value_of("date-format").unwrap();
             let path = get_path_for_existing_file(sub_m.value_of("file").unwrap()).unwrap();
-            info!("CSV Import of File {:?}", path);
-            if simulate {
-                info!("Simulation mode");
-            }
-            if membership {
-                info!("Importing membership data");
-                panic!("Unsupported");
-            } else {
-                info!("Importing account data");
-
-                let default_time =
-                    NaiveDateTime::parse_from_str("1970-01-01 00:00:01", "%Y-%m-%d %H:%M:%S")
-                        .unwrap();
-                let importer = match import::ImportParser::new(&path, default_time, &date_format) {
-                    Ok(v) => v,
-                    Err(e) => {
-                        error!("Error at importer: {}", e);
-                        return;
-                    }
-                };
-
-                let mut inserter = match db::ImportAccountInserter::new(&*pool, comment) {
-                    Ok(v) => v,
-                    Err(e) => {
-                        error!("Error at preparing insertion: {}", e);
-                        return;
-                    }
-                };
-
-                let mut imported = 0;
-                let mut ms_imported = 0;
-                let mut ms_total = 0;
-                for entry in importer {
-                    match entry {
-                        Ok(v) => {
-                            if simulate {
-                                trace!("Entry: {:?}", v);
-                            }
-                            match inserter.insert_account(&v) {
-                                Err(e) => {
-                                    error!("Error on import: {}", e);
-                                    return;
-                                }
-                                Ok((total, imported)) => {
-                                    ms_imported += imported;
-                                    ms_total += total;
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            error!("Error at parsing entry: {}", e);
-                            return;
-                        }
-                    }
-                    imported += 1;
-                }
-                if simulate {
-                    info!(
-                        "Found {} correct entries to import, {}/{} memberships can be used",
-                        imported, ms_imported, ms_total
-                    );
-                } else {
-                    if let Err(e) = inserter.commit() {
-                        error!("Unable to commit import: {}", e);
-                        return;
-                    }
-                    info!(
-                        "Imported {} accounts & {}/{} memberships",
-                        imported, ms_imported, ms_total
-                    );
-                }
-            }
+            import::import_cmd(simulate, membership, comment, date_format, path, &*pool);
         }
         _ => {
             info!("Entering daemon mode");
