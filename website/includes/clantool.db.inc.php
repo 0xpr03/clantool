@@ -438,15 +438,16 @@ class clanDB extends dbException {
     
     /**
      * Get active/future afks for specified date
+     * Shows only afks of members with active membership
      * @param date date for affected afks
      * @param current true to get currently active, false to get future AFKs
      * @return [{name,account name,id,from,to,cause}]
      * @throws dbException
      */
     public function getActiveFutureAFK($date,$current) {
-        $whereClause = $current ? '(`from` <= ? AND `to` >= ?)' : '`from` > ?';
+        $whereClause = $current ? '(afk.`from` <= ? AND afk.`to` >= ?)' : 'afk.`from` > ?';
         
-        if ($query = $this->db->prepare ( 'SELECT IFNULL(ad.name,?) as vname,IFNULL(names.name,?) as `name`,afk.`id`,`from`,`to`,`cause`
+        if ($query = $this->db->prepare ( 'SELECT IFNULL(ad.name,?) as vname,IFNULL(names.name,?) as `name`,afk.`id`,afk.`from`,afk.`to`,`cause`
         FROM `afk` afk
         LEFT JOIN `member_names` names ON afk.id = names.id AND
             `names`.updated = (SELECT MAX(n2.updated) 
@@ -454,9 +455,10 @@ class clanDB extends dbException {
                 WHERE n2.id = afk.id
             )
         LEFT JOIN `member_addition` ad ON afk.id = ad.id
+        JOIN `membership` ms ON ms.id = afk.id AND ms.to IS NULL
         WHERE '.$whereClause.'
         GROUP BY `id`
-        ORDER BY `from`,`to`')) {
+        ORDER BY afk.`from`,afk.`to`')) {
             if ($current) {
                 $query->bind_param('ssss',$this->name_default,$this->name_default,$date,$date);
             } else {
