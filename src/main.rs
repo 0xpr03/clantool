@@ -441,7 +441,7 @@ fn run_leave_detection(pool: &Pool, config: &Config, date: &NaiveDateTime, leave
                 "Unable to get older dates, skipping leave detection",
                 "unable to log get_next_older_date error",
             );
-            error!("Unbale to get older date! {}", e);
+            error!("Unable to get older date! {}", e);
         }
         Ok(Some(previous_date)) => {
             debug!("Date1 {} Date2 {}", previous_date, date);
