@@ -1109,6 +1109,69 @@ class clanDB extends dbException {
     }
     
     /**
+     * Get overview activity data
+     * @param string $date1 !NOT escaped
+     * @param string $date2 !NOT escaped
+     * @throws dbException
+     * @DEPRECATED
+     */
+    function getOverviewActivity($date1,$date2) {
+        $this->escapeData($date1);
+        $this->escapeData($date2);
+        $ignoreid = TS_IGNORE_ID;
+        $this->escapeData($ignoreid);
+        // get clan stuff & get TS stuff, but
+        if ($query = $this->db->prepare ( '
+        SELECT m.date,COUNT(CASE WHEN exp_diff > 0 THEN 1 END) as member_online,
+        COUNT(CASE WHEN exp_diff > 5000 THEN 1 END) as member_active,
+        COUNT(CASE WHEN cp_diff > 100 THEN 1 END) as member_casher,
+        AVG(exp_diff) as member_avg_exp 
+        FROM (
+            SELECT m1.date,m1.id,(m1.exp - m2.exp) as exp_diff,(m1.cp - m2.cp) as cp_diff FROM `member` as m1
+            LEFT JOIN `member` m2
+            ON m2.id = m1.id AND m2.date >= DATE_SUB(m1.date, INTERVAL 1 DAY)
+                AND m2.date < m1.date
+        ) m
+        WHERE m.`date` BETWEEN "'.$date1.'%" AND DATE_ADD("'.$date2.'%" , INTERVAL 1 DAY)
+        GROUP BY m.`date`
+        ORDER BY m.`date`' )) { // Y-m-d G:i:s Y-m-d h:i:s
+            $query->execute ();
+            $result = $query->get_result ();
+            
+            if (! $result) {
+                throw new dbException ( $this->db->error, 500 );
+            }
+            
+            if ($result->num_rows == 0) {
+                $resultset = null;
+            } else {
+                $resultset = array ();
+                $dates = array();
+                $active = array();
+                $online = array();
+                $exp_avg = array();
+                $casher = array();
+                while ( $row = $result->fetch_assoc () ) {
+                    $dates[] = $row['date'];
+                    $active[] = $row['member_active'];
+                    $online[] = $row['member_online'];
+                    $exp_avg[] = $row['member_avg_exp'];
+                    $casher[] = $row['member_casher'];
+                }
+                $resultset['exp_avg'] = $exp_avg;
+                $resultset['active'] = $active;
+                $resultset['online'] = $online;
+                $resultset['casher'] = $casher;
+            }
+            $result->close();
+            
+            return $resultset;
+        } else {
+            throw new dbException ( $this->db->error );
+        }
+    }
+    
+    /**
      * Get overview data
      * @param string $date1
      * @param string $date2
@@ -1121,14 +1184,15 @@ class clanDB extends dbException {
         $ignoreid = TS_IGNORE_ID;
         $this->escapeData($ignoreid);
         // get clan stuff & get TS stuff, but
-        if ($query = $this->db->prepare ( 'SELECT `clan`.`date`,`wins`,`losses`,`draws`,`members`,COUNT(ts_data.`client_id`) as ts_count, SEC_TO_TIME(AVG(ts_data.time)) as ts_time_avg
-        FROM `clan`
+        if ($query = $this->db->prepare ( 'SELECT c.`date`,`wins`,`losses`,`draws`,`members`,
+        COUNT(ts_data.`client_id`) as ts_count, SEC_TO_TIME(AVG(ts_data.time)) as ts_time_avg
+        FROM `clan` as c
         LEFT JOIN `'.DB_TS3_DATA.'` ts_data
-        ON ts_data.date = DATE(DATE_ADD(`clan`.`date`, INTERVAL -1 DAY)) AND ts_data.client_id != 
+        ON ts_data.date = DATE(DATE_ADD(c.`date`, INTERVAL -1 DAY)) AND ts_data.client_id != 
         '.$ignoreid.'
-        WHERE `clan`.`date` BETWEEN "'.$date1.'%" AND DATE_ADD("'.$date2.'%" , INTERVAL 1 DAY)
-        GROUP BY `clan`.`date`
-        ORDER BY `clan`.`date`' )) { // Y-m-d G:i:s Y-m-d h:i:s
+        WHERE c.`date` BETWEEN "'.$date1.'%" AND DATE_ADD("'.$date2.'%" , INTERVAL 1 DAY)
+        GROUP BY c.`date`
+        ORDER BY c.`date`' )) { // Y-m-d G:i:s Y-m-d h:i:s
             $query->execute ();
             $result = $query->get_result ();
             
@@ -1164,6 +1228,12 @@ class clanDB extends dbException {
                 $resultset['ts_time_avg'] = $tsTimeAvg;
             }
             $result->close();
+            
+            $data = $this->getOverviewActivity($date1,$date2);
+            $resultset['active'] = $data['active'];
+            $resultset['exp_avg'] = $data['exp_avg'];
+            $resultset['online'] = $data['online'];
+            $resultset['casher'] = $data['casher'];
             
             return $resultset;
         } else {

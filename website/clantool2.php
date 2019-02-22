@@ -20,6 +20,8 @@ define('DATE_FROM_TS','clantool_dateFromTS');
 define('DATE_TO_TS','clantool_dateToTS');
 define('DATE_FROM_LOG','clantool_dateFromLog');
 define('DATE_TO_LOG','clantool_dateToLog');
+define('DATE_FROM_OVERVIEW','clantool_dateFromOverview');
+define('DATE_TO_OVERVIEW','clantool_dateToOverview');
 // difference: show data base
 define('SHOW_BASE', 'clantool_showBase');
 // difference week: show non current member rows
@@ -161,8 +163,7 @@ function getCTTemplate() {
                 getTSTopView();
                 break;
             case 'general':
-                //if(hasPermission(PERM_CLANTOOL_TEST))
-                    getGeneralView();
+                getGeneralView();
                 break;
             case 'ts3':
                 getTSView();
@@ -483,11 +484,15 @@ function handleDateWeekly() {
 }
 
 function handleDateTS() {
-    handleDateSes('dateFromTS','dateToTS',DATE_FROM_TS,DATE_TO_TS,'-4 weeks');
+    handleDateSes('dateFromTS','dateToTS',DATE_FROM_TS,DATE_TO_TS,'-6 weeks');
 }
 
 function handleDateLog() {
     handleDateSes('dateFromLog','dateToLog',DATE_FROM_LOG,DATE_TO_LOG,'-2 weeks');
+}
+
+function handleDateOverview() {
+    handleDateSes('dateFromOverview','dateToOverview',DATE_FROM_OVERVIEW,DATE_TO_OVERVIEW,'-6 weeks');
 }
 
 function handleCacheOld() {
@@ -605,10 +610,9 @@ function getAjax(){
                 
                 break;
             case 'overview-graph':
-            
-                handleDateDifference();
+                handleDateOverview();
                 
-                echo json_encode($clanDB->getOverview($_SESSION[DATE_FROM],$_SESSION[DATE_TO]));
+                echo json_encode($clanDB->getOverview($_SESSION[DATE_FROM_OVERVIEW],$_SESSION[DATE_TO_OVERVIEW]));
                 
                 break;
             case 'member-search-select2':
@@ -1045,7 +1049,7 @@ function getTSTopView() {
             $to = date('Y-m-d', strtotime('now'));
             $res = $clanDB->getTSTop($from,$to,$amount);
     ?>
-    <h3>TS Aktiveste Spieler</h3>
+    <h3>TS Aktivste Spieler</h3>
     Top <?=$amount?> vom <?=$from?> bis <?=$to?>
     <table class="table table-striped table-bordered table-hover">
         <thead>
@@ -2918,7 +2922,7 @@ function getDatabaseView() {
 <?php }
 
 function getGeneralView() {
-    handleDateDifference();?>
+    handleDateOverview();?>
     <div id="overview-ajax">
         <script type="text/javascript">
         $(document).ready(function() {
@@ -2947,12 +2951,12 @@ function getGeneralView() {
             }, function(start, end, label) {
                 var vFrom = start.format(DATE_FORMAT);
                 var vTo = end.format(DATE_FORMAT);
-                setURLParameter({'dateFrom' : vFrom, 'dateTo': vTo});
+                setURLParameter({'dateFromOverview' : vFrom, 'dateToOverview': vTo});
                 showOverviewChart(start,end);
             });
             
-            var start = moment('<?=$_SESSION[DATE_FROM]?>',DATE_FORMAT);
-            var end = moment('<?=$_SESSION[DATE_TO]?>',DATE_FORMAT);
+            var start = moment('<?=$_SESSION[DATE_FROM_OVERVIEW]?>',DATE_FORMAT);
+            var end = moment('<?=$_SESSION[DATE_TO_OVERVIEW]?>',DATE_FORMAT);
             
             $('#dateDiff').data('daterangepicker').setStartDate(start);
             $('#dateDiff').data('daterangepicker').setEndDate(end);
@@ -2963,7 +2967,7 @@ function getGeneralView() {
             $("#loading").show();
             var vFrom = start.format(DATE_FORMAT);
             var vTo = end.format(DATE_FORMAT);
-            setURLParameter({'dateFrom' : vFrom, 'dateTo': vTo});
+            setURLParameter({'dateFromOverview' : vFrom, 'dateToOverview': vTo});
             $.ajax({
                 url: URL,
                 type: 'get',
@@ -2972,8 +2976,8 @@ function getGeneralView() {
                     'site' : VAR_SITE,
                     'ajaxCont' : 'data',
                     'type' : 'overview-graph',
-                    'dateFrom' : vFrom,
-                    'dateTo' : vTo,
+                    'dateFromOverview' : vFrom,
+                    'dateToOverview' : vTo,
                 }
             }).done(function(data){
                 drawOverviewChart(data);
@@ -3004,7 +3008,7 @@ function getGeneralView() {
             } else {
                 mode = 'lines';
             }
-            var online = {
+            var online_ts = {
                 x: data.x,
                 y: data.ts_count,
                 fill: 'tonexty',
@@ -3059,6 +3063,44 @@ function getGeneralView() {
                 name: 'Draws CW',
                 mode: mode,
                 yaxis: 'y4',
+            };
+            
+            var active = {
+                x: data.x,
+                y: data.active,
+                type: 'scatter',
+                fill: 'tozeroy',
+                name: 'Active Ingame (min 5000EXP)',
+                mode: mode,
+                yaxis: 'y',
+            };
+            
+            var online = {
+                x: data.x,
+                y: data.online,
+                type: 'scatter',
+                fill: 'tozeroy',
+                name: 'Online Ingame (min 1 EXP)',
+                mode: mode,
+                yaxis: 'y',
+            };
+            
+            var exp = {
+                x: data.x,
+                y: data.exp_avg,
+                type: 'scatter',
+                name: 'AVG Exp',
+                mode: mode,
+                yaxis: 'y2',
+            };
+            
+            var casher = {
+                x: data.x,
+                y: data.casher,
+                type: 'scatter',
+                name: 'Casher',
+                mode: mode,
+                yaxis: 'y',
             };
             
             layout = {
@@ -3118,17 +3160,42 @@ function getGeneralView() {
                     overlaying: 'y',
                     tickformat: '%H:%M:%S'
                 },
-                yaxis3: {
-                    title: 'Members',
+                autosize: true,
+            };
+            
+            layout_active = {
+                title: 'Activity Stats',
+                xaxis: {
+                    title: 'Day'
+                },
+                yaxis: {
+                    title: 'Active Players',
                     type: 'line',
-                    overlaying: 'y'
+                    side: 'left'
+                },
+                yaxis2: {
+                    title: 'Average EXP',
+                    type: 'line',
+                    side: 'right',
+                    autorange: true,
+                    overlaying: 'y',
+                },
+                yaxis3: {
+                    title: 'Online',
+                    type: 'line',
+                    side: 'right',
+                    visible: false,
+                    autorange: true,
+                    overlaying: 'y',
                 },
                 autosize: true,
             };
             
             Plotly.newPlot('chart-overview',[member, wins, losses, draws],layout,{responsive: true, modeBarButtonsToRemove: ['sendDataToCloud', 'autoScale2d', 'resetScale2d'] ,displaylogo: false, showTips:false});
             
-            Plotly.newPlot('chart-ts',[online,time_avg],layout_ts,{responsive: true, modeBarButtonsToRemove: ['sendDataToCloud', 'autoScale2d', 'resetScale2d'] ,displaylogo: false, showTips:false});
+            Plotly.newPlot('chart-activity',[active,exp,online_ts,casher],layout_active,{responsive: true, modeBarButtonsToRemove: ['sendDataToCloud', 'autoScale2d', 'resetScale2d'] ,displaylogo: false, showTips:false});
+            
+            Plotly.newPlot('chart-ts',[online_ts,online,time_avg],layout_ts,{responsive: true, modeBarButtonsToRemove: ['sendDataToCloud', 'autoScale2d', 'resetScale2d'] ,displaylogo: false, showTips:false});
 
         }
         </script>
@@ -3140,18 +3207,19 @@ function getGeneralView() {
                 </div>
             </div>
         </div>
-        <div id="container" style="display: none;" class="alert alert-danger fade in"></div>
-            <div id="loading" style="position: fixed; display: none;z-index: 10; background: rgba(255,255,255,0.5); width: 100%; height: 100%;">
-                    <div style="position: fixed; left: 50%; top: 50%;">
-                        <i class="fas fa-spinner fa-pulse fa-3x"></i><br>
-                        <div id="loading-text">Loading...</div>
-                    </div>
-            </div>
-            <div id="chart-overview"></div>
-            <div id="chart-ts"></div>
-            <div id="erromsg" class="alert alert-danger fade in" style="display: none;"></div>
-            <div id="missing-overview" width="auto" height="auto"></div>
+        <div id="loading" style="position: fixed; display: none;z-index: 10; background: rgba(255,255,255,0.5); width: 100%; height: 100%;">
+                <div style="position: fixed; left: 50%; top: 50%;">
+                    <i class="fas fa-spinner fa-pulse fa-3x"></i><br>
+                    <div id="loading-text">Loading...</div>
+                </div>
         </div>
+        
+        <div id="chart-overview"></div>
+        <h3 style="color: red;">Beta:</h3>
+        <div id="chart-ts"></div>
+        <div id="chart-activity"></div>
+        <div id="erromsg" class="alert alert-danger fade in" style="display: none;"></div>
+        <div id="missing-overview" width="auto" height="auto"></div>
     </div>
     <?php
 }
@@ -3771,8 +3839,6 @@ function getTSView() {
             
             inputDate.data('daterangepicker').setStartDate(start);
             inputDate.data('daterangepicker').setEndDate(end);
-            
-            //renderTSChart(start,end);
             
             <?php if(isset($_REQUEST['id'])) { ?>
                 preselect('<?=$_REQUEST['id']?>',inputAcc);
