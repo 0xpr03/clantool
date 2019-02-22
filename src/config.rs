@@ -15,10 +15,10 @@ limitations under the License.
 */
 use toml::de::from_str;
 
-use std::io::Write;
 use std::io::Read;
+use std::io::Write;
 
-use std::fs::{File,metadata,OpenOptions};
+use std::fs::{metadata, File, OpenOptions};
 use std::path::Path;
 
 use std;
@@ -36,11 +36,12 @@ use error::Error;
 /// Custom expect function logging errors plus custom messages on panic
 /// &'static str to prevent the usage of format!(), which would result in overhead
 #[inline]
-pub fn l_expect<T,E: std::fmt::Debug>(result: Result<T,E>, msg: &'static str) -> T {
+pub fn l_expect<T, E: std::fmt::Debug>(result: Result<T, E>, msg: &'static str) -> T {
     match result {
         Ok(v) => v,
-        Err(e) => {error!("{}: {:?}",msg,e);
-                panic!();
+        Err(e) => {
+            error!("{}: {:?}", msg, e);
+            panic!();
         }
     }
 }
@@ -95,19 +96,19 @@ pub struct DBConfig {
 pub fn init_config() -> Config {
     let mut path = l_expect(get_executable_folder(), "config folder"); // PathBuf
     path.push(CONFIG_PATH); // set_file_name doesn't return smth -> needs to be run on mut path
-    trace!("config path {:?}",path );
+    trace!("config path {:?}", path);
     let data: String;
     if metadata(&path).is_ok() {
         info!("Config file found.");
-        data = l_expect(read_config(&path),"unable to read config!");
-    }else{
+        data = l_expect(read_config(&path), "unable to read config!");
+    } else {
         info!("Config file not found.");
         data = default_config();
-        l_expect(write_config_file(&path, &data),"unable to write config");
-        
+        l_expect(write_config_file(&path, &data), "unable to write config");
+
         exit(0);
     }
-    
+
     l_expect(parse_config(data), "unable to parse config")
 }
 
@@ -118,17 +119,22 @@ fn parse_config(input: String) -> Result<Config, Error> {
 }
 
 /// Read config from file.
-pub fn read_config(file: &Path) -> Result<String,ConfigError> {
-    let mut f = try!(OpenOptions::new().read(true).open(file).map_err(|_| ConfigError::ReadError));
+pub fn read_config(file: &Path) -> Result<String, ConfigError> {
+    let mut f = OpenOptions::new()
+        .read(true)
+        .open(file)
+        .map_err(|_| ConfigError::ReadError)?;
     let mut data = String::new();
-    try!(f.read_to_string(&mut data).map_err(|_| ConfigError::ReadError));
+    f.read_to_string(&mut data)
+        .map_err(|_| ConfigError::ReadError)?;
     Ok(data)
 }
 
 /// Writes the recived string into the file
-fn write_config_file(path: &Path, data: &str) -> Result<(),ConfigError> {
-    let mut file = try!(File::create(path).map_err(|_| ConfigError::CreateError ));
-    try!(file.write_all(data.as_bytes()).map_err(|_| ConfigError::WriteError));
+fn write_config_file(path: &Path, data: &str) -> Result<(), ConfigError> {
+    let mut file = File::create(path).map_err(|_| ConfigError::CreateError)?;
+    file.write_all(data.as_bytes())
+        .map_err(|_| ConfigError::WriteError)?;
     Ok(())
 }
 
@@ -170,6 +176,6 @@ send_error_mail = true
 mail = ["root@localhost"]
 mail_from = "noreply@localhost"
 "#;
-    
+
     toml.to_owned()
 }

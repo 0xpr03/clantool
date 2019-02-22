@@ -13,16 +13,16 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-use std::io;
 use chrono;
-use reqwest;
-use json;
-use mysql;
-use log4rs;
-use regex;
-use std;
-use toml;
 use csv;
+use json;
+use log4rs;
+use mysql;
+use regex;
+use reqwest;
+use std;
+use std::io;
+use toml;
 
 quick_error! {
     #[derive(Debug)]
