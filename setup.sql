@@ -15,7 +15,7 @@ CREATE TABLE `clan` (
  `draws` int(11) NOT NULL,
  `members` int(11) NOT NULL,
  PRIMARY KEY (`date`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE `member` (
  `id` int(11) NOT NULL,
@@ -25,7 +25,7 @@ CREATE TABLE `member` (
  PRIMARY KEY (`id`,`date`) USING BTREE,
  KEY `id` (`id`),
  KEY `date` (`date`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE `member_names` (
  `id` int(11) NOT NULL,
@@ -36,12 +36,12 @@ CREATE TABLE `member_names` (
  KEY `name` (`name`),
  KEY `updated` (`updated`),
  KEY `updated_2` (`updated`,`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE `missing_entries` (
  `date` datetime NOT NULL PRIMARY KEY,
  `member` bit(1) NOT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE `member_addition` (
  `id` int(11) NOT NULL,
@@ -51,14 +51,14 @@ CREATE TABLE `member_addition` (
  `diff_comment` VARCHAR(70),
   PRIMARY KEY (`id`),
   KEY `name` (`name`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE `membership_cause` (
  `nr` INT NOT NULL,
  `kicked` bit(1) NOT NULL,
  `cause` varchar(200),
  PRIMARY KEY (`nr`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE `membership` (
  `nr` INT NOT NULL AUTO_INCREMENT,
@@ -70,21 +70,21 @@ CREATE TABLE `membership` (
  KEY `id` (`id`),
  KEY `from` (`from`),
  KEY `to` (`to`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE `ts_relation` (
  `id` int(11) NOT NULL,
  `client_id` int(11) NOT NULL,
  PRIMARY KEY (`id`,`client_id`),
  KEY `id` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE `second_acc` (
  `id` int(11) NOT NULL,
  `id_sec` int(11) NOT NULL,
  PRIMARY KEY (`id`,`id_sec`),
  KEY `id` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE `afk` (
  `id` int(11) NOT NULL,
@@ -96,7 +96,7 @@ CREATE TABLE `afk` (
  KEY `id` (`id`),
  KEY `from` (`from`),
  KEY `to` (`to`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE `caution` (
   `id` int(11) NOT NULL,
@@ -108,7 +108,7 @@ CREATE TABLE `caution` (
   KEY `id` (`id`),
   KEY `from` (`from`),
   KEY `to` (`to`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE `member_trial` (
  `id` int(11) NOT NULL,
@@ -116,16 +116,16 @@ CREATE TABLE `member_trial` (
  `to` date,
  PRIMARY KEY (`id`,`from`),
  KEY `id` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE `log` (
  `date` datetime NOT NULL,
  `msg` text NOT NULL,
  KEY `date` (`date`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE `settings` (
  `key` VARCHAR(50) NOT NULL,
  `value` VARCHAR(250) NOT NULL,
  PRIMARY KEY (`key`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
