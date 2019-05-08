@@ -58,7 +58,7 @@ use clap::{App, Arg, SubCommand};
 const VERSION: &'static str = "0.3.0";
 const USER_AGENT: &'static str =
     "Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:55.0) Gecko/20100101 Firefox/66.0";
-const REFERER: &'static str = "http://crossfire.z8games.com/";
+const REFERER: &'static str = "https://crossfire.z8games.com/";
 const CONFIG_PATH: &'static str = "config/config.toml";
 const LOG_PATH: &'static str = "config/log.yml";
 const INTERVALL_H: i64 = 24; // execute intervall
