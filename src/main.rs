@@ -372,6 +372,11 @@ fn schedule_crawl_thread(
             run_leave_detection(pool, config, &time, &get_leave_message(&mut conn, config));
         } else {
             info!("Leave detection disabled, skipping");
+            db::log_message(
+                &mut conn,
+                "Leave detection disabled.",
+                "unable to log message",
+            );
         }
     }
     Ok(())
