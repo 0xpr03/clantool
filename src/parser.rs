@@ -34,9 +34,9 @@ use json;
 
 use regex::Regex;
 
-use error::Error;
-use Clan;
-use Member;
+use crate::error::Error;
+use crate::Clan;
+use crate::Member;
 
 // https://regex101.com/r/XsoG5T/4
 const REGEX_WINS: &'static str = r#"<div class="match_details">(\d+)<br><span>Wins</span>"#;

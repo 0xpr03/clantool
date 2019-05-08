@@ -19,7 +19,7 @@ use std::io::BufReader;
 
 use std::path::{Path, PathBuf};
 
-use error::Error;
+use crate::error::Error;
 
 use csv;
 use csv::ReaderBuilder;
@@ -32,7 +32,7 @@ use chrono::Duration;
 
 use mysql::Pool;
 
-use db;
+use crate::db;
 
 lazy_static! {
     pub static ref DEFAULT_IMPORT_COMMENT: String =
@@ -308,8 +308,8 @@ fn bool_from_string(input: &str) -> Result<bool, Error> {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::get_path_for_existing_file;
     use chrono::naive::{NaiveDate, NaiveDateTime, NaiveTime};
-    use get_path_for_existing_file;
 
     /// Generate default NaiveDateTime for tests where no specific datetime is required
     fn default_date() -> NaiveDateTime {

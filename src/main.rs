@@ -16,26 +16,12 @@ limitations under the License.
 
 #[macro_use]
 extern crate lazy_static;
-extern crate flate2;
-extern crate json;
-extern crate reqwest;
 #[macro_use]
 extern crate log;
-extern crate log4rs;
 #[macro_use]
 extern crate quick_error;
 #[macro_use]
 extern crate mysql;
-extern crate chrono;
-extern crate regex;
-extern crate timer;
-extern crate toml;
-#[macro_use]
-extern crate serde_derive;
-extern crate clap;
-extern crate csv;
-extern crate sendmail;
-extern crate serde;
 
 mod config;
 mod db;
@@ -71,7 +57,7 @@ use clap::{App, Arg, SubCommand};
 
 const VERSION: &'static str = "0.3.0";
 const USER_AGENT: &'static str =
-    "Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:55.0) Gecko/20100101 Firefox/55.0";
+    "Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:55.0) Gecko/20100101 Firefox/66.0";
 const REFERER: &'static str = "http://crossfire.z8games.com/";
 const CONFIG_PATH: &'static str = "config/config.toml";
 const LOG_PATH: &'static str = "config/log.yml";

@@ -14,21 +14,20 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 use toml::de::from_str;
+use serde::Deserialize;
 
 use std::io::Read;
 use std::io::Write;
-
 use std::fs::{metadata, File, OpenOptions};
 use std::path::Path;
-
 use std;
 use std::process::exit;
 
-use CONFIG_PATH;
+use crate::CONFIG_PATH;
 
-use get_executable_folder;
+use crate::get_executable_folder;
 
-use error::Error;
+use crate::error::Error;
 
 // pub mod config;
 // Config section
