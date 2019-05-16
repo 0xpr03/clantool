@@ -128,7 +128,7 @@ function getCTTemplate() {
         </ul>
     </div>
     <div class="column col-sm-9 col-xs-11 container-fluid" id="main">
-    <?php
+    <?php        
         $view = $_GET[VIEW];
         $ok_view = true;
         switch($_GET[VIEW]){
@@ -370,6 +370,7 @@ function getCTTemplate() {
         }
         
         function initTableTool() {
+            console.log("default sorter");
             var myTextExtraction = function(node) 
             {
                 return node.innerHTML;
@@ -378,6 +379,7 @@ function getCTTemplate() {
         }
         
         function initTableTool(extractor) {
+            console.log("extractor sorter..");
             $(fixedTableClass).tablesorter({
                 textExtraction: extractor,
                 widgets: ["stickyHeaders"],
@@ -1092,30 +1094,68 @@ function getTSTopView() {
 
 function getMSChangesView() {
     $days = 14;
+    require 'includes/clantool.db.inc.php';
+    $clanDB = new clanDB();
+    $resp = $clanDB->getSetting(KEY_AUTO_LEAVE);
+    $res = $clanDB->getMembershipChanges(
+        date('Y-m-d', strtotime('-'.$days.' days'))
+    );
     ?>
     <h3>Membership Änderungen</h3>
     der letzten <?=$days?> Tage
-    <table class="table table-striped table-bordered table-hover table_nowrap">
+    <?php
+    if ($resp != true ) {
+        echo '<div class="alert alert-info">Auto-<b>Leave detection </b>is currently <b>disabled!</b></div>';
+    }
+    ?>
+    <h4>Joins</h4>
+    <table id="joins" data-sortlist="[[2,0]]" class="table table-striped table-bordered table-hover table_nowrap">
         <thead>
             <tr>
                 <th>Vorname</th>
                 <th>Account</th>
+                <th data-sortinitialorder="desc"><i class="fas fa-user-plus"></i> Join</th>
+            </tr>
+        </thead>
+        <tbody>
+            <?php
+            foreach($res as &$elem){
+                if ( $elem['to'] === null ) {?>
+                <tr>
+                    <td><?=htmlspecialchars($elem['vname'])?></td>
+                    <td><?=htmlspecialchars($elem['name'])?> <a href="?site=<?=SITE?>&view=<?=SITE_MEMBER?>&id=<?=$elem['id']?>">(<?=$elem['id']?>)</a></td>
+                    <td>
+                    
+                    <?=$elem['from']?>
+                    </td>
+                </tr>
+            <?php
+              }
+           }
+            ?>
+        </tbody>
+    </table>
+    <h4>Leaves</h4>
+    <table id="leaves" data-sortlist="[[3,0],[2,0],[4,0]]" class="table table-striped table-bordered table-hover table_nowrap">
+        <thead>
+            <tr>
+                <th class="sorter-text">Vorname</th>
+                <th class="sorter-text">Account</th>
                 <th><i class="fas fa-user-plus"></i> Join</th>
                 <th><i class="fas fa-user-times"></i> Leave</th>
-                <th><i class="fas fa-times-circle"></i> Kicked</th>
+                <th><i class="fas fa-times-circle sorter-false"></i> Kicked</th>
                 <th>Grund</th>
             </tr>
         </thead>
         <tbody>
             <?php
-            require 'includes/clantool.db.inc.php';
-            $clanDB = new clanDB();
             
             $res = $clanDB->getMembershipChanges(
                 date('Y-m-d', strtotime('-'.$days.' days'))
             );
             
-            foreach($res as &$elem){ ?>
+            foreach($res as &$elem){
+                if ( $elem['to'] !== null ) {?>
                 <tr>
                     <td><?=htmlspecialchars($elem['vname'])?></td>
                     <td><?=htmlspecialchars($elem['name'])?> <a href="?site=<?=SITE?>&view=<?=SITE_MEMBER?>&id=<?=$elem['id']?>">(<?=$elem['id']?>)</a></td>
@@ -1138,7 +1178,8 @@ function getMSChangesView() {
                     ?>
                 </tr>
             <?php
-            }
+              }
+           }
             ?>
         </tbody>
     </table>
