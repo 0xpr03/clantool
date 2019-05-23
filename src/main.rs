@@ -24,13 +24,12 @@ extern crate quick_error;
 extern crate mysql;
 
 mod config;
+mod crawler;
 mod db;
 mod error;
-mod http;
 mod import;
-mod parser;
 
-use http::HeaderType;
+use crate::crawler::http::HeaderType;
 
 use std::env::current_exe;
 use std::fs::DirBuilder;
@@ -144,7 +143,11 @@ fn main() {
                             .short("m")
                             .long("message")
                             .takes_value(true)
-                            .help("custom leave message to use")))
+                            .help("custom leave message to use"))
+                        .arg(Arg::with_name("simulate")
+                            .short("s")
+                            .long("simulate")
+                            .help("Don't enter leaves, just print them")))
                     .subcommand(SubCommand::with_name("checkdb")
                         .about("checks DB for missing entries or doubles and corrects those")
                         .arg(Arg::with_name("simulate")
@@ -207,6 +210,7 @@ fn main() {
                     return;
                 }
             };
+            let simulate = sub_m.is_present("simulate");
             let date_s = sub_m.value_of("date").unwrap();
             let date = NaiveDate::parse_from_str(date_s, DATE_FORMAT_DAY).unwrap();
             let datetime = match db::check_date_for_data(&mut conn, &date) {
@@ -227,7 +231,7 @@ fn main() {
                 Some(v) => v.to_owned(),
                 None => format!("{} manual check", get_leave_message(&mut conn, &*config)),
             };
-            run_leave_detection(&*pool, &*config, &datetime, &message);
+            run_leave_detection(&*pool, &*config, &datetime, &message, simulate);
             info!("Finished");
         }
         ("init", _) => {
@@ -369,7 +373,13 @@ fn schedule_crawl_thread(
         let mut conn = pool.get_conn()?;
         if get_leave_detection_enabled(&mut conn, config) {
             debug!("Leave detection enabled");
-            run_leave_detection(pool, config, &time, &get_leave_message(&mut conn, config));
+            run_leave_detection(
+                pool,
+                config,
+                &time,
+                &get_leave_message(&mut conn, config),
+                false,
+            );
         } else {
             info!("Leave detection disabled, skipping");
             db::log_message(
@@ -411,7 +421,13 @@ fn get_leave_detection_enabled(conn: &mut PooledConn, config: &Config) -> bool {
 
 /// Detect leaves & process these
 /// date: current date for which to look back
-fn run_leave_detection(pool: &Pool, config: &Config, date: &NaiveDateTime, leave_cause: &str) {
+fn run_leave_detection(
+    pool: &Pool,
+    config: &Config,
+    date: &NaiveDateTime,
+    leave_cause: &str,
+    simulate: bool,
+) {
     let max_age: NaiveDate = date
         .date()
         .checked_sub_signed(Duration::days(config.main.auto_leave_max_age as i64))
@@ -449,48 +465,63 @@ fn run_leave_detection(pool: &Pool, config: &Config, date: &NaiveDateTime, leave
                     for m in left {
                         match m.membership_nr {
                             Some(nr) => {
-                                match db::insert_member_leave(
-                                    &mut conn,
-                                    &m.id,
-                                    &nr,
-                                    &previous_date.date(),
-                                    leave_cause,
-                                ) {
-                                    Ok(trial) => {
-                                        db::log_message(
+                                if simulate {
+                                    info!("Found leave for {} {}", m.id, m.get_name());
+                                } else {
+                                    match db::insert_member_leave(
+                                        &mut conn,
+                                        &m.id,
+                                        &nr,
+                                        &previous_date.date(),
+                                        leave_cause,
+                                    ) {
+                                        Ok(trial) => db::log_message(
                                             &mut conn,
                                             &format!(
                                         "Detected leave for {} {} nr:{} terminated trials: {}",
                                             m.get_name(),m.id,nr,trial),
                                             "Unable to log member leave detection!",
-                                        )
-                                    }
-                                    Err(e) => {
-                                        error!("Unable to insert member leave! nr:{} {}", nr, e)
+                                        ),
+                                        Err(e) => {
+                                            error!("Unable to insert member leave! nr:{} {}", nr, e)
+                                        }
                                     }
                                 }
                             }
-                            None => db::log_message(
-                                &mut conn,
-                                &format!(
-                                    "No open membership for {} {}, can't auto-leave!",
-                                    m.get_name(),
-                                    m.id
-                                ),
-                                "Unable to log message",
-                            ),
+                            None => {
+                                if simulate {
+                                    info!("No open membership for {} {}", m.id, m.get_name());
+                                } else {
+                                    db::log_message(
+                                        &mut conn,
+                                        &format!(
+                                            "No open membership for {} {}, can't auto-leave!",
+                                            m.get_name(),
+                                            m.id
+                                        ),
+                                        "Unable to log message",
+                                    );
+                                }
+                            }
                         }
                     }
                 }
             }
         }
         Ok(None) => {
-            db::log_message(
-                &mut conn,
-                "No older entries to compare found, skipping leave detection",
-                "unable to log get_next_older_date miss",
-            );
+            if simulate {
+                warn!("No older entries to compare found, skipping leave detection");
+            } else {
+                db::log_message(
+                    &mut conn,
+                    "No older entries to compare found, skipping leave detection",
+                    "unable to log get_next_older_date miss",
+                );
+            }
         }
+    }
+    if simulate {
+        info!("Finished simulation of leave detection.");
     }
 }
 
@@ -611,8 +642,9 @@ fn run_update_member(pool: &Pool, config: &Config, time: &NaiveDateTime) -> Resu
             error!("Reaching site {}, aborting.", site);
             return Err(Error::Other("Site over limit."));
         }
-        let raw_members_json = http::get(&get_member_url(&site, config), HeaderType::Ajax)?;
-        let (mut members_temp, t_total) = parser::parse_all_member(&raw_members_json)?;
+        let raw_members_json =
+            crawler::http::get(&get_member_url(&site, config), HeaderType::Ajax)?;
+        let (mut members_temp, t_total) = crawler::parser::parse_all_member(&raw_members_json)?;
         to_receive = t_total as usize;
         members.append(&mut members_temp);
         trace!("fetched site {}", site);
@@ -625,8 +657,8 @@ fn run_update_member(pool: &Pool, config: &Config, time: &NaiveDateTime) -> Resu
 /// run clan crawl & update
 fn run_update_clan(pool: &Pool, config: &Config, time: &NaiveDateTime) -> Result<(), Error> {
     trace!("run_update_clan");
-    let raw_http_clan = http::get(&config.main.clan_url, HeaderType::Html)?;
-    let clan = parser::parse_clan(&raw_http_clan)?;
+    let raw_http_clan = crawler::http::get(&config.main.clan_url, HeaderType::Html)?;
+    let clan = crawler::parser::parse_clan(&raw_http_clan)?;
     db::insert_clan_update(&mut pool.get_conn()?, &clan, &time)?;
     Ok(())
 }

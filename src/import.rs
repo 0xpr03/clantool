@@ -333,7 +333,7 @@ mod test {
     #[test]
     fn parse_account_header_correct_long_unending() {
         let path =
-            get_path_for_existing_file("src/test_csv_header_valid_long_unending.csv").unwrap();
+            get_path_for_existing_file("tests/test_csv_header_valid_long_unending.csv").unwrap();
         let mut var = Vec::new();
         let date_format = "%d-%m-%y";
         let verify_date = parse_date("20-08-18", date_format).unwrap();
@@ -365,7 +365,7 @@ mod test {
     /// Test account pasing with long, valid
     #[test]
     fn parse_account_header_correct_long() {
-        let path = get_path_for_existing_file("src/test_csv_header_valid_long.csv").unwrap();
+        let path = get_path_for_existing_file("tests/test_csv_header_valid_long.csv").unwrap();
         let mut var = Vec::new();
         let verify_date = parse_date("03/02/16", DATE_DEFAULT_FORMAT).unwrap();
         var.push(ImportMembership {
@@ -389,7 +389,7 @@ mod test {
     /// Test account pasing with header, valid
     #[test]
     fn parse_account_header_correct() {
-        let path = get_path_for_existing_file("src/test_csv_header_valid.csv").unwrap();
+        let path = get_path_for_existing_file("tests/test_csv_header_valid.csv").unwrap();
         let mut var = Vec::new();
         var.push(ImportMembership {
             name: String::from("Alptraum"),
@@ -409,7 +409,7 @@ mod test {
     /// Test account pasing without header, valid
     #[test]
     fn parse_account_correct() {
-        let path = get_path_for_existing_file("src/test_csv_valid.csv").unwrap();
+        let path = get_path_for_existing_file("tests/test_csv_valid.csv").unwrap();
         let mut var = Vec::new();
         var.push(ImportMembership {
             name: String::from("Alptraum"),
@@ -429,7 +429,7 @@ mod test {
     /// Test account pasing without header, invalid vip field
     #[test]
     fn parse_account_incorrect_vip() {
-        let path = get_path_for_existing_file("src/test_csv_invalid_vip.csv").unwrap();
+        let path = get_path_for_existing_file("tests/test_csv_invalid_vip.csv").unwrap();
         let mut importer = ImportParser::new(&path, default_date(), DATE_DEFAULT_FORMAT).unwrap();
         assert!(importer.next().unwrap().is_err());
     }

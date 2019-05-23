@@ -38,11 +38,12 @@ use crate::error::Error;
 use crate::Clan;
 use crate::Member;
 
-// https://regex101.com/r/XsoG5T/4
+// https://regex101.com/r/XsoG5T/5
 const REGEX_WINS: &'static str = r#"<div class="match_details">(\d+)<br><span>Wins</span>"#;
 const REGEX_LOSSES: &'static str = r#"<div class="match_details">(\d+)<br><span>Losses</span>"#;
 const REGEX_DRAWS: &'static str = r#"<div class="match_details">(\d+)<br><span>Draws</span>"#;
 const REGEX_MEMBERS: &'static str = r#"<div>(\d+).?clan.members"#;
+const REGEX_MEMBER_NAME: &'static str = r#"class=\"username\">([a-zA-Z0-9]+)<\/div>"#;
 
 const KEY_MEMBERSHIP: &'static str = "position_title";
 
@@ -183,7 +184,7 @@ mod test {
     /// Test full parsing of parse_all_member
     #[test]
     fn parse_all_member_test() {
-        let input = include_str!("test_json_members.json");
+        let input = include_str!("../../tests/test_json_members.json");
         let mut var = Vec::new();
         var.push(Member {
             name: String::from("Dr.Alptraum"),
@@ -199,7 +200,7 @@ mod test {
     /// Test parsing of single member function parse_member
     #[test]
     fn parse_member_test() {
-        let input = include_str!("test_json_member_valid.json");
+        let input = include_str!("../../tests/test_json_member_valid.json");
         let mut parsed = json::parse(input).unwrap();
         let mut pmember = parsed["members"][0].take();
         let output = parse_member(&mut pmember).unwrap();
@@ -215,7 +216,7 @@ mod test {
     /// Test for non-member detection
     #[test]
     fn parse_member_invalid_test() {
-        let input = include_str!("test_json_member_invalid.json");
+        let input = include_str!("../../tests/test_json_member_invalid.json");
         let mut parsed = json::parse(input).unwrap();
         let mut pmember = parsed["members"][0].take();
         let output = parse_member(&mut pmember).unwrap();
@@ -224,7 +225,7 @@ mod test {
 
     #[test]
     fn check_member_test() {
-        let input = include_str!("test_json_members.json");
+        let input = include_str!("../../tests/test_json_members.json");
         let mut parsed = json::parse(input).unwrap();
         let mut valid_member = parsed["members"][0].take();
         let mut invalid_member = parsed["members"][1].take();
@@ -235,7 +236,7 @@ mod test {
     /// Test clan parsing parse_clan
     #[test]
     fn parse_clan_test() {
-        let input = include_str!("test_http_clan.txt");
+        let input = include_str!("../../tests/test_http_clan.txt");
         let clan = Clan {
             members: 41,
             wins: 11495,
