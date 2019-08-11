@@ -36,8 +36,9 @@ use std::fs::DirBuilder;
 use std::fs::{metadata, File};
 use std::io::Write;
 use std::path::PathBuf;
-
+use std::time::{Duration as Dur,Instant};
 use std::sync::Arc;
+use std::thread::sleep;
 
 use sendmail::email;
 
@@ -79,19 +80,7 @@ fn main() {
     info!("Clan tools crawler v{}", VERSION);
 
     let config = Arc::new(config::init_config());
-    let pool = match db::new(
-        config.db.ip.clone(),
-        config.db.port,
-        config.db.user.clone(),
-        config.db.password.clone(),
-        config.db.db.clone(),
-    ) {
-        Err(e) => {
-            error!("Can't connect to DB! {}", e);
-            panic!();
-        }
-        Ok(v) => Arc::new(v),
-    };
+    let pool = init_db(&config, Dur::from_secs(60*10));
     let timer = timer::Timer::new();
 
     let app = App::new("Clantool")
@@ -165,7 +154,7 @@ fn main() {
         }
         ("fcrawl", _) => {
             info!("Performing force crawl");
-            let local_pool = &*pool;
+            let local_pool = &pool;
             let local_config = &*config;
             let rt_time = NaiveTime::from_num_seconds_from_midnight(20, 0);
             debug!(
@@ -175,7 +164,7 @@ fn main() {
             info!("Finished force crawl");
         }
         ("printconfig", _) => {
-            let local_pool = &*pool;
+            let local_pool = &pool;
             let local_config = &*config;
             let mut conn = match local_pool.get_conn() {
                 Err(e) => {
@@ -231,7 +220,7 @@ fn main() {
                 Some(v) => v.to_owned(),
                 None => format!("{} manual check", get_leave_message(&mut conn, &*config)),
             };
-            run_leave_detection(&*pool, &*config, &datetime, &message, simulate);
+            run_leave_detection(&pool, &*config, &datetime, &message, simulate);
             info!("Finished");
         }
         ("init", _) => {
@@ -248,7 +237,7 @@ fn main() {
             let comment = sub_m.value_of("comment").unwrap();
             let date_format = sub_m.value_of("date-format").unwrap();
             let path = get_path_for_existing_file(sub_m.value_of("file").unwrap()).unwrap();
-            import::import_cmd(simulate, membership, comment, date_format, path, &*pool);
+            import::import_cmd(simulate, membership, comment, date_format, path, &pool);
         }
         _ => {
             info!("Entering daemon mode");
@@ -258,6 +247,33 @@ fn main() {
             }
         }
     }
+}
+
+fn init_db(config: &Config, retry_timeout: Dur) -> Pool {
+    let sleep_time = match retry_timeout.as_secs() / 10 {
+        x if x < 10 => 5,
+        x if x > 30 => 60,
+        x => x,
+    };
+    let start = Instant::now();
+    while start.elapsed() < retry_timeout {
+        match db::new(
+            config.db.ip.clone(),
+            config.db.port,
+            config.db.user.clone(),
+            config.db.password.clone(),
+            config.db.db.clone(),
+        ) {
+            Err(e) => {
+                warn!("Couldn't connect to DB, retrying! {}", e);
+            }
+            Ok(v) => return v,
+        };
+        sleep(Dur::from_secs(sleep_time));
+    }
+    let msg = format!("Unable to connecto to DB after {} seconds. Aborting!",start.elapsed().as_secs());
+    error!("{}",msg);
+    panic!(msg);
 }
 
 /// validate path input
@@ -300,7 +316,7 @@ fn validator_date(input: String) -> Result<(), String> {
 }
 
 /// Check DB for missing entries
-fn run_checkdb(pool: Arc<Pool>, simulate: bool) -> Result<(), Error> {
+fn run_checkdb(pool: Pool, simulate: bool) -> Result<(), Error> {
     let mut conn = pool.get_conn()?;
     let missing_dates = db::get_missing_dates(&mut conn)?;
 
@@ -318,7 +334,7 @@ fn run_checkdb(pool: Arc<Pool>, simulate: bool) -> Result<(), Error> {
 }
 
 /// Initialize timed task
-fn run_timer<'a>(pool: Arc<Pool>, config: Arc<Config>, timer: &'a timer::Timer) {
+fn run_timer<'a>(pool: Pool, config: Arc<Config>, timer: &'a timer::Timer) {
     let date_time = Local::now(); // get current datetime
     let today = Local::today();
     let target_naive_time = match NaiveTime::parse_from_str(&config.main.time, "%H:%M") {
@@ -355,7 +371,7 @@ fn run_timer<'a>(pool: Arc<Pool>, config: Arc<Config>, timer: &'a timer::Timer) 
     let a = timer.schedule(
         schedule_time,
         Some(chrono::Duration::hours(INTERVALL_H)),
-        move || match schedule_crawl_thread(&*pool, &*config, &retry_time) {
+        move || match schedule_crawl_thread(&pool, &*config, &retry_time) {
             Err(e) => error!("Error in crawler thread {}", e),
             Ok(_) => (),
         },

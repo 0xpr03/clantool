@@ -13,14 +13,14 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-use toml::de::from_str;
 use serde::Deserialize;
+use toml::de::from_str;
 
+use std;
+use std::fs::{metadata, File, OpenOptions};
 use std::io::Read;
 use std::io::Write;
-use std::fs::{metadata, File, OpenOptions};
 use std::path::Path;
-use std;
 use std::process::exit;
 
 use crate::CONFIG_PATH;
