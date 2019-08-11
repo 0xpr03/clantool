@@ -36,9 +36,9 @@ use std::fs::DirBuilder;
 use std::fs::{metadata, File};
 use std::io::Write;
 use std::path::PathBuf;
-use std::time::{Duration as Dur,Instant};
 use std::sync::Arc;
 use std::thread::sleep;
+use std::time::{Duration as Dur, Instant};
 
 use sendmail::email;
 
@@ -80,7 +80,7 @@ fn main() {
     info!("Clan tools crawler v{}", VERSION);
 
     let config = Arc::new(config::init_config());
-    let pool = init_db(&config, Dur::from_secs(60*10));
+    let pool = init_db(&config, Dur::from_secs(60 * 10));
     let timer = timer::Timer::new();
 
     let app = App::new("Clantool")
@@ -271,8 +271,11 @@ fn init_db(config: &Config, retry_timeout: Dur) -> Pool {
         };
         sleep(Dur::from_secs(sleep_time));
     }
-    let msg = format!("Unable to connecto to DB after {} seconds. Aborting!",start.elapsed().as_secs());
-    error!("{}",msg);
+    let msg = format!(
+        "Unable to connecto to DB after {} seconds. Aborting!",
+        start.elapsed().as_secs()
+    );
+    error!("{}", msg);
     panic!(msg);
 }
 
