@@ -4203,6 +4203,7 @@ function getTSView() {
             <h2>No data for selected range!</h2>
             Entweder es fehlen Daten für die Auswahl oder es wurden noch keine Erhoben.
         </div>
+        <p>Data incorrect ? <a href="index.php?site=clantool2&view=ts3&id=<?=TS_REFERENCE_ACCOUNT?>">This account</a> has to have 100% online time!</p>
         <div class="form-horizontal">
             <div class="form-group">
                 <label for="dateDiff" class="control-label col-xs-2">Date Range</label>
