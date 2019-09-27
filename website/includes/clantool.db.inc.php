@@ -14,6 +14,7 @@
 // This file relies also on the defines in clantool2.php !
 define('DB_TS3_DATA','mDSStats2_6243');
 define('DB_TS3_NAMES','mDSNames_6243');
+define('DB_TS3_STATS','ModStats_6243');
 // used to trick seconds -> datetime to display values as time
 define('PLOTLY_START_DATE','1970-01-01 ');
 define('ER_DUP_ENTRY',23000);
@@ -1971,6 +1972,47 @@ class clanDB extends dbException {
             return $resultset;
         } else {
             throw new dbException ( $this->db->error );
+        }
+    }
+    
+    /**
+     * Get TS3 stats for Host-ID
+     * @param String $date1, $date2  String of Y-m-d G:i:s Y-m-d h:i:s
+     * @throws dbException
+     */
+    public function getTS3Stats($date1, $date2) {
+        if ($query = $this->db->prepare ( 'SELECT `timestamp`,`clients`,`queryclients` FROM `'.DB_TS3_STATS.'` WHERE `timestamp` >= ? AND `timestamp` < ? + INTERVAL 1 DAY' )) {
+            $query->bind_param ( 'ss',$date1, $date2 );
+            $query->execute ();
+            $result = $query->get_result ();
+            
+            if (! $result) {
+                throw new dbException ( $this->db->error, 500 );
+            }
+            
+            if ($result->num_rows == 0) {
+                $resultset = null;
+            } else {
+                $x = array();
+                $total = array();
+                $console = array();
+                while ( $row = $result->fetch_assoc () ) {
+                    $x [] = $row['timestamp'];
+                    $total [] = $row['clients'];
+                    $console [] = $row['queryclients'];
+                }
+                $resultset = array (
+                    'x' => $x,
+                    'total' => $total,
+                    'console' => $console
+                );
+            }
+            
+            $result->close ();
+            
+            return $resultset;
+        } else {
+            throw new dbException ( '500' );
         }
     }
 

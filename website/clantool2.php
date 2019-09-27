@@ -43,6 +43,8 @@ define('EXP_TO_CP', 500);
 define('TS_DIFF_MIN',7);
 // ignore ts client_id on statistics in General view [bot]
 define('TS_IGNORE_ID', 18106);
+// for checking up/down
+define('TS_REFERENCE_ACCOUNT',11825577);
 
 define('SITE', 'clantool2'); // site value
 define('VIEW','view'); // view key for requests
@@ -610,6 +612,11 @@ function getAjax(){
                 
                 echo json_encode($clanDB->getMemberChange($_SESSION[DATE_FROM],$_SESSION[DATE_TO],$_REQUEST['id']));
                 
+                break;
+            case 'ts3-stats':
+                handleDateOverview();
+                
+                echo json_encode($clanDB->getTS3Stats($_SESSION[DATE_FROM_OVERVIEW],$_SESSION[DATE_TO_OVERVIEW]));
                 break;
             case 'overview-graph':
                 handleDateOverview();
@@ -3004,6 +3011,73 @@ function getGeneralView() {
                         
             showOverviewChart(start,end);
         });
+        function drawTs3Stats(data) {
+            if(data === null){
+                console.log('null data');
+                // no data, use toy values
+                data = {x: ['2012-02-24 00:00:00'], total: [-1], console: [-1]};
+            }
+            var mode; // performance safer
+            if ( data.x.length < 2000 ) {
+                mode = 'lines+markers';
+            } else {
+                mode = 'lines';
+            }
+            var total = {
+                x: data.x, 
+                y: data.total, 
+                fill: 'tonexty', 
+                type: 'scatter',
+                mode: mode,
+                name: 'Total Clients',
+                line: {shape: 'hv'},
+            };
+
+            var console = {
+                x: data.x, 
+                y: data.console, 
+                fill: 'tozeroy', 
+                type: 'scatter',
+                name: 'Console Clients',
+                mode: mode,
+                line: {shape: 'hv'},
+            };
+            
+            layout = {                     // all "layout" attributes: #layout
+                title: 'TS3 Stats (~15min behind)',  // more about "layout.title": #layout-title
+                xaxis: {                  // all "layout.xaxis" attributes: #layout-xaxis
+                    title: 'time'         // more about "layout.xaxis.title": #layout-xaxis-title
+                },
+                yaxis: {
+                    title: 'clients online'
+                },
+                autosize: true,
+            };
+            
+            Plotly.newPlot('chart-tsrelation',[console,total],layout,{responsive: true, modeBarButtonsToRemove: ['sendDataToCloud', 'autoScale2d', 'resetScale2d'] ,displaylogo: false, showTips:false});
+        }
+        function showTs3Stats(vFrom,vTo) {
+            $.ajax({
+                url: URL,
+                type: 'get',
+                dataType: "json",
+                data: {
+                    'site' : VAR_SITE,
+                    'ajaxCont' : 'data',
+                    'type' : 'ts3-stats',
+                    'dateFromOverview' : vFrom,
+                    'dateToOverview' : vTo,
+                }
+            }).done(function(data){
+                drawTs3Stats(data);
+                $("#loading").hide();
+                $('#erromsg').hide();
+            }).fail(function(data){
+                $('#erromsg').html('Error!<br>'+formatErrorData(data));
+                $("#loading").hide();
+                $('#erromsg').show();
+            });
+        }
         function showOverviewChart(start,end) {
             $("#loading").show();
             var vFrom = start.format(DATE_FORMAT);
@@ -3023,8 +3097,7 @@ function getGeneralView() {
             }).done(function(data){
                 drawOverviewChart(data);
                 drawMissingOverviewEntries(data.missing);
-                $("#loading").hide();
-                $('#erromsg').hide();
+                showTs3Stats(vFrom,vTo); // will hide error,loading
             }).fail(function(data){
                 $('#erromsg').html('Error!<br>'+formatErrorData(data));
                 $("#loading").hide();
@@ -3185,7 +3258,7 @@ function getGeneralView() {
             };
             
             layout_ts = {
-                title: 'TS Stats',
+                title: 'TS-Activity Relation',
                 xaxis: {
                     title: 'Day'
                 },
@@ -3236,7 +3309,7 @@ function getGeneralView() {
             
             Plotly.newPlot('chart-activity',[active,exp,online_ts,casher],layout_active,{responsive: true, modeBarButtonsToRemove: ['sendDataToCloud', 'autoScale2d', 'resetScale2d'] ,displaylogo: false, showTips:false});
             
-            Plotly.newPlot('chart-ts',[online_ts,online,time_avg],layout_ts,{responsive: true, modeBarButtonsToRemove: ['sendDataToCloud', 'autoScale2d', 'resetScale2d'] ,displaylogo: false, showTips:false});
+            Plotly.newPlot('chart-tsstats',[online_ts,online,time_avg],layout_ts,{responsive: true, modeBarButtonsToRemove: ['sendDataToCloud', 'autoScale2d', 'resetScale2d'] ,displaylogo: false, showTips:false});
 
         }
         </script>
@@ -3257,7 +3330,8 @@ function getGeneralView() {
         
         <div id="chart-overview"></div>
         <h3 style="color: red;">Beta:</h3>
-        <div id="chart-ts"></div>
+        <div id="chart-tsrelation"></div>
+        <div id="chart-tsstats"></div>
         <div id="chart-activity"></div>
         <div id="erromsg" class="alert alert-danger fade in" style="display: none;"></div>
         <div id="missing-overview" width="auto" height="auto"></div>
