@@ -540,10 +540,10 @@ function getAjax(){
                 break;
             case 'settings-set':
                 // manually to disallow sender dictating key names
-                $clanDB->setSetting(KEY_LEAVE_CAUSE,$_REQUEST['leave-cause']);
-                $clanDB->setSetting(KEY_TS3_REMOVE,isset($_REQUEST['ts3-removal']));
-                $clanDB->setSetting(KEY_TS3_WHITELIST,$_REQUEST['ts3-whitelist']);
-                $clanDB->setSetting(KEY_AUTO_LEAVE,isset($_REQUEST['leave-detection']));
+                $clanDB->setSetting(KEY_LEAVE_CAUSE,$_POST['leave-cause']);
+                $clanDB->setSetting(KEY_TS3_REMOVE,isset($_POST['ts3-removal']));
+                $clanDB->setSetting(KEY_TS3_WHITELIST,$_POST['ts3-whitelist']);
+                $clanDB->setSetting(KEY_AUTO_LEAVE,isset($_POST['leave-detection']));
                 
                 echo json_encode(true);
                 break;
@@ -604,7 +604,7 @@ function getAjax(){
                 echo $_SESSION[C_DIFFERENCE];
                 break;
             case 'update-diff-comment':
-                $clanDB->updateDiffComment($_REQUEST['id'],$_REQUEST['comment']);
+                $clanDB->updateDiffComment($_POST['id'],$_POST['comment']);
                 echo json_encode(true);
                 break;
             case 'member-difference':
@@ -676,16 +676,16 @@ function getAjax(){
                 echo json_encode($res);
                 break;
             case 'membership-edit':
-                $nr = $_REQUEST['nr'];
+                $nr = $_POST['nr'];
             case 'membership-add': // NO break, for memberDetail editing, not join form!
-                $id = $_REQUEST['id'];
-                $from = $_REQUEST['from'];
+                $id = $_POST['id'];
+                $from = $_POST['from'];
                 
-                $kick = isset($_REQUEST['kicked']);
+                $kick = isset($_POST['kicked']);
                 
-                if(isset($_REQUEST['to'])){
-                    $cause = $_REQUEST['cause'];
-                    $to = $_REQUEST['to'];
+                if(isset($_POST['to'])){
+                    $cause = $_POST['cause'];
+                    $to = $_POST['to'];
                 }else{
                     $cause = null;
                     $to = null;
@@ -693,7 +693,7 @@ function getAjax(){
                 
                 
                 $clanDB->startTransaction();
-                if($_REQUEST['type'] == "membership-add"){
+                if($_POST['type'] == "membership-add"){
                     $nr = $clanDB->insertJoin($id,$from);
                     if($to != null){
                         $clanDB->insertLeave($nr,$to,$kick,$cause);
@@ -716,36 +716,36 @@ function getAjax(){
                 echo json_encode($res);
                 break;
             case 'membership-delete':
-                $nr = $_REQUEST['nr'];
+                $nr = $_POST['nr'];
                 $clanDB->deleteMembershipEntry($nr);
                 echo json_encode(array('nr' => $nr));
                 break;
             case 'add-second-account':
-                $clanDB->setSecondAccount($_REQUEST['id'],$_REQUEST['secID']);
-                $res = $clanDB->getMemberByExactID($_REQUEST['secID']);
+                $clanDB->setSecondAccount($_POST['id'],$_POST['secID']);
+                $res = $clanDB->getMemberByExactID($_POST['secID']);
                 if($res != null)
                     $name = $res[0]['text'];
                 else 
                     $name = "";
-                echo json_encode(array('secID' => $_REQUEST['secID'],'name' => $name));
+                echo json_encode(array('secID' => $_POST['secID'],'name' => $name));
                 break;
             case 'remove-second-account':
-                $clanDB->removeSecondAccount($_REQUEST['id'],$_REQUEST['secID']);
-                echo json_encode(array('secID' => $_REQUEST['secID']));
+                $clanDB->removeSecondAccount($_POST['id'],$_POST['secID']);
+                echo json_encode(array('secID' => $_POST['secID']));
                 break;
             case 'add-caution':
-                $cause = $_REQUEST['cause']; // NO break!
+                $cause = $_POST['cause']; // NO break!
             case 'delete-caution':
-                $id = $_REQUEST['id'];
-                $from = $_REQUEST['from'];
-                $to = $_REQUEST['to'];
+                $id = $_POST['id'];
+                $from = $_POST['from'];
+                $to = $_POST['to'];
                 $res = array(
                     'id' => $id,
                     'from' => $from,
                     'to' => $to
                 ); 
                 
-                if($_REQUEST['type'] == "delete-caution"){
+                if($_POST['type'] == "delete-caution"){
                     $clanDB->deleteCaution($id,$from);
                 } else {
                     $clanDB->insertCaution($id,$from,$to,$cause);
@@ -755,18 +755,18 @@ function getAjax(){
                 echo json_encode($res);
                 break;
             case 'add-afk':
-                $cause = $_REQUEST['cause']; // NO break!
+                $cause = $_POST['cause']; // NO break!
             case 'delete-afk':
-                $id = $_REQUEST['id'];
-                $from = $_REQUEST['from'];
-                $to = $_REQUEST['to'];
+                $id = $_POST['id'];
+                $from = $_POST['from'];
+                $to = $_POST['to'];
                 $res = array(
                     'id' => $id,
                     'from' => $from,
                     'to' => $to
                 ); 
                 
-                if($_REQUEST['type'] == "delete-afk"){
+                if($_POST['type'] == "delete-afk"){
                     $clanDB->deleteAFK($id,$from,$to);
                 } else {
                     $clanDB->insertAFK($id,$from,$to,$cause);
@@ -786,12 +786,12 @@ function getAjax(){
                 echo json_encode(array('from' => $fromNew, 'to' => $toNew, 'cause' => $cause));
                 break;
             case 'add-ts3-relation':
-                $clanDB->insertTSRelation($_REQUEST['id'],$_REQUEST['tsID']);
-                echo json_encode(array('tsID' => $_REQUEST['tsID'],'name' => $_REQUEST['name']));
+                $clanDB->insertTSRelation($_POST['id'],$_POST['tsID']);
+                echo json_encode(array('tsID' => $_POST['tsID'],'name' => $_POST['name']));
                 break;
             case 'remove-ts3-relation':
-                $clanDB->removeTSRelation($_REQUEST['id'],$_REQUEST['tsID']);
-                echo json_encode(array('tsID' => $_REQUEST['tsID']));
+                $clanDB->removeTSRelation($_POST['id'],$_POST['tsID']);
+                echo json_encode(array('tsID' => $_POST['tsID']));
                 break;
             case 'database-json':
                 $res = array(
@@ -873,8 +873,8 @@ function getAjax(){
                 echo json_encode($data);
                 break;
             case 'member-trial-delete':
-                $id = $_REQUEST['id'];
-                $from = $_REQUEST['from'];
+                $id = $_POST['id'];
+                $from = $_POST['from'];
                 $clanDB->deleteMemberTrial($id,$from);
                 echo json_encode(array(
                     'id' => $id,
@@ -882,11 +882,11 @@ function getAjax(){
                 ));
                 break;
             case 'member-trial-set':
-                $id = $_REQUEST['id'];
-                $from = $_REQUEST['from'];
+                $id = $_POST['id'];
+                $from = $_POST['from'];
                 $to = null;
-                if(isset($_REQUEST['to'])){
-                    $to = $_REQUEST['to'];
+                if(isset($_POST['to'])){
+                    $to = $_POST['to'];
                 }
                 $clanDB->setMemberTrial($id,$from,$to);
                 echo json_encode(array(
@@ -896,14 +896,14 @@ function getAjax(){
                 ));
                 break;
             case 'member-addition-set';
-                $clanDB->setMemberAddition($_REQUEST['id'],$_REQUEST['name'],$_REQUEST['comment'],isset($_REQUEST['vip']));
+                $clanDB->setMemberAddition($_POST['id'],$_POST['name'],$_POST['comment'],isset($_POST['vip']));
                 echo json_encode(true);
                 break;
             case 'memberLeave':
-                $id = $_REQUEST['id'];
-                $kicked = isset($_REQUEST['kicked']);
-                $cause = $_REQUEST['cause'];
-                $date = $_REQUEST['date'];
+                $id = $_POST['id'];
+                $kicked = isset($_POST['kicked']);
+                $cause = $_POST['cause'];
+                $date = $_POST['date'];
                 $res = $clanDB->getMemberByExactID($id);
                 $result = array(
                     'id' => $id,
@@ -930,9 +930,9 @@ function getAjax(){
                 echo json_encode($result);
                 break;
             case 'account-change':
-                $oldID = $_REQUEST['oldID'];
-                $newID = $_REQUEST['newID'];
-                //$copy = $_REQUEST['copy'];
+                $oldID = $_POST['oldID'];
+                $newID = $_POST['newID'];
+                //$copy = $_POST['copy'];
                 
                 $ms = $clanDB->getOpenMembership($oldID);
                 $size = count($ms);
@@ -1000,10 +1000,10 @@ function getAjax(){
                 );
                 break;
             case 'member-join':
-                $id = $_REQUEST['id'];
-                $tsID = $_REQUEST['ts3'];
-                $name = $_REQUEST['name'];
-                $vip = isset($_REQUEST['vip']);
+                $id = $_POST['id'];
+                $tsID = $_POST['ts3'];
+                $name = $_POST['name'];
+                $vip = isset($_POST['vip']);
                 $date = date('Y-m-d', strtotime('now'));
                 $clanDB->startTransaction();
                 
