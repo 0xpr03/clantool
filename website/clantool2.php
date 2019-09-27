@@ -775,6 +775,16 @@ function getAjax(){
                 
                 echo json_encode($res);
                 break;
+            case 'edit-afk':
+                $id = $_POST['id'];
+                $fromNew = $_POST['fromNew'];
+                $toNew = $_POST['toNew'];
+                $from = $_POST['from'];
+                $to = $_POST['to'];
+                $cause = $_POST['cause'];
+                $clanDB->editAFK($id,$from,$to,$fromNew,$toNew,$cause);
+                echo json_encode(array('from' => $fromNew, 'to' => $toNew, 'cause' => $cause));
+                break;
             case 'add-ts3-relation':
                 $clanDB->insertTSRelation($_REQUEST['id'],$_REQUEST['tsID']);
                 echo json_encode(array('tsID' => $_REQUEST['tsID'],'name' => $_REQUEST['name']));
@@ -1497,6 +1507,10 @@ function getMemberDetailView() { ?>
                         <div class="form-group">
                             <div class="col-xs-offset-2 col-xs-10">
                                 <button type="submit" id="afkAddSubmit" class="btn btn-primary"><i class="fas fa-plus"></i> Eintrag Hinzufügen</button>
+                                <button type="submit" stlye="display:none;" id="afkEditSubmit" class="btn btn-primary"><i class="fas fa-save"></i> Speichern</button>
+                            </div>
+                            <div style="display:none;" id="afkEditCancelDiv" class="col-xs-offset-2 col-xs-10">
+                                <button type="button" id="afkEditCancel" class="btn btn-danger"><i class="fas fa-times"> </i> Abbrechen</button>
                             </div>
                         </div>
                     </form>
@@ -1612,6 +1626,8 @@ function getMemberDetailView() { ?>
     const CAUTION_ENTRY = "caution-";
     const MS_ENTRY = "ms-";
     const TRIAL_ENTRY = "trial-";
+    const actionEdit = 'edit';
+    const actionDelete = 'delete';
     
     function setLoadingMsg(msg){
         $('#loading-content').text(msg);
@@ -1814,9 +1830,13 @@ function getMemberDetailView() { ?>
             + '</li>';
     }
     
-    function formatAFKEntry(from,to,cause) {
+    function formatAFKEntry(from,to,cause,nr) {
         return '<li class="list-group-item" id="'+AFK_ENTRY+from+'-'+to+'">'
-            + '<a href="#" class="critical" data-from="'+from+'" data-to="'+to+'" style="float: right;"> <i class="fas fa-trash"></i> Delete</a>'
+            + '<a href="#" style="float: right; margin-left: 2em;" data-action="'+actionEdit+'" data-from="'
+            + from + '" data-to="' + to +'" data-cause="'
+            + escapeHtml(cause)+'">'
+            + '<i class="fas fa-pencil-alt"></i> Edit </a>'
+            + '<a href="#" class="critical" data-action="'+actionDelete+'" data-from="'+from+'" data-to="'+to+'" style="float: right;"> <i class="fas fa-trash"></i> Delete</a>'
             + from + ' - ' + to + '<br>'
             + cause
             + '</li>';
@@ -1856,9 +1876,6 @@ function getMemberDetailView() { ?>
             $('#membership').append(formatMembershipEntry(data[i],false));
         }
     }
-    
-    var msEdit = 'edit';
-    var msDelete = 'delete';
     // generate membership entry, edit = true will suppress the main <li>
     function formatMembershipEntry(data,edit) {
         var span_start = '<span class="avoidwrap">'; // avoid bad linebreaks
@@ -1874,12 +1891,12 @@ function getMemberDetailView() { ?>
         var member = data.to == null ? "true" : "false";
         var kicked = data.kicked ? "true" : "false";
         
-        ret += '<a href="#" style="float: right; margin-left: 2em;" data-id="'+data.nr+'" data-action="'+msEdit+'" data-from="';
+        ret += '<a href="#" style="float: right; margin-left: 2em;" data-id="'+data.nr+'" data-action="'+actionEdit+'" data-from="';
         ret += data.from + '" data-to="' + data.to+'" data-cause="';
         ret += escapeHtml(data.cause)+'" data-kicked="'+kicked+'" data-member="'+member+'">';
         ret += '<i class="fas fa-pencil-alt"></i> Edit </a>';
         
-        ret += '<a href="#" class="critical" data-id="'+data.nr+'" data-action="'+msDelete+'" style="float: right;"> <i class="fas fa-trash"></i> Delete </a>';
+        ret += '<a href="#" class="critical" data-id="'+data.nr+'" data-action="'+actionDelete+'" style="float: right;"> <i class="fas fa-trash"></i> Delete </a>';
 
         
         if(data.to == null){
@@ -1972,9 +1989,13 @@ function getMemberDetailView() { ?>
         var afkFrom = $('#afkFrom');
         var afkTo = $('#afkTo');
         var afkForm = $('#afkForm');
+        var afkAddSubmit = $('#afkAddSubmit');
         var afkAdd = $('#afkAdd');
+        var afkEditCancel = $('#afkEditCancel');
+        var afkEditSubmit = $('#afkEditSubmit');
         var afkAddDiv = $('#afkAddDiv');
         var afkCause = $('#inputAFKCause');
+        var afkEditCancelDiv = $('#afkEditCancelDiv');
         
         var cautionFrom = $('#cautionFrom');
         var cautionTo = $('#cautionTo');
@@ -2093,6 +2114,14 @@ function getMemberDetailView() { ?>
             msDefaultDiv.show();
         });
         
+        afkEditCancel.click(function() {
+            afkEditCancelDiv.hide();
+            afkEditSubmit.hide();
+            afkAddSubmit.show();
+            afkForm.hide();
+            afkAdd.show();
+        });
+        
         trialsAddNew.click(function(){
             trialsListForm.show();
             trialsAddNew.hide();
@@ -2108,7 +2137,10 @@ function getMemberDetailView() { ?>
         
         afkAdd.click(function() {
             afkAddDiv.hide();
+            afkForm.attr({'edit':false});
             afkForm.show();
+            afkEditSubmit.hide();
+            afkEditCancelDiv.hide();
         });
         
         cautionAdd.click(function() {
@@ -2122,7 +2154,7 @@ function getMemberDetailView() { ?>
             var div = $(this);
             var id = $(this).attr('data-id');
             var action = $(this).attr('data-action');
-            if(action == msDelete){
+            if(action == actionDelete){
                 $.ajax({
                     url: URL,
                     type: 'post',
@@ -2145,7 +2177,7 @@ function getMemberDetailView() { ?>
                     loadingDiv.hide();
                     errorDiv.show();
                 });
-            }else if(action == msEdit) {
+            }else if(action == actionEdit) {
                 var member = div.attr('data-member') == "true";
                 changeMember(member);
                 msFormDiv.attr('data-id',id);
@@ -2336,60 +2368,112 @@ function getMemberDetailView() { ?>
         
         afkForm.submit(function(e) {
             loadingDiv.show();
-            $.ajax({
-                url: URL,
-                type: 'post',
-                dataType: "json",
-                data: {
-                    'site' : VAR_SITE,
-                    'ajaxCont' : 'data',
-                    'type' : 'add-afk',
-                    'id' : $('#inputID').val(),
-                    'from' : afkFrom.val(),
-                    'to' : afkTo.val(),
-                    'cause' : afkCause.val(),
-                }
-            }).done(function(data){
-                var elem = $('#'+AFK_ENTRY+data.from+'-'+data.to);
-                if(elem.length){
-                    elem.remove();
-                }
-                $('#afk').append(formatAFKEntry(data.from,data.to,data.cause));
-                errorDiv.hide();
-                loadingDiv.hide();
-            }).fail(function(data){
-                errorDiv.html(formatErrorData(data));
-                errorDiv.show();
-                loadingDiv.hide();
-            });
+            var edit = afkForm.attr('edit');
+            if (edit) {
+                var from_orig = afkForm.attr('data-from');
+                var to_orig = afkForm.attr('data-to');
+                console.log('from_orig',from_orig);
+                $.ajax({
+                    url: URL,
+                    type: 'post',
+                    dataType: "json",
+                    data: {
+                        'site' : VAR_SITE,
+                        'ajaxCont' : 'data',
+                        'type' : 'edit-afk',
+                        'id' : $('#inputID').val(),
+                        'fromNew' : afkFrom.val(),
+                        'toNew' : afkTo.val(),
+                        'cause' : afkCause.val(),
+                        'from': from_orig,
+                        'to': to_orig,
+                    }
+                }).done(function(data){
+                    var elem = $('#'+AFK_ENTRY+from_orig+'-'+to_orig);
+                    if(elem.length){
+                        elem.remove();
+                    }
+                    $('#afk').append(formatAFKEntry(data.from,data.to,data.cause));
+                    resetAfk();
+                    errorDiv.hide();
+                    loadingDiv.hide();
+                }).fail(function(data){
+                    errorDiv.html(formatErrorData(data));
+                    errorDiv.show();
+                    loadingDiv.hide();
+                });
+            } else {
+                $.ajax({
+                    url: URL,
+                    type: 'post',
+                    dataType: "json",
+                    data: {
+                        'site' : VAR_SITE,
+                        'ajaxCont' : 'data',
+                        'type' : 'add-afk',
+                        'id' : $('#inputID').val(),
+                        'from' : afkFrom.val(),
+                        'to' : afkTo.val(),
+                        'cause' : afkCause.val(),
+                    }
+                }).done(function(data){
+                    var elem = $('#'+AFK_ENTRY+data.from+'-'+data.to);
+                    if(elem.length){
+                        elem.remove();
+                    }
+                    $('#afk').append(formatAFKEntry(data.from,data.to,data.cause));
+                    errorDiv.hide();
+                    loadingDiv.hide();
+                }).fail(function(data){
+                    errorDiv.html(formatErrorData(data));
+                    errorDiv.show();
+                    loadingDiv.hide();
+                });
+            }
             e.preventDefault();
         });
         
         $('#afk').on('click', 'a', function (e) {
-            loadingDiv.show();
             var from = $(this).attr('data-from');
             var to = $(this).attr('data-to');
-            $.ajax({
-                url: URL,
-                type: 'post',
-                dataType: "json",
-                data: {
-                    'site' : VAR_SITE,
-                    'ajaxCont' : 'data',
-                    'type' : 'delete-afk',
-                    'id' : $('#inputID').val(),
-                    'from' : from,
-                    'to' : to,
-                }
-            }).done(function(data){
-                $('#'+AFK_ENTRY+data.from+'-'+data.to).remove();
-                errorDiv.hide();
-                loadingDiv.hide();
-            }).fail(function(data){
-                errorDiv.html(formatErrorData(data));
-                errorDiv.show();
-                loadingDiv.hide();
-            });
+            var action = $(this).attr('data-action');
+            if(action == actionDelete){
+                loadingDiv.show();
+                $.ajax({
+                    url: URL,
+                    type: 'post',
+                    dataType: "json",
+                    data: {
+                        'site' : VAR_SITE,
+                        'ajaxCont' : 'data',
+                        'type' : 'delete-afk',
+                        'id' : $('#inputID').val(),
+                        'from' : from,
+                        'to' : to,
+                    }
+                }).done(function(data){
+                    $('#'+AFK_ENTRY+data.from+'-'+data.to).remove();
+                    errorDiv.hide();
+                    loadingDiv.hide();
+                }).fail(function(data){
+                    errorDiv.html(formatErrorData(data));
+                    errorDiv.show();
+                    loadingDiv.hide();
+                });
+            } else if(action == actionEdit) {
+                afkTo.val(to);
+                afkFrom.val(from);
+                afkCause.val($(this).attr('data-cause'));
+                afkAddSubmit.hide();
+                afkForm.attr({'data-to':to,'data-from':from, 'edit': true});
+                afkAddDiv.hide();
+                afkEditCancelDiv.show();
+                afkEditSubmit.show();
+                afkForm.show();
+            } else {
+                console.error('unknown action:'+action);
+            }
+            
             e.preventDefault();
         });
         

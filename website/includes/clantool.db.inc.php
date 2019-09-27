@@ -529,6 +529,28 @@ class clanDB extends dbException {
     }
     
     /**
+     * Edit member afk entry
+     * @param $id
+     * @param $from
+     * @param $to
+     * @param $fromNew
+     * @param $toNew
+     * @param $cause
+     * @throws dbException
+     */
+    public function editAFK($id,$from,$to,$fromNew,$toNew,$cause) {
+        if($query = $this->db->prepare(
+            'UPDATE `afk` SET `from` = ?, `to` = ?, `cause` = ? WHERE `id` = ? AND `from` = ? AND `to` = ?')) {
+            $query->bind_param('sssiss',$fromNew,$toNew,$cause,$id,$from,$to);
+            if(!$query->execute()) {
+                throw new dbException($this->db->error);
+            }
+        } else {
+            throw new dbException($this->db->error);
+        }
+    }
+    
+    /**
      * Insert member afk entry
      * @param id account ID
      * @param from from date
