@@ -2888,9 +2888,6 @@ function getMemberJoinView() { ?>
         <div id="warnOverride" style="display: none;" class="alert alert-danger fade in">
             <span class="glyphicon glyphicon-exclamation-sign" aria-hidden="true"></span>
         </div>
-        <div class="alert alert-success fade in">
-            Bitte den Eintrag in die <b>CW-Liste</b> &amp; sowie TS <b>Memberliste</b> Channel &amp; <b>Download/Upload Ordner</b> nicht vergessen!
-        </div>
         <table class="table">
             <tbody>
                 <tr><td>Datum</td><td><div id="Rdate"></div></td></tr>
@@ -2900,7 +2897,9 @@ function getMemberJoinView() { ?>
                 <tr><td>TS3 Account ID</td><td><div id="Rts3"></div></td></tr>
             </tbody>
         </table>
-        
+    </div>
+    <div class="alert alert-success">
+        Bitte den Eintrag in den TS-Channel <b>Memberliste</b> &amp; <b>Download/Upload Ordner</b> nicht vergessen!
     </div>
     <script type="text/javascript">
     var MEMBER_DETAIL_URL = '<?=MEMBER_DETAIL_URL?>';
