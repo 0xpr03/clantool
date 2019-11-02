@@ -1933,6 +1933,7 @@ function getMemberDetailView() { ?>
     
     function resetAfk(){
         $('#afkAddDiv').show();
+        $('#afkAddSubmit').show();
         $('#afkForm').hide();
     }
     
@@ -2369,7 +2370,7 @@ function getMemberDetailView() { ?>
         afkForm.submit(function(e) {
             loadingDiv.show();
             var edit = afkForm.attr('edit');
-            if (edit) {
+            if (edit == "true") {
                 var from_orig = afkForm.attr('data-from');
                 var to_orig = afkForm.attr('data-to');
                 console.log('from_orig',from_orig);
