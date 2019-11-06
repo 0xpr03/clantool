@@ -1,0 +1,26 @@
+[package]
+name = "ranked_daemon"
+version = "0.1.0"
+authors = ["Aron Heinecke <aron.heinecke@t-online.de>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+actix-web = "1"
+reqwest = "0.9"
+serde = { version = "1", features = ["derive"] }
+mysql = "17"
+timer = "0.2"
+structopt = "0.3"
+chrono = {version = "0.4", features = ["serde"] }
+snafu = "0.5"
+lazy_static = "1"
+log = "0.4"
+serde_json = "1"
+env_logger = "0.7"
+
+[dependencies.config]
+version = "0.9"
+default-features = false
+features = ["toml"]
