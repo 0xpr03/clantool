@@ -154,10 +154,10 @@ CREATE TABLE `rank_names` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE OR REPLACE VIEW `ranked` AS
-    SELECT mn.name as player_name,usn,season,r.mode,r.rank,subrank,
-        n.name as mode_name,rn.name as rank_name from ranks r
-    JOIN mode_names n ON r.mode = n.mode
-    JOIN rank_names rn ON r.rank = rn.rank
-    JOIN member_names mn ON r.usn = mn.id AND mn.updated = (
-        SELECT MAX(updated) FROM member_names mnl WHERE mnl.id = r.usn
-    );
+SELECT mn.name as player_name,usn,season,r.mode,r.rank,subrank,
+    n.name as mode_name,rn.name as rank_name from ranks r
+JOIN mode_names n ON r.mode = n.mode
+JOIN rank_names rn ON r.rank = rn.rank
+JOIN member_names mn ON r.usn = mn.id AND mn.updated = (
+    SELECT MAX(updated) FROM member_names mnl WHERE mnl.id = r.usn
+);

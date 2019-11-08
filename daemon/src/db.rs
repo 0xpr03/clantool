@@ -30,6 +30,7 @@ const POOL_MAX_CONN: usize = 100; // maximum amount of running connections per p
 const TABLE_MISSING_DATES: &'static str = "t_missingdates"; // temporary table used to store missing dates
 const DATE_FORMAT: &'static str = "%Y-%m-%d";
 const DATETIME_FORMAT: &'static str = "%Y-%m-%d %H:%M:%S";
+const REGEX_VIEW: &str = r"CREATE (OR REPLACE)? VIEW `([\-_a-zA-Z]+)` AS";
 
 /// Create a new db pool with fixed min-max connections
 pub fn new(
@@ -507,24 +508,30 @@ pub fn init_tables(pool: &Pool) -> Result<(), Error> {
 
 /// Get database setup sql
 /// Returns a vector of table setup sql
-fn get_db_create_sql<'a>() -> Vec<String> {
+fn get_db_create_sql() -> Vec<String> {
     let raw_sql = include_str!("../setup.sql");
 
     let reg = regex::Regex::new(r"(/\*(.|\s)*?\*/)").unwrap(); // https://regex101.com/r/bG6aF2/6, replace `\/` with `/`
     let raw_sql = reg.replace_all(raw_sql, "");
 
-    let raw_sql = raw_sql.replace("\n", "");
+    let raw_sql = raw_sql.replace("\n", " ");
     let raw_sql = raw_sql.replace("\r", "");
 
     debug!("\n\nSQL: {}\n\n", raw_sql);
 
-    let split_sql: Vec<String> = raw_sql.split(";").filter_map(|x| // split at `;`, filter_map on iterator
-        if x != "" { // check if it's an empty group (last mostly)
-            Some(x.to_owned()) // &str to String
-        } else {
-            None
-        }
-    ).collect(); // collect back to vec
+    let split_sql: Vec<String> = raw_sql
+        .split(";")
+        .filter_map(|x| {
+            // split at `;`, filter_map on iterator
+            let x = x.trim();
+            if x.len() > 0 {
+                // check if it's an empty group (last mostly)
+                Some(x.to_owned()) // &str to String
+            } else {
+                None
+            }
+        })
+        .collect(); // collect back to vec
 
     debug!("\n\nGroups: {:?}\n\n", split_sql);
 
@@ -560,6 +567,7 @@ mod test {
     struct CleanupGuard {
         pub pool: Pool,
         pub tables: Vec<String>,
+        pub views: Vec<String>,
     }
 
     impl CleanupGuard {
@@ -567,17 +575,24 @@ mod test {
             CleanupGuard {
                 pool,
                 tables: Vec::new(),
+                views: Vec::new(),
             }
         }
     }
 
     impl Drop for CleanupGuard {
         fn drop(&mut self) {
+            for view in &self.views {
+                self.pool
+                    .prep_exec(format!("DROP VIEW IF EXISTS `{}`;", view), ())
+                    .unwrap();
+                println!("dropped view {}", view);
+            }
             for table in &self.tables {
                 self.pool
                     .prep_exec(format!("DROP TABLE IF EXISTS `{}`;", table), ())
                     .unwrap();
-                println!("dropped {}", table);
+                println!("dropped table {}", table);
             }
         }
     }
@@ -587,15 +602,30 @@ mod test {
     /// Returns all table names which got created
     fn setup_tables(pool: Pool) -> Result<CleanupGuard, Error> {
         let tables = get_db_create_sql();
-        let reg = regex::Regex::new(r"CREATE TABLE `([\-_a-zA-Z]+)` \(").unwrap();
+        let reg_tables = regex::Regex::new(r"CREATE TABLE `([\-_a-zA-Z]+)` \(").unwrap();
+        let reg_views = regex::Regex::new(REGEX_VIEW).unwrap();
         let mut guard = CleanupGuard::new(pool);
         for a in tables {
-            let table = reg.captures(&a).unwrap()[1].to_string();
-            guard
-                .pool
-                .prep_exec(format!("DROP TABLE IF EXISTS `{}`;", &table), ())?;
-            guard.tables.push(table);
-            guard.pool.prep_exec(a, ())?;
+            if let Some(cap) = reg_tables.captures(&a) {
+                let table = cap[1].to_string();
+                guard
+                    .pool
+                    .prep_exec(format!("DROP TABLE IF EXISTS `{}`;", &table), ())?;
+                guard.tables.push(table);
+                guard.pool.prep_exec(a, ())?;
+            } else if let Some(cap) = reg_views.captures(&a) {
+                let view = cap[2].to_string();
+                guard
+                    .pool
+                    .prep_exec(format!("DROP VIEW IF EXISTS `{}`;", &view), ())?;
+                guard.views.push(view);
+                guard.pool.prep_exec(a, ())?;
+            } else {
+                return Err(Error::InvalidDBSetup(format!(
+                    "Expected table/view, found {}",
+                    a
+                )));
+            }
         }
         Ok(guard)
     }
@@ -1321,5 +1351,22 @@ mod test {
             draws: 3,
         };
         insert_clan_update(&mut conn, &clan, &time).unwrap();
+    }
+
+    /// Verify REGEX_VIEW and also behavior of regex captures
+    #[test]
+    fn test_view_regex() {
+        let reg = regex::Regex::new(REGEX_VIEW).unwrap();
+
+        {
+            let test_1 = "CREATE OR REPLACE VIEW `ranked` AS";
+            let cap_1 = reg.captures(test_1).unwrap();
+            assert_eq!("ranked", &cap_1[2]);
+        }
+        {
+            let test_2 = "CREATE OR REPLACE VIEW `ranked` AS";
+            let cap_2 = reg.captures(test_2).unwrap();
+            assert_eq!("ranked", &cap_2[2]);
+        }
     }
 }

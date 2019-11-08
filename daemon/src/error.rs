@@ -107,6 +107,10 @@ quick_error! {
             display("csv error: {}",err)
             cause(err)
         }
+        InvalidDBSetup(descr: String) {
+            description(descr)
+            display("Error {}", descr)
+        }
         Other(descr: &'static str) {
             description(descr)
             display("Error {}", descr)
