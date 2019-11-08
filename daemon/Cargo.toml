@@ -23,6 +23,6 @@ quick-error = "1"
 clap = "2"
 sendmail = { git = "https://github.com/0xpr03/rust-sendmail", rev = "f0463869b55b3309d9c82e1b0c86ddad58eb98ef" }
 regex = "1"
-mysql = "16"
+mysql = "17"
 timer = "0.2"
 csv = "1"
