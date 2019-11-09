@@ -34,7 +34,7 @@ pub fn init(config: &Settings) -> Result<Pool> {
     opts.db_name(Some(config.db.database.clone()));
     opts.tcp_port(config.db.port);
     opts.user(Some(config.db.user.clone()));
-    opts.pass(Some(config.db.password.clone()));
+    opts.pass(config.db.password.clone());
     opts.prefer_socket(false);
     let opts: Opts = opts.into();
     Ok(Pool::new(opts)?)

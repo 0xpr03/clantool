@@ -33,7 +33,14 @@ script:
   - sed -i -e 's/password = "password"//g' target/debug/config/config.toml
   - sed -i -e 's/"clantool"/"test"/g' target/debug/config/config.toml
   - cat target/debug/config/config.toml
+# init conifg ranked_daemon, looks for config in run-dir
+  - cp ranked/ctd_config.toml ctd_config.toml
+  - sed -i -e 's/"ctd"/"root"/g' ctd_config.toml
+  - sed -i -e 's/password = "password"//g' ctd_config.toml
+  - sed -i -e 's/"clantool"/"test"/g' ctd_config.toml
+  - cat ctd_config.toml
 # init db & run crawl
   - RUST_BACKTRACE=1 cargo run --bin clantool -- init
   - RUST_BACKTRACE=1 cargo run --bin clantool -- fcrawl
+  - RUST_BACKTRACE=1 cargo run --bin ranked_daemon -- -c --no-daemon
   - mysql -e 'DROP DATABASE test;'

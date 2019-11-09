@@ -37,7 +37,7 @@ pub struct ConfigDB {
     pub ip: String,
     pub database: String,
     pub user: String,
-    pub password: String,
+    pub password: Option<String>,
     pub port: u16,
 }
 
@@ -65,7 +65,7 @@ impl Default for ConfigDB {
         Self {
             ip: "localhost".to_string(),
             user: "ctd".to_string(),
-            password: "".to_string(),
+            password: None,
             port: 3306,
             database: "clantool".to_string(),
         }

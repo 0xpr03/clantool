@@ -28,6 +28,9 @@ struct Opt {
     /// Force crawling
     #[structopt(short, long)]
     crawl: bool,
+    /// Don't start daemon
+    #[structopt(long = "no-daemon")]
+    no_daemon: bool,
 }
 
 type Cache = Data<RwLock<Vec<model::APIRankedEntry>>>;
@@ -88,6 +91,11 @@ fn _main() -> Result<()> {
 
     // populate cache
     update_cache(&cache, &pool);
+
+    if opt.no_daemon {
+        info!("No-Daemon mode, quitting..");
+        return Ok(());
+    }
 
     info!("Entering daemon mode");
 

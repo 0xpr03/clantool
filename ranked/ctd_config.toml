@@ -6,6 +6,7 @@ bind_port = "1400"
 [db]
 ip = "127.0.0.1"
 user = "ctd"
+# remove to login without password
 password = "password"
 port = 3306
 database = "clantool"
