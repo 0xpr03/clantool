@@ -27,9 +27,9 @@ use crate::Member;
 
 const POOL_MIN_CONN: usize = 1; // minimum amount of running connection per pool
 const POOL_MAX_CONN: usize = 100; // maximum amount of running connections per pool
-const TABLE_MISSING_DATES: &'static str = "t_missingdates"; // temporary table used to store missing dates
-const DATE_FORMAT: &'static str = "%Y-%m-%d";
-const DATETIME_FORMAT: &'static str = "%Y-%m-%d %H:%M:%S";
+const TABLE_MISSING_DATES: &str = "t_missingdates"; // temporary table used to store missing dates
+const DATE_FORMAT: &str = "%Y-%m-%d";
+const DATETIME_FORMAT: &str = "%Y-%m-%d %H:%M:%S";
 const REGEX_VIEW: &str = r"CREATE (OR REPLACE)? VIEW `([\-_a-zA-Z]+)` AS";
 
 /// Create a new db pool with fixed min-max connections
@@ -75,7 +75,7 @@ pub fn log_message_opt(conn: &mut PooledConn, message: &str) -> Result<(), Error
 /// This does affect table member and member_names
 pub fn insert_members(
     conn: &mut PooledConn,
-    members: &Vec<Member>,
+    members: &[Member],
     timestamp: &NaiveDateTime,
 ) -> Result<(), Error> {
     {
@@ -252,7 +252,7 @@ fn get_min_max_date(conn: &mut PooledConn) -> Result<(NaiveDate, NaiveDate), Err
 /// Returns datetime if correct
 pub fn check_date_for_data(
     conn: &mut PooledConn,
-    date: &NaiveDate,
+    date: NaiveDate,
 ) -> Result<Option<NaiveDateTime>, Error> {
     let mut stmt = conn.prepare(
         "SELECT `date` FROM member m
@@ -260,7 +260,7 @@ pub fn check_date_for_data(
     )?;
     let mut result = stmt.execute((format!("{}%", date.format(DATE_FORMAT)),))?;
     match result.next() {
-        None => return Ok(None),
+        None => Ok(None),
         Some(v) => {
             let row = v?;
             let value = from_row_opt(row)?;
@@ -275,7 +275,7 @@ pub fn check_date_for_data(
 pub fn get_next_older_date(
     conn: &mut PooledConn,
     date: &NaiveDateTime,
-    min: &NaiveDate,
+    min: NaiveDate,
 ) -> Result<Option<NaiveDateTime>, Error> {
     debug!("date: {} min: {}", date, min);
     let mut stmt = conn.prepare(
@@ -289,7 +289,7 @@ pub fn get_next_older_date(
         format!("{}%", min.format(DATE_FORMAT)),
     ))?;
     match result.next() {
-        None => return Ok(None),
+        None => Ok(None),
         Some(v) => {
             let row = v?;
             let value = from_row_opt(row)?;
@@ -303,7 +303,7 @@ pub fn read_string_setting(conn: &mut PooledConn, key: &str) -> Result<Option<St
     let mut stmt = conn.prepare("SELECT `value` FROM settings WHERE `key` = ?")?;
     let mut result = stmt.execute((key,))?;
     match result.next() {
-        None => return Ok(None),
+        None => Ok(None),
         Some(v) => {
             let row = v?;
             let value = from_row_opt(row)?;
@@ -317,7 +317,7 @@ pub fn read_bool_setting(conn: &mut PooledConn, key: &str) -> Result<Option<bool
     let mut stmt = conn.prepare("SELECT `value` FROM settings WHERE `key` = ?")?;
     let mut result = stmt.execute((key,))?;
     match result.next() {
-        None => return Ok(None),
+        None => Ok(None),
         Some(v) => {
             let row = v?;
             let row: Option<String> = from_row_opt(row)?;
@@ -374,18 +374,17 @@ pub fn get_member_left(
         "datetime2" => date2.format(DATETIME_FORMAT).to_string(),
         "date1" => date1.date(),
     })?;
-    let member_left = result
+
+    result
         .map(|res| {
             let (name, id, nr) = from_row_opt(res?)?;
             Ok(LeftMember {
-                id: id,
-                name: name,
+                id,
+                name,
                 membership_nr: nr,
             })
         })
-        .collect();
-
-    member_left
+        .collect()
 }
 
 /// Insert member leave
@@ -395,9 +394,9 @@ pub fn get_member_left(
 /// returns affected affected trial entries that were ended
 pub fn insert_member_leave(
     conn: &mut PooledConn,
-    id: &i32,
-    ms_nr: &i32,
-    date_leave: &NaiveDate,
+    id: i32,
+    ms_nr: i32,
+    date_leave: NaiveDate,
     cause: &str,
 ) -> Result<(u64), Error> {
     let trial_affected;
@@ -520,11 +519,11 @@ fn get_db_create_sql() -> Vec<String> {
     debug!("\n\nSQL: {}\n\n", raw_sql);
 
     let split_sql: Vec<String> = raw_sql
-        .split(";")
+        .split(';')
         .filter_map(|x| {
             // split at `;`, filter_map on iterator
             let x = x.trim();
-            if x.len() > 0 {
+            if !x.is_empty() {
                 // check if it's an empty group (last mostly)
                 Some(x.to_owned()) // &str to String
             } else {
@@ -671,9 +670,9 @@ mod test {
     fn create_member(name: &str, id: i32, exp: i32, contribution: i32) -> Member {
         Member {
             name: String::from(name),
-            id: id,
-            exp: exp,
-            contribution: contribution,
+            id,
+            exp,
+            contribution,
         }
     }
 
@@ -873,7 +872,7 @@ mod test {
         insert_members(&mut conn, &vec_t, &date2).unwrap();
 
         let expected = LeftMember {
-            id: id,
+            id,
             name: None,
             membership_nr: Some(ms_nr),
         };
@@ -908,7 +907,7 @@ mod test {
         insert_members(&mut conn, &vec_t, &date2).unwrap();
 
         let expected = LeftMember {
-            id: id,
+            id,
             name: Some(name),
             membership_nr: Some(ms_nr),
         };
@@ -1058,9 +1057,9 @@ mod test {
         }
         assert_eq!(
             Some(datetime),
-            check_date_for_data(&mut conn, &date_valid).unwrap()
+            check_date_for_data(&mut conn, date_valid).unwrap()
         );
-        assert_eq!(None, check_date_for_data(&mut conn, &date_invalid).unwrap());
+        assert_eq!(None, check_date_for_data(&mut conn, date_invalid).unwrap());
     }
 
     #[test]
@@ -1098,7 +1097,7 @@ mod test {
         let join = Local::today().naive_local();
         let nr = insert_membership(&mut conn, &id, &join, None);
         let leave = Local::today().naive_local().succ();
-        let trial = insert_member_leave(&mut conn, &id, &nr, &leave, msg).unwrap();
+        let trial = insert_member_leave(&mut conn, id, nr, leave, msg).unwrap();
         assert_eq!(trial, 0);
     }
 
@@ -1112,7 +1111,7 @@ mod test {
         insert_trial(&mut conn, &id, &join.succ());
         let nr = insert_membership(&mut conn, &id, &join, None);
         let leave = Local::today().naive_local().succ();
-        let trial = insert_member_leave(&mut conn, &id, &nr, &leave, msg).unwrap();
+        let trial = insert_member_leave(&mut conn, id, nr, leave, msg).unwrap();
         assert_eq!(trial, 2);
     }
 
@@ -1125,7 +1124,7 @@ mod test {
         let nr = insert_full_membership(&mut conn, &id, &join, &join, "asd", true);
         insert_trial(&mut conn, &id, &join);
         let leave = Local::today().naive_local().succ();
-        let trial = insert_member_leave(&mut conn, &id, &nr, &leave, msg).unwrap();
+        let trial = insert_member_leave(&mut conn, id, nr, leave, msg).unwrap();
         assert_eq!(trial, 1);
     }
 
@@ -1179,19 +1178,19 @@ mod test {
 
         assert_eq!(
             Some(correct.and_hms(10, 9, 0)),
-            get_next_older_date(&mut conn, &start_test.and_hms(10, 0, 0), &date_start).unwrap()
+            get_next_older_date(&mut conn, &start_test.and_hms(10, 0, 0), date_start).unwrap()
         );
         assert_eq!(
             Some(correct.and_hms(10, 9, 0)),
-            get_next_older_date(&mut conn, &correct.succ().and_hms(10, 0, 0), &correct).unwrap()
+            get_next_older_date(&mut conn, &correct.succ().and_hms(10, 0, 0), correct).unwrap()
         );
         assert_eq!(
             Some(correct.and_hms(10, 9, 0)),
-            get_next_older_date(&mut conn, &correct.succ().and_hms(10, 0, 0), &date_start).unwrap()
+            get_next_older_date(&mut conn, &correct.succ().and_hms(10, 0, 0), date_start).unwrap()
         );
         assert_eq!(
             Some(date_curr.pred().pred().and_hms(10, 5, 0)),
-            get_next_older_date(&mut conn, &date_curr.pred().and_hms(10, 0, 0), &date_start)
+            get_next_older_date(&mut conn, &date_curr.pred().and_hms(10, 0, 0), date_start)
                 .unwrap()
         );
         assert_eq!(
@@ -1199,13 +1198,13 @@ mod test {
             get_next_older_date(
                 &mut conn,
                 &correct.succ().and_hms(10, 0, 0),
-                &correct.succ()
+                correct.succ()
             )
             .unwrap()
         );
         assert_eq!(
             None,
-            get_next_older_date(&mut conn, &correct.succ().and_hms(10, 0, 0), &start_test).unwrap()
+            get_next_older_date(&mut conn, &correct.succ().and_hms(10, 0, 0), start_test).unwrap()
         );
     }
 

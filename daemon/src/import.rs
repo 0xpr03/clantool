@@ -121,9 +121,9 @@ pub fn import_cmd(
     }
 }
 
-const DATETIME_FORMAT_COMMENT: &'static str = "%Y-%m-%d %H:%M:%S";
-pub const DATE_DEFAULT_FORMAT: &'static str = "%-m/%-d/%y";
-pub const IMPORT_MEMBERSHIP_CAUSE: &'static str = "imported membership";
+const DATETIME_FORMAT_COMMENT: &str = "%Y-%m-%d %H:%M:%S";
+pub const DATE_DEFAULT_FORMAT: &str = "%-m/%-d/%y";
+pub const IMPORT_MEMBERSHIP_CAUSE: &str = "imported membership";
 
 macro_rules! opt {
     ($e:expr) => {
@@ -236,10 +236,10 @@ fn parse_record(
         });
     }
 
-    let date_name = if memberships.len() > 0 {
+    let date_name = if !memberships.is_empty() {
         NaiveDateTime::new(memberships[0].from, NaiveTime::from_hms(0, 0, 1))
     } else {
-        parser.default_date_name.clone()
+        parser.default_date_name
     };
 
     Ok(ImportMembership {

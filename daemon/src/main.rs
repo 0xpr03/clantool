@@ -55,22 +55,22 @@ use config::Config;
 
 use clap::{App, Arg, SubCommand};
 
-const VERSION: &'static str = "0.3.0";
-const USER_AGENT: &'static str =
+const VERSION: &str = "0.3.0";
+const USER_AGENT: &str =
     "Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:55.0) Gecko/20100101 Firefox/66.0";
-const REFERER: &'static str = "https://crossfire.z8games.com/";
-const CONFIG_PATH: &'static str = "config/config.toml";
-const LOG_PATH: &'static str = "config/log.yml";
+const REFERER: &str = "https://crossfire.z8games.com/";
+const CONFIG_PATH: &str = "config/config.toml";
+const LOG_PATH: &str = "config/log.yml";
 const INTERVALL_H: i64 = 24; // execute intervall
 
-const DATE_FORMAT_DAY: &'static str = "%Y-%m-%d";
+const DATE_FORMAT_DAY: &str = "%Y-%m-%d";
 
-const LEAVE_MSG_KEY: &'static str = "auto_leave_message";
-const LEAVE_ENABLE_KEY: &'static str = "auto_leave_enable";
+const LEAVE_MSG_KEY: &str = "auto_leave_message";
+const LEAVE_ENABLE_KEY: &str = "auto_leave_enable";
 #[allow(dead_code)]
-const TS3_REMOVAL_KEY: &'static str = "ts3_removal_enable";
+const TS3_REMOVAL_KEY: &str = "ts3_removal_enable";
 #[allow(dead_code)]
-const TS3_WHITELIST_KEY: &'static str = "ts3_whitelist";
+const TS3_WHITELIST_KEY: &str = "ts3_whitelist";
 
 fn main() {
     match init_log() {
@@ -159,7 +159,7 @@ fn main() {
             let rt_time = NaiveTime::from_num_seconds_from_midnight(20, 0);
             debug!(
                 "Result: {:?}",
-                schedule_crawl_thread(local_pool, local_config, &rt_time)
+                schedule_crawl_thread(local_pool, local_config, rt_time)
             );
             info!("Finished force crawl");
         }
@@ -202,7 +202,7 @@ fn main() {
             let simulate = sub_m.is_present("simulate");
             let date_s = sub_m.value_of("date").unwrap();
             let date = NaiveDate::parse_from_str(date_s, DATE_FORMAT_DAY).unwrap();
-            let datetime = match db::check_date_for_data(&mut conn, &date) {
+            let datetime = match db::check_date_for_data(&mut conn, date) {
                 Ok(Some(v)) => {
                     info!("Using exact dataset {}", v);
                     v
@@ -290,14 +290,14 @@ fn validator_path(input: String) -> Result<(), String> {
 /// Get path for input if possible
 fn get_path_for_existing_file(input: &str) -> Result<PathBuf, String> {
     let path_o = PathBuf::from(input);
-    let path;
-    if path_o.parent().is_some() && path_o.parent().unwrap().is_dir() {
-        path = path_o;
+    let path = if path_o.parent().is_some() 
+        && path_o.parent().unwrap().is_dir() {
+        path_o
     } else {
         let mut path_w = std::env::current_dir().unwrap();
         path_w.push(input);
-        path = path_w;
-    }
+        path_w
+    };
 
     if path.is_dir() {
         return Err(format!("Specified file is a directory {:?}", path));
@@ -337,7 +337,7 @@ fn run_checkdb(pool: Pool, simulate: bool) -> Result<(), Error> {
 }
 
 /// Initialize timed task
-fn run_timer<'a>(pool: Pool, config: Arc<Config>, timer: &'a timer::Timer) {
+fn run_timer(pool: Pool, config: Arc<Config>, timer: & timer::Timer) {
     let date_time = Local::now(); // get current datetime
     let today = Local::today();
     let target_naive_time = match NaiveTime::parse_from_str(&config.main.time, "%H:%M") {
@@ -374,9 +374,8 @@ fn run_timer<'a>(pool: Pool, config: Arc<Config>, timer: &'a timer::Timer) {
     let a = timer.schedule(
         schedule_time,
         Some(chrono::Duration::hours(INTERVALL_H)),
-        move || match schedule_crawl_thread(&pool, &*config, &retry_time) {
-            Err(e) => error!("Error in crawler thread {}", e),
-            Ok(_) => (),
+        move || if let Err(e) = schedule_crawl_thread(&pool, &*config, retry_time) {
+            error!("Error in crawler thread {}", e);
         },
     );
     a.ignore();
@@ -385,7 +384,7 @@ fn run_timer<'a>(pool: Pool, config: Arc<Config>, timer: &'a timer::Timer) {
 fn schedule_crawl_thread(
     pool: &Pool,
     config: &Config,
-    retry_time: &NaiveTime,
+    retry_time: NaiveTime,
 ) -> Result<(), Error> {
     if let Some(time) = run_update(pool, config, retry_time) {
         debug!("{}", time);
@@ -430,10 +429,10 @@ fn get_leave_message(conn: &mut PooledConn, config: &Config) -> String {
 fn get_leave_detection_enabled(conn: &mut PooledConn, config: &Config) -> bool {
     match db::read_bool_setting(conn, LEAVE_ENABLE_KEY) {
         Ok(Some(v)) => v,
-        Ok(None) => config.main.auto_leave_enabled.clone(),
+        Ok(None) => config.main.auto_leave_enabled,
         Err(e) => {
             error!("Error retrieving leave setting {}", e);
-            config.main.auto_leave_enabled.clone()
+            config.main.auto_leave_enabled
         }
     }
 }
@@ -460,7 +459,7 @@ fn run_leave_detection(
         }
     };
 
-    match db::get_next_older_date(&mut conn, date, &max_age) {
+    match db::get_next_older_date(&mut conn, date, max_age) {
         Err(e) => {
             db::log_message(
                 &mut conn,
@@ -489,9 +488,9 @@ fn run_leave_detection(
                                 } else {
                                     match db::insert_member_leave(
                                         &mut conn,
-                                        &m.id,
-                                        &nr,
-                                        &previous_date.date(),
+                                        m.id,
+                                        nr,
+                                        previous_date.date(),
                                         leave_cause,
                                     ) {
                                         Ok(trial) => db::log_message(
@@ -545,7 +544,7 @@ fn run_leave_detection(
 }
 
 /// Performs a complete crawl
-fn run_update(pool: &Pool, config: &Config, retry_time: &NaiveTime) -> Option<NaiveDateTime> {
+fn run_update(pool: &Pool, config: &Config, retry_time: NaiveTime) -> Option<NaiveDateTime> {
     trace!("performing crawler");
 
     let mut member_success = false;
@@ -577,38 +576,36 @@ fn run_update(pool: &Pool, config: &Config, retry_time: &NaiveTime) -> Option<Na
         if member_success && clan_success {
             info!("Crawling successfull");
             return Some(time);
+        } else if x == config.main.retries {
+            warn!("No dataset for this schedule, all retries failed!");
+            match write_missing(&time, pool, !member_success) {
+                Ok(_) => {}
+                Err(e) => error!("Unable to write missing date! {}", e),
+            }
+
+            let message = format!(
+                    "Error at clantool update execution!\nRetried {} times, waiting {} seconds max.\nMissing Member data: {}. Missing clan data: {}"
+                    ,x,retry_time.num_seconds_from_midnight()*x,!member_success,!clan_success);
+
+            if config.main.send_error_mail {
+                send_mail(config, "Clantool error", &message);
+            }
         } else {
-            if x == config.main.retries {
-                warn!("No dataset for this schedule, all retries failed!");
-                match write_missing(&time, pool, !member_success) {
-                    Ok(_) => {}
-                    Err(e) => error!("Unable to write missing date! {}", e),
-                }
+            let wait_time = retry_time.num_seconds_from_midnight() * x;
+            std::thread::sleep(std::time::Duration::from_secs(wait_time.into()));
 
-                let message = format!(
-                        "Error at clantool update execution!\nRetried {} times, waiting {} seconds max.\nMissing Member data: {}. Missing clan data: {}"
-                        ,x,retry_time.num_seconds_from_midnight()*x,!member_success,!clan_success);
-
-                if config.main.send_error_mail {
-                    send_mail(config, "Clantool error", &message);
-                }
-            } else {
-                let wait_time = retry_time.num_seconds_from_midnight() * x;
-                std::thread::sleep(std::time::Duration::from_secs(wait_time.into()));
-
-                // refresh time, otherwise leave it, so it's synchronized
-                if !member_success && !clan_success {
-                    time = Local::now().naive_local();
-                }
+            // refresh time, otherwise leave it, so it's synchronized
+            if !member_success && !clan_success {
+                time = Local::now().naive_local();
             }
         }
     }
-    return None;
+    None
 }
 
 /// Send email, catch & log errors
 fn send_mail(config: &Config, subject: &str, message: &str) {
-    match email::send_new::<Vec<&str>>(
+    if let Err(e) = email::send_new::<Vec<&str>>(
         &config.main.mail_from,
         config.main.mail.iter().map(|v| &v[..]).collect(),
         // Subject
@@ -616,8 +613,7 @@ fn send_mail(config: &Config, subject: &str, message: &str) {
         // Body
         message,
     ) {
-        Err(e) => error!("Error at mail sending: {}", e),
-        _ => (),
+        error!("Error at mail sending: {}", e);
     }
 }
 
@@ -633,7 +629,7 @@ fn write_missing(
 }
 
 /// get member url for ajax request
-fn get_member_url(site: &u8, config: &Config) -> String {
+fn get_member_url(site: u8, config: &Config) -> String {
     let _site = format!("{}", site);
     let end_row = site * config.main.clan_ajax_exptected_per_site;
     let start_row = end_row - (config.main.clan_ajax_exptected_per_site - 1);
@@ -662,7 +658,7 @@ fn run_update_member(pool: &Pool, config: &Config, time: &NaiveDateTime) -> Resu
             return Err(Error::Other("Site over limit."));
         }
         let raw_members_json =
-            crawler::http::get(&get_member_url(&site, config), HeaderType::Ajax)?;
+            crawler::http::get(&get_member_url(site, config), HeaderType::Ajax)?;
         let (mut members_temp, t_total) = crawler::parser::parse_all_member(&raw_members_json)?;
         to_receive = t_total as usize;
         members.append(&mut members_temp);
@@ -692,7 +688,7 @@ fn init_log() -> Result<(), Error> {
     log_dir.pop();
     DirBuilder::new().recursive(true).create(log_dir)?;
 
-    if !metadata(&log_path).is_ok() {
+    if metadata(&log_path).is_err() {
         let config = include_str!("../log.yml");
         let mut file = File::create(&log_path)?;
         file.write_all(config.as_bytes())?;

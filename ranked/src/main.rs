@@ -4,10 +4,10 @@ extern crate log;
 extern crate lazy_static;
 use actix_web::web::Data;
 use chrono::offset::Local;
+use mysql::Pool;
 use snafu::{Backtrace, ResultExt, Snafu};
 use std::sync::RwLock;
 use structopt::StructOpt;
-use mysql::Pool;
 use timer;
 
 mod crawler;
@@ -17,7 +17,7 @@ mod settings;
 mod webserver;
 
 const INTERVALL_H: i64 = 24; // execute intervall
-const RUST_LOG: &'static str = "RUST_LOG";
+const RUST_LOG: &str = "RUST_LOG";
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "Clantool-Ranked", about = "Clantool ranked stats daemon.")]
@@ -83,9 +83,8 @@ fn _main() -> Result<()> {
     let opt = Opt::from_args();
     if opt.crawl {
         info!("Starting manual crawl");
-        match crawler::schedule_crawler(pool.clone()) {
-            Err(e) => error!("Error in crawler thread {}", e),
-            Ok(_) => (),
+        if let Err(e) = crawler::schedule_crawler(pool.clone()) {
+            error!("Error in crawler thread {}", e);
         }
     }
 

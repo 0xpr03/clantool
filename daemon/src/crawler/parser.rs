@@ -24,13 +24,13 @@ use crate::Clan;
 use crate::Member;
 
 // https://regex101.com/r/XsoG5T/5
-const REGEX_WINS: &'static str = r#"<div class="match_details">(\d+)<br><span>Wins</span>"#;
-const REGEX_LOSSES: &'static str = r#"<div class="match_details">(\d+)<br><span>Losses</span>"#;
-const REGEX_DRAWS: &'static str = r#"<div class="match_details">(\d+)<br><span>Draws</span>"#;
-const REGEX_MEMBERS: &'static str = r#"<div>(\d+).?clan.members"#;
-const REGEX_MEMBER_NAME: &'static str = r#"class=\"username\">([a-zA-Z0-9]+)<\/div>"#;
+const REGEX_WINS: &str = r#"<div class="match_details">(\d+)<br><span>Wins</span>"#;
+const REGEX_LOSSES: &str = r#"<div class="match_details">(\d+)<br><span>Losses</span>"#;
+const REGEX_DRAWS: &str = r#"<div class="match_details">(\d+)<br><span>Draws</span>"#;
+const REGEX_MEMBERS: &str = r#"<div>(\d+).?clan.members"#;
+const REGEX_MEMBER_NAME: &str = r#"class=\"username\">([a-zA-Z0-9]+)<\/div>"#;
 
-const KEY_MEMBERSHIP: &'static str = "position_title";
+const KEY_MEMBERSHIP: &str = "position_title";
 
 /// Parse a raw member json request to a vec of Members
 pub fn parse_all_member(input: &str) -> Result<(Vec<Member>, i32), Error> {
@@ -107,10 +107,10 @@ pub fn parse_clan(input: &str) -> Result<Clan, Error> {
     }
 
     let clan = Clan {
-        members: members,
-        wins: wins,
-        losses: losses,
-        draws: draws,
+        members,
+        wins,
+        losses,
+        draws,
     };
     Ok(clan)
 }
@@ -120,7 +120,7 @@ pub fn parse_clan(input: &str) -> Result<Clan, Error> {
 fn get_string_value(input: &mut JsonValue, key: &str) -> Result<String, Error> {
     let mut val = get_value(input, key)?;
     val.take_string()
-        .ok_or(Error::Parser(format!("Value for {} is no string", key)))
+        .ok_or_else(||Error::Parser(format!("Value for {} is no string", key)))
 }
 
 /// Helper function to get a i32 from a provided json object
@@ -128,7 +128,7 @@ fn get_string_value(input: &mut JsonValue, key: &str) -> Result<String, Error> {
 fn get_i32_value(input: &mut JsonValue, key: &str) -> Result<i32, Error> {
     let val = get_value(input, key)?;
     val.as_i32()
-        .ok_or(Error::Parser(format!("Value for {} is no i32", key)))
+        .ok_or_else(||Error::Parser(format!("Value for {} is no i32", key)))
 }
 
 /// Helper function to get a u32 from a provided json object
@@ -137,7 +137,7 @@ fn get_i32_value(input: &mut JsonValue, key: &str) -> Result<i32, Error> {
 fn get_u32_value(input: &mut JsonValue, key: &str) -> Result<u32, Error> {
     let val = get_value(input, key)?;
     val.as_u32()
-        .ok_or(Error::Parser(format!("Value for {} is no u32", key)))
+        .ok_or_else(||Error::Parser(format!("Value for {} is no u32", key)))
 }
 
 /// Helper function to get a json sub-object under the provided key
