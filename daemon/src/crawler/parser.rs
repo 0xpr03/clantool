@@ -28,7 +28,6 @@ const REGEX_WINS: &str = r#"<div class="match_details">(\d+)<br><span>Wins</span
 const REGEX_LOSSES: &str = r#"<div class="match_details">(\d+)<br><span>Losses</span>"#;
 const REGEX_DRAWS: &str = r#"<div class="match_details">(\d+)<br><span>Draws</span>"#;
 const REGEX_MEMBERS: &str = r#"<div>(\d+).?clan.members"#;
-const REGEX_MEMBER_NAME: &str = r#"class=\"username\">([a-zA-Z0-9]+)<\/div>"#;
 
 const KEY_MEMBERSHIP: &str = "position_title";
 

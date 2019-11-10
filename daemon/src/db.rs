@@ -30,7 +30,6 @@ const POOL_MAX_CONN: usize = 100; // maximum amount of running connections per p
 const TABLE_MISSING_DATES: &str = "t_missingdates"; // temporary table used to store missing dates
 const DATE_FORMAT: &str = "%Y-%m-%d";
 const DATETIME_FORMAT: &str = "%Y-%m-%d %H:%M:%S";
-const REGEX_VIEW: &str = r"CREATE (OR REPLACE)? VIEW `([\-_a-zA-Z]+)` AS";
 
 /// Create a new db pool with fixed min-max connections
 pub fn new(
@@ -555,12 +554,12 @@ mod test {
 
     // change these settings to connect to another DB
     // Please note: the TEST_DB has to be empty (no tables)!
-    const TEST_USER: &'static str = "root";
-    const TEST_PASSWORD: &'static str = "root";
-    const TEST_DB: &'static str = "test";
+    const TEST_USER: &str = "root";
+    const TEST_PASSWORD: &str = "root";
+    const TEST_DB: &str = "test";
     const TEST_PORT: u16 = 3306;
-    const TEST_IP: &'static str = "127.0.0.1";
-    const DATETIME_FORMAT: &'static str = "%Y-%m-%d %H:%M:%S";
+    const TEST_IP: &str = "127.0.0.1";
+    const REGEX_VIEW: &str = r"CREATE (OR REPLACE)? VIEW `([\-_a-zA-Z]+)` AS";
 
     /// Cleanup guard for tests removing it's database content afterwards
     struct CleanupGuard {
