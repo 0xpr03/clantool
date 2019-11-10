@@ -120,7 +120,7 @@ pub fn parse_clan(input: &str) -> Result<Clan, Error> {
 fn get_string_value(input: &mut JsonValue, key: &str) -> Result<String, Error> {
     let mut val = get_value(input, key)?;
     val.take_string()
-        .ok_or_else(||Error::Parser(format!("Value for {} is no string", key)))
+        .ok_or_else(|| Error::Parser(format!("Value for {} is no string", key)))
 }
 
 /// Helper function to get a i32 from a provided json object
@@ -128,7 +128,7 @@ fn get_string_value(input: &mut JsonValue, key: &str) -> Result<String, Error> {
 fn get_i32_value(input: &mut JsonValue, key: &str) -> Result<i32, Error> {
     let val = get_value(input, key)?;
     val.as_i32()
-        .ok_or_else(||Error::Parser(format!("Value for {} is no i32", key)))
+        .ok_or_else(|| Error::Parser(format!("Value for {} is no i32", key)))
 }
 
 /// Helper function to get a u32 from a provided json object
@@ -137,7 +137,7 @@ fn get_i32_value(input: &mut JsonValue, key: &str) -> Result<i32, Error> {
 fn get_u32_value(input: &mut JsonValue, key: &str) -> Result<u32, Error> {
     let val = get_value(input, key)?;
     val.as_u32()
-        .ok_or_else(||Error::Parser(format!("Value for {} is no u32", key)))
+        .ok_or_else(|| Error::Parser(format!("Value for {} is no u32", key)))
 }
 
 /// Helper function to get a json sub-object under the provided key

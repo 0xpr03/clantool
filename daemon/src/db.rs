@@ -1195,12 +1195,8 @@ mod test {
         );
         assert_eq!(
             None,
-            get_next_older_date(
-                &mut conn,
-                &correct.succ().and_hms(10, 0, 0),
-                correct.succ()
-            )
-            .unwrap()
+            get_next_older_date(&mut conn, &correct.succ().and_hms(10, 0, 0), correct.succ())
+                .unwrap()
         );
         assert_eq!(
             None,

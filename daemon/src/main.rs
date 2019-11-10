@@ -290,8 +290,7 @@ fn validator_path(input: String) -> Result<(), String> {
 /// Get path for input if possible
 fn get_path_for_existing_file(input: &str) -> Result<PathBuf, String> {
     let path_o = PathBuf::from(input);
-    let path = if path_o.parent().is_some() 
-        && path_o.parent().unwrap().is_dir() {
+    let path = if path_o.parent().is_some() && path_o.parent().unwrap().is_dir() {
         path_o
     } else {
         let mut path_w = std::env::current_dir().unwrap();
@@ -337,7 +336,7 @@ fn run_checkdb(pool: Pool, simulate: bool) -> Result<(), Error> {
 }
 
 /// Initialize timed task
-fn run_timer(pool: Pool, config: Arc<Config>, timer: & timer::Timer) {
+fn run_timer(pool: Pool, config: Arc<Config>, timer: &timer::Timer) {
     let date_time = Local::now(); // get current datetime
     let today = Local::today();
     let target_naive_time = match NaiveTime::parse_from_str(&config.main.time, "%H:%M") {
@@ -374,18 +373,16 @@ fn run_timer(pool: Pool, config: Arc<Config>, timer: & timer::Timer) {
     let a = timer.schedule(
         schedule_time,
         Some(chrono::Duration::hours(INTERVALL_H)),
-        move || if let Err(e) = schedule_crawl_thread(&pool, &*config, retry_time) {
-            error!("Error in crawler thread {}", e);
+        move || {
+            if let Err(e) = schedule_crawl_thread(&pool, &*config, retry_time) {
+                error!("Error in crawler thread {}", e);
+            }
         },
     );
     a.ignore();
 }
 
-fn schedule_crawl_thread(
-    pool: &Pool,
-    config: &Config,
-    retry_time: NaiveTime,
-) -> Result<(), Error> {
+fn schedule_crawl_thread(pool: &Pool, config: &Config, retry_time: NaiveTime) -> Result<(), Error> {
     if let Some(time) = run_update(pool, config, retry_time) {
         debug!("{}", time);
         let mut conn = pool.get_conn()?;
@@ -657,8 +654,7 @@ fn run_update_member(pool: &Pool, config: &Config, time: &NaiveDateTime) -> Resu
             error!("Reaching site {}, aborting.", site);
             return Err(Error::Other("Site over limit."));
         }
-        let raw_members_json =
-            crawler::http::get(&get_member_url(site, config), HeaderType::Ajax)?;
+        let raw_members_json = crawler::http::get(&get_member_url(site, config), HeaderType::Ajax)?;
         let (mut members_temp, t_total) = crawler::parser::parse_all_member(&raw_members_json)?;
         to_receive = t_total as usize;
         members.append(&mut members_temp);

@@ -140,8 +140,7 @@ fn write_config_file(path: &Path, data: &str) -> Result<(), ConfigError> {
 /// Create a new config.
 pub fn default_config() -> String {
     trace!("Creating config..");
-    let toml = 
-r#"[db]
+    let toml = r#"[db]
 user = "user"
 #comment out to login without password
 password = "password"
