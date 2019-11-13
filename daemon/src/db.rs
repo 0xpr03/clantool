@@ -70,6 +70,52 @@ pub fn log_message_opt(conn: &mut PooledConn, message: &str) -> Result<()> {
     Ok(())
 }
 
+/// Updatae unknwon_ts_ids table based on member clients  
+/// Handles known member client_id filtering
+pub fn update_unknown_ts_ids(conn: &mut PooledConn, member_clients: &[usize]) -> Result<()> {
+    create_temp_ts3_table(conn, "t_member_clients")?;
+    {
+        // insert every member client id into temp table
+        let mut stmt = conn.prepare("INSERT INTO `t_member_clients` (`client_id`) VALUES (?)")?;
+        for client in member_clients {
+            stmt.execute((&client,))?;
+        }
+    }
+
+    {
+        // filter everything out that has a member assigned
+        conn.prep_exec("DELETE FROM t1 USING `t_member_clients` t1 INNER JOIN `ts_relation` t2 ON ( t1.client_id = t2.client_id )", ())?;
+    }
+
+    {
+        // truncate unknown ts ids table
+        conn.prep_exec("TRUNCATE `unknown_ts_ids`", ())?;
+    }
+
+    {
+        // replace with correct values
+        conn.prep_exec(
+            "INSERT INTO `unknown_ts_ids` SELECT * FROM `t_member_clients`",
+            (),
+        )?;
+    }
+
+    Ok(())
+}
+
+/// Creates a temporary, single client_id column table with the specified name
+fn create_temp_ts3_table(conn: &mut PooledConn, tbl_name: &'static str) -> Result<()> {
+    let mut stmt = conn.prepare(format!(
+        "CREATE TEMPORARY TABLE `{}` (
+                        `client_id` int(11) NOT NULL PRIMARY KEY
+                        ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+                        ",
+        tbl_name
+    ))?;
+    stmt.execute(())?;
+    Ok(())
+}
+
 /// Insert a Vec of members under the given Timestamp
 /// This does affect table member and member_names
 pub fn insert_members(
@@ -1353,5 +1399,52 @@ mod test {
             let cap_2 = reg.captures(test_2).unwrap();
             assert_eq!("ranked", &cap_2[2]);
         }
+    }
+
+    #[test]
+    fn test_create_temp_ts3_table() {
+        let (mut conn, _guard) = setup_db();
+        create_temp_ts3_table(&mut conn, "temp_table").unwrap();
+    }
+
+    #[test]
+    fn test_update_unknown_ts_ids() {
+        let (mut conn, _guard) = setup_db();
+        {
+            // insert some ids into member ts relation
+            let mut stmt = conn
+                .prepare("INSERT INTO `ts_relation` (`client_id`,`id`) VALUES (?,1)")
+                .unwrap();
+            for i in 0..5 {
+                stmt.execute((i,)).unwrap();
+            }
+        }
+
+        {
+            // insert some "old" values into the table
+            let mut stmt = conn
+                .prepare("INSERT INTO `unknown_ts_ids` (`client_id`) VALUES (?)")
+                .unwrap();
+            for i in 0..10 {
+                stmt.execute((i,)).unwrap();
+            }
+        }
+
+        update_unknown_ts_ids(&mut conn, &vec![2, 3, 4, 5, 6]).unwrap();
+
+        let res = conn
+            .prep_exec(
+                "SELECT client_id FROM `unknown_ts_ids` ORDER BY client_id",
+                (),
+            )
+            .unwrap();
+        let data: Vec<isize> = res
+            .map(|row| {
+                let id = from_row(row.unwrap());
+                id
+            })
+            .collect();
+
+        assert_eq!(data, vec![5, 6]);
     }
 }

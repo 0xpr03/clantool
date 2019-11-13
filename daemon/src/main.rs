@@ -28,6 +28,7 @@ mod crawler;
 mod db;
 mod error;
 mod import;
+mod ts;
 
 use crate::crawler::http::HeaderType;
 
@@ -181,6 +182,12 @@ fn main() {
             let date_format = sub_m.value_of("date-format").unwrap();
             let path = get_path_for_existing_file(sub_m.value_of("file").unwrap()).unwrap();
             import::import_cmd(simulate, membership, comment, date_format, path, &pool);
+        }
+        ("check-ts", _) => {
+            info!("Performing manual ts group check");
+            if let Err(e) = ts::find_unknown_identities(&pool, &config.ts) {
+                error!("Error performing ts group check: {}", e);
+            }
         }
         _ => {
             info!("Entering daemon mode");

@@ -58,6 +58,17 @@ pub enum ConfigError {
 pub struct Config {
     pub db: DBConfig,
     pub main: MainConfig,
+    pub ts: TSConfig,
+}
+
+/// TS config struct
+#[derive(Debug, Deserialize)]
+pub struct TSConfig {
+    pub ip: String,
+    pub port: u16,
+    pub user: String,
+    pub password: String,
+    pub server_port: u16,
 }
 
 /// Main config struct
@@ -147,6 +158,15 @@ password = "password"
 db = "clantool"
 port = 3306
 ip = "127.0.0.1"
+
+[ts]
+ip = "127.0.0.1"
+# query port
+port = 1111
+user = "user"
+password = "password"
+# port of the ts server instance to use
+server_port = 1101
 
 [main]
 clan_ajax_url = "http://crossfire.z8games.com/rest/clanmembers.json?clanID=68910&page=%Page&perPage=10&rankType=user&startrow=%StartRow&endrow=%EndRow"

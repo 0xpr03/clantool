@@ -130,6 +130,10 @@ CREATE TABLE `settings` (
  PRIMARY KEY (`key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE `unknown_ts_ids` (
+  `client_id` int(11) NOT NULL PRIMARY KEY
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 /* module for ranked */
 
 CREATE TABLE `ranks` (

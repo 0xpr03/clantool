@@ -23,6 +23,7 @@ use reqwest;
 use std;
 use std::io;
 use toml;
+use ts3_query;
 
 quick_error! {
     #[derive(Debug)]
@@ -114,6 +115,15 @@ quick_error! {
         Other(descr: &'static str) {
             description(descr)
             display("Error {}", descr)
+        }
+        TSError(err: ts3_query::Ts3Error) {
+            from()
+            display("ts3 error")
+            description(err.description())
+            cause(err)
+        }
+        MissingKey(key: &'static str) {
+            display("Key {} not found in db!",key)
         }
     }
 }

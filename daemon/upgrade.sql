@@ -53,3 +53,11 @@ CREATE TABLE `caution` (
   KEY `from` (`from`),
   KEY `to` (`to`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+/*
+ * Execute on upgrad from 0.3.0
+ * adding TS identity check
+ */
+CREATE TABLE `unknown_ts_ids` (
+  `client_id` int(11) NOT NULL PRIMARY KEY
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
