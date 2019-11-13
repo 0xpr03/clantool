@@ -19,11 +19,11 @@ use mysql::{from_row_opt, Opts, OptsBuilder, Pool, PooledConn, Row, Transaction}
 use regex;
 
 use crate::error::Error;
-
 use crate::import;
 use crate::Clan;
 use crate::LeftMember;
 use crate::Member;
+use crate::Result;
 
 const POOL_MIN_CONN: usize = 1; // minimum amount of running connection per pool
 const POOL_MAX_CONN: usize = 100; // maximum amount of running connections per pool
@@ -38,7 +38,7 @@ pub fn new(
     user: String,
     password: Option<String>,
     db: String,
-) -> Result<Pool, Error> {
+) -> Result<Pool> {
     let mut builder = OptsBuilder::new();
     builder
         .ip_or_hostname(Some(address))
@@ -64,7 +64,7 @@ pub fn log_message(conn: &mut PooledConn, message: &str, error_msg: &str) {
 }
 
 /// Insert log message for current timestamp
-pub fn log_message_opt(conn: &mut PooledConn, message: &str) -> Result<(), Error> {
+pub fn log_message_opt(conn: &mut PooledConn, message: &str) -> Result<()> {
     let mut stmt = conn.prepare("INSERT INTO `log` (`date`,`msg`) VALUES (NOW(),?)")?;
     stmt.execute((message,))?;
     Ok(())
@@ -76,7 +76,7 @@ pub fn insert_members(
     conn: &mut PooledConn,
     members: &[Member],
     timestamp: &NaiveDateTime,
-) -> Result<(), Error> {
+) -> Result<()> {
     {
         let mut stmt =
             conn.prepare("INSERT INTO `member` (`id`,`date`,`exp`,`cp`) VALUES (?,?,?,?)")?;
@@ -107,7 +107,7 @@ pub fn insert_clan_update(
     conn: &mut PooledConn,
     clan: &Clan,
     timestamp: &NaiveDateTime,
-) -> Result<(), Error> {
+) -> Result<()> {
     let mut stmt = conn.prepare(
         "INSERT INTO `clan` (`date`,`wins`,`losses`,`draws`,`members`) VALUES (?,?,?,?,?)",
     )?;
@@ -122,7 +122,7 @@ pub fn insert_missing_entry(
     datetime: &NaiveDateTime,
     conn: &mut PooledConn,
     missing_member: bool,
-) -> Result<(), Error> {
+) -> Result<()> {
     let mut stmt = conn.prepare("INSERT INTO `missing_entries` (`date`,`member`) VALUES (?,?)")?;
     stmt.execute((datetime, missing_member))?;
     Ok(())
@@ -130,7 +130,7 @@ pub fn insert_missing_entry(
 
 /// Retrieves missing dates in the db
 /// for which no entri(es exist
-pub fn get_missing_dates(conn: &mut PooledConn) -> Result<Vec<NaiveDate>, Error> {
+pub fn get_missing_dates(conn: &mut PooledConn) -> Result<Vec<NaiveDate>> {
     // create date lookup table
     create_temp_date_table(conn, "t_dates")?;
     create_temp_date_table(conn, TABLE_MISSING_DATES)?;
@@ -203,7 +203,7 @@ pub fn get_missing_dates(conn: &mut PooledConn) -> Result<Vec<NaiveDate>, Error>
 }
 
 /// Inserts TABLE_MISSING_DATES into `missing_entries`
-pub fn insert_missing_dates(conn: &mut PooledConn) -> Result<(), Error> {
+pub fn insert_missing_dates(conn: &mut PooledConn) -> Result<()> {
     let mut stmt = conn.prepare(format!(
         "
         INSERT INTO `missing_entries` (`date`)
@@ -216,7 +216,7 @@ pub fn insert_missing_dates(conn: &mut PooledConn) -> Result<(), Error> {
 }
 
 /// Creates a temporary, single date column table with the specified name
-fn create_temp_date_table(conn: &mut PooledConn, tbl_name: &'static str) -> Result<(), Error> {
+fn create_temp_date_table(conn: &mut PooledConn, tbl_name: &'static str) -> Result<()> {
     let mut stmt = conn.prepare(format!(
         "CREATE TEMPORARY TABLE `{}` (
                         `date` datetime NOT NULL PRIMARY KEY
@@ -230,7 +230,7 @@ fn create_temp_date_table(conn: &mut PooledConn, tbl_name: &'static str) -> Resu
 
 /// Retrieves the oldest & newest date `clan` & `member` table combined
 /// Returns (min,max) dates as String
-fn get_min_max_date(conn: &mut PooledConn) -> Result<(NaiveDate, NaiveDate), Error> {
+fn get_min_max_date(conn: &mut PooledConn) -> Result<(NaiveDate, NaiveDate)> {
     // full outer join to get all
     let mut stmt = conn.prepare(
         "SELECT MIN(`date`) as min, MAX(`date`) as max FROM (
@@ -252,7 +252,7 @@ fn get_min_max_date(conn: &mut PooledConn) -> Result<(NaiveDate, NaiveDate), Err
 pub fn check_date_for_data(
     conn: &mut PooledConn,
     date: NaiveDate,
-) -> Result<Option<NaiveDateTime>, Error> {
+) -> Result<Option<NaiveDateTime>> {
     let mut stmt = conn.prepare(
         "SELECT `date` FROM member m
     WHERE m.date LIKE ? LIMIT 1",
@@ -275,7 +275,7 @@ pub fn get_next_older_date(
     conn: &mut PooledConn,
     date: &NaiveDateTime,
     min: NaiveDate,
-) -> Result<Option<NaiveDateTime>, Error> {
+) -> Result<Option<NaiveDateTime>> {
     debug!("date: {} min: {}", date, min);
     let mut stmt = conn.prepare(
         "SELECT MAX(m.`date`) as `date` FROM member m
@@ -298,38 +298,35 @@ pub fn get_next_older_date(
 }
 
 /// read entry in settings table as string
-pub fn read_string_setting(conn: &mut PooledConn, key: &str) -> Result<Option<String>, Error> {
+pub fn read_string_setting(conn: &mut PooledConn, key: &str) -> Result<Option<String>> {
+    read_setting::<String>(conn, key)
+}
+
+/// Read setting for generic value
+pub fn read_setting<T>(conn: &mut PooledConn, key: &str) -> Result<Option<T>>
+where
+    T: mysql::prelude::FromValue,
+{
     let mut stmt = conn.prepare("SELECT `value` FROM settings WHERE `key` = ?")?;
     let mut result = stmt.execute((key,))?;
     match result.next() {
         None => Ok(None),
         Some(v) => {
             let row = v?;
-            let value = from_row_opt(row)?;
+            let value: Option<T> = from_row_opt(row)?;
             Ok(value)
         }
     }
 }
 
 /// read entry in settings table as bool
-pub fn read_bool_setting(conn: &mut PooledConn, key: &str) -> Result<Option<bool>, Error> {
-    let mut stmt = conn.prepare("SELECT `value` FROM settings WHERE `key` = ?")?;
-    let mut result = stmt.execute((key,))?;
-    match result.next() {
-        None => Ok(None),
-        Some(v) => {
-            let row = v?;
-            let row: Option<String> = from_row_opt(row)?;
-            if let Some(v) = row {
-                Ok(Some(match v.as_str() {
-                    "1" | "true" => true,
-                    _ => false,
-                }))
-            } else {
-                Ok(None)
-            }
-        }
-    }
+pub fn read_bool_setting(conn: &mut PooledConn, key: &str) -> Result<Option<bool>> {
+    read_setting::<String>(conn, key).map(|v| {
+        v.map(|s| match s.as_str() {
+            "1" | "true" => true,
+            _ => false,
+        })
+    })
 }
 
 /// Get left members from difference betweeen date1 & date2
@@ -338,7 +335,7 @@ pub fn get_member_left(
     conn: &mut PooledConn,
     date1: &NaiveDateTime,
     date2: &NaiveDateTime,
-) -> Result<Vec<LeftMember>, Error> {
+) -> Result<Vec<LeftMember>> {
     if date1 >= date2 {
         return Err(Error::Other("invalid input, date1 < date2 expected!"));
     }
@@ -397,7 +394,7 @@ pub fn insert_member_leave(
     ms_nr: i32,
     date_leave: NaiveDate,
     cause: &str,
-) -> Result<(u64), Error> {
+) -> Result<(u64)> {
     let trial_affected;
     {
         let mut stmt = conn.prepare("UPDATE `membership` SET `to` = ? WHERE `nr` = ?")?;
@@ -424,10 +421,7 @@ impl<'a> ImportAccountInserter<'a> {
     /// New Import Account Inserter
     /// comment_addition: appended to comment on insertion (`imported account`)
     /// date_name_insert: date to use for name insertion & update field
-    pub fn new(
-        pool: &'a Pool,
-        comment_addition: &'a str,
-    ) -> Result<ImportAccountInserter<'a>, Error> {
+    pub fn new(pool: &'a Pool, comment_addition: &'a str) -> Result<ImportAccountInserter<'a>> {
         Ok(ImportAccountInserter {
             transaction: pool.start_transaction(false, None, None)?,
             comment_addition,
@@ -435,7 +429,7 @@ impl<'a> ImportAccountInserter<'a> {
     }
 
     /// Commit account import
-    pub fn commit(self) -> Result<(), Error> {
+    pub fn commit(self) -> Result<()> {
         self.transaction.commit()?;
         Ok(())
     }
@@ -447,10 +441,7 @@ impl<'a> ImportAccountInserter<'a> {
 
     /// Insert account data
     /// return total amount memberships,inserted for account
-    pub fn insert_account(
-        &mut self,
-        acc: &import::ImportMembership,
-    ) -> Result<(usize, usize), Error> {
+    pub fn insert_account(&mut self, acc: &import::ImportMembership) -> Result<(usize, usize)> {
         self.transaction.prep_exec(
             "INSERT IGNORE INTO `member_names` (`id`,`name`,`date`,`updated`) VALUES (?,?,?,?)",
             (acc.id, &acc.name, acc.date_name, acc.date_name),
@@ -491,7 +482,7 @@ impl<'a> ImportAccountInserter<'a> {
 
 /// Initialize tables on first try, error if existing
 /// Undos everything on failure
-pub fn init_tables(pool: &Pool) -> Result<(), Error> {
+pub fn init_tables(pool: &Pool) -> Result<()> {
     let tables = get_db_create_sql();
 
     let mut transaction = pool.start_transaction(false, None, None)?;
@@ -598,7 +589,7 @@ mod test {
     /// Setup db tables, does crash if tables are existing
     /// Created as temporary if specified, using the u32 as name suffix: myTable{},u32
     /// Returns all table names which got created
-    fn setup_tables(pool: Pool) -> Result<CleanupGuard, Error> {
+    fn setup_tables(pool: Pool) -> Result<CleanupGuard> {
         let tables = get_db_create_sql();
         let reg_tables = regex::Regex::new(r"CREATE TABLE `([\-_a-zA-Z]+)` \(").unwrap();
         let reg_views = regex::Regex::new(REGEX_VIEW).unwrap();

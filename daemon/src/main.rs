@@ -67,11 +67,13 @@ const DATE_FORMAT_DAY: &str = "%Y-%m-%d";
 
 const LEAVE_MSG_KEY: &str = "auto_leave_message";
 const LEAVE_ENABLE_KEY: &str = "auto_leave_enable";
-#[allow(dead_code)]
-const TS3_REMOVAL_KEY: &str = "ts3_removal_enable";
-#[allow(dead_code)]
-const TS3_WHITELIST_KEY: &str = "ts3_whitelist";
+/// Check for unknown identities in member group
+const TS3_REMOVAL_KEY: &str = "ts3_check_identities_enable";
+const TS3_MEMBER_GROUP: &str = "ts3_check_member_group";
 
+pub type Result<T> = ::std::result::Result<T, Error>;
+
+#[allow(clippy::cognitive_complexity)]
 fn main() {
     match init_log() {
         Err(e) => println!("Error on config initialization: {}", e),
@@ -83,66 +85,7 @@ fn main() {
     let pool = init_db(&config, Dur::from_secs(60 * 10));
     let timer = timer::Timer::new();
 
-    let app = App::new("Clantool")
-                    .version(VERSION)
-                    .author("Aron Heinecke <aron.heinecke@t-online.de>")
-                    .about("Gathers statistics about CF-NA clans. Starts as daemon per default")
-                    .subcommand(SubCommand::with_name("fcrawl")
-                        .about("force run crawl & exit, no leave detection"))
-                    .subcommand(SubCommand::with_name("mail-test")
-                        .about("Test mail sending")
-                        /*.arg(Arg::with_name("mail")
-                            .help("Required mail address")
-                            .takes_value(true)
-                            .required(true))
-                        */    )
-                    .subcommand(SubCommand::with_name("printconfig")
-                        .about("Print configuration settings in the Database"))
-                    .subcommand(SubCommand::with_name("init")
-                        .about("Initialize database on first execution"))
-                    .subcommand(SubCommand::with_name("import")
-                        .about("Import CSV data, expects id,name,vname,vip,comment\nThe first line has to be a header.")
-                        .arg(Arg::with_name("file")
-                            .required(true)
-                            .short("f")
-                            .validator(validator_path)
-                            .takes_value(true)
-                            .help("file to parse"))
-                        .arg(Arg::with_name("simulate")
-                            .short("s")
-                            .help("simulation mode, leaves DB unchanged"))
-                        .arg(Arg::with_name("comment")
-                            .short("c")
-                            .default_value(&import::DEFAULT_IMPORT_COMMENT)
-                            .takes_value(true)
-                            .help("file to parse"))
-                        .arg(Arg::with_name("date-format")
-                            .short("d")
-                            .default_value(import::DATE_DEFAULT_FORMAT)
-                            .takes_value(true)
-                            .help("date parse format")))
-                    .subcommand(SubCommand::with_name("check-leave")
-                        .about("Manually run leave detection for given date")
-                        .arg(Arg::with_name("date")
-                            .required(true)
-                            .validator(validator_date)
-                            .takes_value(true)
-                            .help("date to check for: 'YYYY-MM-DD'"))
-                        .arg(Arg::with_name("message")
-                            .short("m")
-                            .long("message")
-                            .takes_value(true)
-                            .help("custom leave message to use"))
-                        .arg(Arg::with_name("simulate")
-                            .short("s")
-                            .long("simulate")
-                            .help("Don't enter leaves, just print them")))
-                    .subcommand(SubCommand::with_name("checkdb")
-                        .about("checks DB for missing entries or doubles and corrects those")
-                        .arg(Arg::with_name("simulate")
-                            .short("s")
-                            .help("simulation mode, leaves DB unchanged")))
-                    .get_matches();
+    let app = cli().get_matches();
 
     match app.subcommand() {
         ("checkdb", Some(sub_m)) => {
@@ -249,6 +192,70 @@ fn main() {
     }
 }
 
+fn cli<'a, 'b>() -> clap::App<'a, 'b> {
+    App::new("Clantool")
+        .version(VERSION)
+        .author("Aron Heinecke <aron.heinecke@t-online.de>")
+        .about("Gathers statistics about CF-NA clans. Starts as daemon per default")
+        .subcommand(SubCommand::with_name("fcrawl")
+            .about("force run crawl & exit, no leave detection"))
+        .subcommand(SubCommand::with_name("mail-test")
+            .about("Test mail sending")
+            /*.arg(Arg::with_name("mail")
+                .help("Required mail address")
+                .takes_value(true)
+                .required(true))
+            */    )
+        .subcommand(SubCommand::with_name("check-ts")
+            .about("Manually check ts identities for unknown member IDs"))
+        .subcommand(SubCommand::with_name("printconfig")
+            .about("Print configuration settings in the Database"))
+        .subcommand(SubCommand::with_name("init")
+            .about("Initialize database on first execution"))
+        .subcommand(SubCommand::with_name("import")
+            .about("Import CSV data, expects id,name,vname,vip,comment\nThe first line has to be a header.")
+            .arg(Arg::with_name("file")
+                .required(true)
+                .short("f")
+                .validator(validator_path)
+                .takes_value(true)
+                .help("file to parse"))
+            .arg(Arg::with_name("simulate")
+                .short("s")
+                .help("simulation mode, leaves DB unchanged"))
+            .arg(Arg::with_name("comment")
+                .short("c")
+                .default_value(&import::DEFAULT_IMPORT_COMMENT)
+                .takes_value(true)
+                .help("file to parse"))
+            .arg(Arg::with_name("date-format")
+                .short("d")
+                .default_value(import::DATE_DEFAULT_FORMAT)
+                .takes_value(true)
+                .help("date parse format")))
+        .subcommand(SubCommand::with_name("check-leave")
+            .about("Manually run leave detection for given date")
+            .arg(Arg::with_name("date")
+                .required(true)
+                .validator(validator_date)
+                .takes_value(true)
+                .help("date to check for: 'YYYY-MM-DD'"))
+            .arg(Arg::with_name("message")
+                .short("m")
+                .long("message")
+                .takes_value(true)
+                .help("custom leave message to use"))
+            .arg(Arg::with_name("simulate")
+                .short("s")
+                .long("simulate")
+                .help("Don't enter leaves, just print them")))
+        .subcommand(SubCommand::with_name("checkdb")
+            .about("checks DB for missing entries or doubles and corrects those")
+            .arg(Arg::with_name("simulate")
+                .short("s")
+                .help("simulation mode, leaves DB unchanged")))
+}
+
 fn init_db(config: &Config, retry_timeout: Dur) -> Pool {
     let sleep_time = match retry_timeout.as_secs() / 10 {
         x if x < 10 => 5,
@@ -280,7 +287,7 @@ fn init_db(config: &Config, retry_timeout: Dur) -> Pool {
 }
 
 /// validate path input
-fn validator_path(input: String) -> Result<(), String> {
+fn validator_path(input: String) -> ::std::result::Result<(), String> {
     match get_path_for_existing_file(&input) {
         Ok(_) => Ok(()),
         Err(e) => Err(e),
@@ -288,7 +295,7 @@ fn validator_path(input: String) -> Result<(), String> {
 }
 
 /// Get path for input if possible
-fn get_path_for_existing_file(input: &str) -> Result<PathBuf, String> {
+fn get_path_for_existing_file(input: &str) -> ::std::result::Result<PathBuf, String> {
     let path_o = PathBuf::from(input);
     let path = if path_o.parent().is_some() && path_o.parent().unwrap().is_dir() {
         path_o
@@ -310,7 +317,7 @@ fn get_path_for_existing_file(input: &str) -> Result<PathBuf, String> {
 }
 
 /// verify date input of YYYY-MM-DD
-fn validator_date(input: String) -> Result<(), String> {
+fn validator_date(input: String) -> ::std::result::Result<(), String> {
     match NaiveDate::parse_from_str(&input, DATE_FORMAT_DAY) {
         Ok(_) => Ok(()),
         Err(e) => Err(format!("Invalid date input: {}", e)),
@@ -318,7 +325,7 @@ fn validator_date(input: String) -> Result<(), String> {
 }
 
 /// Check DB for missing entries
-fn run_checkdb(pool: Pool, simulate: bool) -> Result<(), Error> {
+fn run_checkdb(pool: Pool, simulate: bool) -> Result<()> {
     let mut conn = pool.get_conn()?;
     let missing_dates = db::get_missing_dates(&mut conn)?;
 
@@ -382,7 +389,7 @@ fn run_timer(pool: Pool, config: Arc<Config>, timer: &timer::Timer) {
     a.ignore();
 }
 
-fn schedule_crawl_thread(pool: &Pool, config: &Config, retry_time: NaiveTime) -> Result<(), Error> {
+fn schedule_crawl_thread(pool: &Pool, config: &Config, retry_time: NaiveTime) -> Result<()> {
     if let Some(time) = run_update(pool, config, retry_time) {
         debug!("{}", time);
         let mut conn = pool.get_conn()?;
@@ -616,11 +623,7 @@ fn send_mail(config: &Config, subject: &str, message: &str) {
 
 /// wrapper to write missing date
 /// allowing for error return
-fn write_missing(
-    timestamp: &NaiveDateTime,
-    pool: &Pool,
-    missing_member: bool,
-) -> Result<(), Error> {
+fn write_missing(timestamp: &NaiveDateTime, pool: &Pool, missing_member: bool) -> Result<()> {
     db::insert_missing_entry(timestamp, &mut pool.get_conn()?, missing_member)?;
     Ok(())
 }
@@ -643,7 +646,7 @@ fn get_member_url(site: u8, config: &Config) -> String {
 }
 
 /// run member data crawl & update
-fn run_update_member(pool: &Pool, config: &Config, time: &NaiveDateTime) -> Result<(), Error> {
+fn run_update_member(pool: &Pool, config: &Config, time: &NaiveDateTime) -> Result<()> {
     trace!("run_update_member");
     let mut site = 0;
     let mut members = Vec::new();
@@ -666,7 +669,7 @@ fn run_update_member(pool: &Pool, config: &Config, time: &NaiveDateTime) -> Resu
 }
 
 /// run clan crawl & update
-fn run_update_clan(pool: &Pool, config: &Config, time: &NaiveDateTime) -> Result<(), Error> {
+fn run_update_clan(pool: &Pool, config: &Config, time: &NaiveDateTime) -> Result<()> {
     trace!("run_update_clan");
     let raw_http_clan = crawler::http::get(&config.main.clan_url, HeaderType::Html)?;
     let clan = crawler::parser::parse_clan(&raw_http_clan)?;
@@ -676,7 +679,7 @@ fn run_update_clan(pool: &Pool, config: &Config, time: &NaiveDateTime) -> Result
 
 /// Init log system
 /// Creating a default log file if not existing
-fn init_log() -> Result<(), Error> {
+fn init_log() -> Result<()> {
     let mut log_path = get_executable_folder()?;
     log_path.push(LOG_PATH);
     let mut log_dir = log_path.clone();
@@ -694,7 +697,7 @@ fn init_log() -> Result<(), Error> {
 }
 
 /// Returns the current executable folder
-pub fn get_executable_folder() -> Result<std::path::PathBuf, Error> {
+pub fn get_executable_folder() -> Result<std::path::PathBuf> {
     let mut folder = current_exe()?;
     folder.pop();
     Ok(folder)
