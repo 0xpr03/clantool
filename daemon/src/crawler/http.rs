@@ -62,6 +62,7 @@ fn header(htype: HeaderType) -> HeaderMap {
     headers.insert(ACCEPT_LANGUAGE, "en-US,en;q=0.5".parse().unwrap());
     headers.insert(USER_AGENT, UA.parse().unwrap());
     headers.insert(REFERER, REF.parse().unwrap());
+    headers.insert(CACHE_CONTROL, "max-age=0".parse().unwrap());
 
     match htype {
         HeaderType::Html => {
@@ -112,5 +113,12 @@ mod test {
     fn get_ajax_z8() {
         let b_ajax = get("http://crossfire.z8games.com/clan/1", HeaderType::Ajax).unwrap();
         assert!(b_ajax.contains("Clan1"));
+    }
+
+    #[test]
+    fn get_ajax_z8_member() {
+        let b_ajax = get("http://crossfire.z8games.com/rest/clanmembers.json?clanID=68910&page=1&perPage=10&rankType=user", HeaderType::Ajax).unwrap();
+        assert!(b_ajax.contains("Dr.Alptraum"));
+        println!("{}",b_ajax);
     }
 }

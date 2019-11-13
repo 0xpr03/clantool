@@ -191,8 +191,8 @@ mod test {
         let mem_thomas = Member {
             name: String::from("Dr.Alptraum"),
             id: 9926942,
-            exp: 10826457,
-            contribution: 6830,
+            exp: 14444738,
+            contribution: 9639,
         };
         assert_eq!(output, Some(mem_thomas));
     }
