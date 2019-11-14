@@ -119,6 +119,6 @@ mod test {
     fn get_ajax_z8_member() {
         let b_ajax = get("http://crossfire.z8games.com/rest/clanmembers.json?clanID=68910&page=1&perPage=10&rankType=user", HeaderType::Ajax).unwrap();
         assert!(b_ajax.contains("Dr.Alptraum"));
-        println!("{}",b_ajax);
+        println!("{}", b_ajax);
     }
 }
