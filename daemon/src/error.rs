@@ -118,11 +118,12 @@ quick_error! {
         }
         TSError(err: ts3_query::Ts3Error) {
             from()
-            display("ts3 error")
+            display("ts3 error: {}",err)
             description(err.description())
             cause(err)
         }
         MissingKey(key: &'static str) {
+            description("Required settings key not found in db")
             display("Key {} not found in db!",key)
         }
     }
