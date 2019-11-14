@@ -71,12 +71,13 @@ pub fn log_message_opt(conn: &mut PooledConn, message: &str) -> Result<()> {
 }
 
 /// Updatae unknwon_ts_ids table based on member clients  
-/// Handles known member client_id filtering
+/// Handles known member client_id filtering  
+/// Allows doubled group IDs in member_clients
 pub fn update_unknown_ts_ids(conn: &mut PooledConn, member_clients: &[usize]) -> Result<()> {
     create_temp_ts3_table(conn, "t_member_clients")?;
     {
-        // insert every member client id into temp table
-        let mut stmt = conn.prepare("INSERT INTO `t_member_clients` (`client_id`) VALUES (?)")?;
+        // insert every member client id into temp table, ignore multi-group clients
+        let mut stmt = conn.prepare("INSERT IGNORE INTO `t_member_clients` (`client_id`) VALUES (?)")?;
         for client in member_clients {
             stmt.execute((&client,))?;
         }
@@ -341,6 +342,27 @@ pub fn get_next_older_date(
             Ok(value)
         }
     }
+}
+
+/// Read a settings entry consisting of multiple values, comma separated
+///
+/// Note that a from() conversion for crate::Error has to exist for the from_str implemention error type
+pub fn read_list_setting<T: ::std::str::FromStr>(
+    conn: &mut PooledConn,
+    key: &str,
+) -> Result<Option<Vec<T>>>
+where
+    crate::error::Error: std::convert::From<<T as std::str::FromStr>::Err>,
+{
+    let raw = read_string_setting(conn, key)?;
+    if let Some(v) = raw {
+        let values: Vec<T> = v
+            .split(',')
+            .map(|v| T::from_str(v.trim()))
+            .collect::<::std::result::Result<Vec<_>, _>>()?;
+        return Ok(Some(values));
+    }
+    Ok(None)
 }
 
 /// read entry in settings table as string
@@ -1430,7 +1452,8 @@ mod test {
             }
         }
 
-        update_unknown_ts_ids(&mut conn, &vec![2, 3, 4, 5, 6]).unwrap();
+        // include double ids, allows two relevant groups for same client
+        update_unknown_ts_ids(&mut conn, &vec![2, 3, 6, 4, 5, 6]).unwrap();
 
         let res = conn
             .prep_exec(
