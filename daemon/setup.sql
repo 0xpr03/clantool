@@ -138,6 +138,11 @@ CREATE TABLE `ignore_ts_ids` (
   `client_id` int(11) NOT NULL PRIMARY KEY
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE OR REPLACE VIEW `unknown_ts_unignored` AS
+SELECT `t`.`client_id` from `unknown_ts_ids` t where `t`.`client_id` NOT IN (
+    select `ignore_ts_ids`.`client_id` from `ignore_ts_ids`
+);
+
 /* module for ranked */
 
 CREATE TABLE `ranks` (
