@@ -56,6 +56,7 @@ pub enum CrawlerError {
 }
 
 pub fn schedule_crawler(pool: Pool) -> Result<()> {
+    trace!("Scheduling crawler");
     let ids = db::get_current_member_ids(&pool).context(DBError)?;
     debug!("Found {} USNs", ids.len());
 

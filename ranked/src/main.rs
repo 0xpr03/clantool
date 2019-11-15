@@ -111,11 +111,15 @@ fn _main() -> Result<()> {
         today.and_time(config.main.hour).unwrap()
     };
 
+    debug!("First update: {}",schedule_time);
+
     let timer = timer::Timer::new();
 
     let cache_c = cache.clone();
     let _a = timer.schedule(
+        // chrono::Local::now() - chrono::Duration::seconds(5),
         schedule_time,
+        // Some(chrono::Duration::seconds(20)),
         Some(chrono::Duration::hours(INTERVALL_H)),
         move || match crawler::schedule_crawler(pool.clone()) {
             Err(e) => error!("Error in crawler thread {}", e),
