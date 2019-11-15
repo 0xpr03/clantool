@@ -1818,7 +1818,7 @@ function getMemberDetailView() { ?>
         
     function formatNameEntry(name,date) {
         return '<tr><td>'
-            + name + '</td><td>'+ date
+            + escapeHtml(name) + '</td><td>'+ date
             + '</tr>';
     }
     
@@ -1826,7 +1826,7 @@ function getMemberDetailView() { ?>
         return '<li class="list-group-item" id="'+CAUTION_ENTRY+from+'">'
             + '<a href="#" class="critical" data-from="'+from+'" data-to="'+to+'" style="float: right;"> <i class="fas fa-trash"></i> Delete</a>'
             + from + ' - ' + to + '<br>'
-            + cause
+            + escapeHtml(cause)
             + '</li>';
     }
     
@@ -1834,18 +1834,18 @@ function getMemberDetailView() { ?>
         return '<li class="list-group-item" id="'+AFK_ENTRY+from+'-'+to+'">'
             + '<a href="#" style="float: right; margin-left: 2em;" data-action="'+actionEdit+'" data-from="'
             + from + '" data-to="' + to +'" data-cause="'
-            + escapeHtml(cause)+'">'
+            + escapeHtml(cause) +'">'
             + '<i class="fas fa-pencil-alt"></i> Edit </a>'
             + '<a href="#" class="critical" data-action="'+actionDelete+'" data-from="'+from+'" data-to="'+to+'" style="float: right;"> <i class="fas fa-trash"></i> Delete</a>'
             + from + ' - ' + to + '<br>'
-            + cause
+            + escapeHtml(cause)
             + '</li>';
     }
     
     function formatTS3Entry(name,id) {
         return '<li class="list-group-item" id="'+TS3_ENTRY+id+'">'
             + '<a href="#" class="critical" data-id="'+id+'" style="float: right;"> <i class="fas fa-trash"></i> Remove</a>'
-            + name
+            + escapeHtml(name)
             + '</li>';
     }
     
@@ -1855,7 +1855,7 @@ function getMemberDetailView() { ?>
             vname = name;
         return '<li class="list-group-item" id="accs-'+id+'">'
             + '<a href="#" class="critical" data-id="'+id+'" style="float: right;"> <i class="fas fa-trash"></i> Remove</a>'
-            + vname +' ('+formatMemberDetailLink(id,id)+')'
+            + escapeHtml(vname) +' ('+formatMemberDetailLink(id,id)+')'
             + '</li>';
     }    
     
