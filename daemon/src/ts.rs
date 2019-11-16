@@ -2,17 +2,16 @@ use crate::config::TSConfig;
 use crate::db;
 use crate::error::Error;
 use crate::Result;
-use mysql::Pool;
-use ts3_query::*;
+use mysql::{Pool, PooledConn};
 use std::thread::sleep;
 use std::time::Duration;
+use ts3_query::*;
 
 /// Check for unknown identities with member group and update unknown_ts_ids
 pub fn find_unknown_identities(pool: &Pool, ts_cfg: &TSConfig) -> Result<()> {
     dbg!(&ts_cfg);
     let mut conn = pool.get_conn()?;
-    let group_ids: Vec<usize> = db::read_list_setting(&mut conn, crate::TS3_MEMBER_GROUP)?
-        .ok_or(Error::MissingKey(crate::TS3_MEMBER_GROUP))?;
+    let group_ids = get_ts3_member_groups(&mut conn)?;
 
     trace!("TS3 group IDS: {:?}", group_ids);
     trace!("Connect ts3");
@@ -32,4 +31,10 @@ pub fn find_unknown_identities(pool: &Pool, ts_cfg: &TSConfig) -> Result<()> {
     }
     db::update_unknown_ts_ids(&mut conn, &ids)?;
     Ok(())
+}
+
+/// Get ts3 member groups settings
+pub fn get_ts3_member_groups(conn: &mut PooledConn) -> Result<Vec<usize>> {
+    Ok(db::read_list_setting(conn, crate::TS3_MEMBER_GROUP)?
+        .ok_or(Error::MissingKey(crate::TS3_MEMBER_GROUP))?)
 }

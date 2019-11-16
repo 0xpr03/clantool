@@ -68,8 +68,8 @@ const DATE_FORMAT_DAY: &str = "%Y-%m-%d";
 const LEAVE_MSG_KEY: &str = "auto_leave_message";
 const LEAVE_ENABLE_KEY: &str = "auto_leave_enable";
 /// Check for unknown identities in member group
-const TS3_REMOVAL_KEY: &str = "ts3_check_identities_enable";
-const TS3_MEMBER_GROUP: &str = "ts3_check_member_group";
+const TS3_UNKNOWN_CHECK_KEY: &str = "ts3_check_identities_enable";
+const TS3_MEMBER_GROUP: &str = "ts3_check_member_groups";
 
 pub type Result<T> = ::std::result::Result<T, Error>;
 
@@ -123,6 +123,14 @@ fn main() {
             info!(
                 "Auto Leave check: {}",
                 get_leave_detection_enabled(&mut conn, &local_config)
+            );
+            info!(
+                "TS3 member groups: {:?}",
+                ts::get_ts3_member_groups(&mut conn).unwrap()
+            );
+            info!(
+                "TS3 unknown IDs check: {}",
+                get_ts3_check_enabled(&mut conn, &local_config)
             );
         }
         ("mail-test", _) => {
@@ -416,6 +424,20 @@ fn schedule_crawl_thread(pool: &Pool, config: &Config, retry_time: NaiveTime) ->
                 "unable to log message",
             );
         }
+
+        if get_ts3_check_enabled(&mut conn, config) {
+            debug!("Unknown-ts-identity-check enabled");
+            if let Err(e) = ts::find_unknown_identities(&pool, &config.ts) {
+                error!("Error performing ts group check: {}", e);
+            }
+        } else {
+            info!("Unknown-ts-identity-check disabled, skipping");
+            db::log_message(
+                &mut conn,
+                "Unknown-ts-identity-check disabled.",
+                "unable to log message",
+            );
+        }
     }
     Ok(())
 }
@@ -443,6 +465,18 @@ fn get_leave_detection_enabled(conn: &mut PooledConn, config: &Config) -> bool {
         Err(e) => {
             error!("Error retrieving leave setting {}", e);
             config.main.auto_leave_enabled
+        }
+    }
+}
+
+/// Read ts3 unknown identity settings from DB
+fn get_ts3_check_enabled(conn: &mut PooledConn, config: &Config) -> bool {
+    match db::read_bool_setting(conn, TS3_UNKNOWN_CHECK_KEY) {
+        Ok(Some(v)) => v,
+        Ok(None) => config.ts.unknown_id_check_enabled,
+        Err(e) => {
+            error!("Error retrieving unknown-ts check setting {}", e);
+            config.ts.unknown_id_check_enabled
         }
     }
 }

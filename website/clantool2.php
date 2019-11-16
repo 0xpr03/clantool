@@ -68,8 +68,8 @@ define('PERM_CLANTOOL_TEST','clantoolTest');
 // db keys, read by backend
 define('KEY_AUTO_LEAVE', 'auto_leave_enable');
 define('KEY_LEAVE_CAUSE','auto_leave_message');
-define('KEY_TS3_REMOVE','ts3_removal_enable');
-define('KEY_TS3_WHITELIST','ts3_whitelist');
+define('KEY_TS3_CHECK','ts3_check_identities_enable');
+define('KEY_TS3_MEMBER_GROUPS','ts3_check_member_groups');
 
 function getContent() {
     getCTTemplate();
@@ -123,9 +123,10 @@ function getCTTemplate() {
             <?=generateViewLink('database','fas fa-server fa-lg','Status')?>
             <?=generateViewLink('log','far fa-list-alt fa-lg','System Log')?>
             <?=generateViewLink('settings','fas fa-sliders-h fa-lg','System Settings')?>
+            <?=generateViewLink('tsIdentity','fas fa-question-circle fa-lg','TS3 Ident')?>
             <?php
             if(hasPermission(PERM_CLANTOOL_TEST)) { // alpha/beta views
-                //echo generateViewLink('general','fas fa-chart-bar fa-lg','General');
+                //echo generateViewLink('tsIdentity','fas fa-list-ol fa-lg','TS3 Ident');
             }?>
         </ul>
     </div>
@@ -178,6 +179,9 @@ function getCTTemplate() {
                 break;
             case 'settings':
                 getSettingsView();
+                break;
+            case 'tsIdentity':
+                getTsIdentityView();
                 break;
             default:
                 $ok_view = false;
@@ -532,8 +536,8 @@ function getAjax(){
                 echo json_encode(
                     array(
                         'leave-cause' => $clanDB->getSetting(KEY_LEAVE_CAUSE),
-                        'ts3-removal' => $clanDB->getSetting(KEY_TS3_REMOVE),
-                        'ts3-whitelist' => $clanDB->getSetting(KEY_TS3_WHITELIST),
+                        'ts3-check' => $clanDB->getSetting(KEY_TS3_CHECK),
+                        'ts3-member-groups' => $clanDB->getSetting(KEY_TS3_MEMBER_GROUPS),
                         'leave-detection' => $clanDB->getSetting(KEY_AUTO_LEAVE),
                     )
                 );
@@ -541,8 +545,8 @@ function getAjax(){
             case 'settings-set':
                 // manually to disallow sender dictating key names
                 $clanDB->setSetting(KEY_LEAVE_CAUSE,$_POST['leave-cause']);
-                $clanDB->setSetting(KEY_TS3_REMOVE,isset($_POST['ts3-removal']));
-                $clanDB->setSetting(KEY_TS3_WHITELIST,$_POST['ts3-whitelist']);
+                $clanDB->setSetting(KEY_TS3_CHECK,isset($_POST['ts3-check']));
+                $clanDB->setSetting(KEY_TS3_MEMBER_GROUPS,$_POST['ts3-member-groups']);
                 $clanDB->setSetting(KEY_AUTO_LEAVE,isset($_POST['leave-detection']));
                 
                 echo json_encode(true);
@@ -754,6 +758,12 @@ function getAjax(){
                 
                 echo json_encode($res);
                 break;
+            case 'has-ts3-unknown-identities':
+                echo json_encode($clanDB->hasUnknownTs3IDs());
+                break;
+            case 'ts3-unknown-identities':
+                echo json_encode($clanDB->getUnknownTSIdentities());
+                break;
             case 'add-afk':
                 $cause = $_POST['cause']; // NO break!
             case 'delete-afk':
@@ -785,8 +795,14 @@ function getAjax(){
                 $clanDB->editAFK($id,$from,$to,$fromNew,$toNew,$cause);
                 echo json_encode(array('from' => $fromNew, 'to' => $toNew, 'cause' => $cause));
                 break;
+            case 'ignore-ts3-id':
+                $clanDB->ignoreTS3Identity($_POST['tsID']);
+                echo json_encode(true);
+                break;
             case 'add-ts3-relation':
+                $clanDB->startTransaction();
                 $clanDB->insertTSRelation($_POST['id'],$_POST['tsID']);
+                $clanDB->endTransaction();
                 echo json_encode(array('tsID' => $_POST['tsID'],'name' => $_POST['name']));
                 break;
             case 'remove-ts3-relation':
@@ -1058,6 +1074,133 @@ function getAjax(){
             echo 'Case not found!';
             break;
     }
+}
+
+function getTsIdentityView() { ?>
+    <h3>Unknown TS Identities</h3>
+    Die folgenden Identitäten haben Member-Status, gehören aber zu keiner Member-Kartei!
+    <div id="error" style="display: none;" class="alert alert-danger fade in"></div>
+    <div id="loading" style="position: fixed; display: none;z-index: 10; background: rgba(255,255,255,0.5); width: 100%; height: 100%;">
+        <div style="position: fixed; left: 50%; top: 50%;">
+            <i class="fas fa-spinner fa-pulse fa-3x"></i><br>
+            <div id="loading-content">Loading...</div>
+        </div>
+    </div>
+    <ul id="ts_identities" class="list-group">
+    <li class="list-group-item list-group-item-disabled">Loading..</li>
+    </ul>
+    <script type="text/javascript">
+    $(document).ready(function() {
+        $.ajax({
+            url: URL,
+            type: 'get',
+            dataType: "json",
+            data: {
+                'site' : VAR_SITE,
+                'ajaxCont' : 'data',
+                'type' : 'ts3-unknown-identities',
+            }
+        }).done(function(data){
+            renderData(data);
+            $('#loading').hide();
+            $('#error').hide();
+        }).fail(function(data){
+            $('#error').html(formatErrorData(data));
+            $('#error').show();
+            $('#loading').hide();
+        });
+        /*let data = [{'name': "asd",'id': 12345},{'name': "fgh", 'id': 2345},{'name': "jkl", 'id': 34567}];
+        renderData(data);*/
+    });
+    function renderData(data) {
+        var elements = "";
+        
+        for(var i = 0; i < data.length; i++) {
+            let elem = data[i];
+            elements += formatIdentity(elem);
+        }
+        $('#ts_identities').html(elements);
+        $('.accountSelector').each(function (i,obj) {
+            accountSelect($(obj));
+        });
+        $('.addAccountForm').submit(function (e) {
+            e.preventDefault();
+            console.log(e);
+            handleAccountAdd(e.target.getAttribute('data-cid'));
+        });
+        $('.addIgnore').submit(function (e) {
+            e.preventDefault();
+            console.log(e);
+            handleIgnore(e.target.getAttribute('data-cid'));
+        });
+    }
+    
+    function formatIdentity(elem) {
+        return '<li class="list-group-item" id="li-'+elem.id+'">'
+            + '<h4 class="list-group-item-heading">' + escapeHtml(elem.name) + '</h4>'
+            + `<form class="form-horizontal addAccountForm" data-cid="`+elem.id+`" action="" method="post">
+                <div class="form-group">
+                    <label for="inputAccount" class="control-label col-xs-2">Add to account</label>
+                    <div class="col-xs-10">
+                        <select class="form-control accountSelector" name="id" required=""
+                            id="accountSelect`+elem.id+`" >
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                            <div class="col-xs-offset-2 col-xs-10">
+                    <button class="btn btn-primary" type="submit">Add to account</button>
+                            </div>
+                </div>
+               </form>`
+            + '<button data-cid="'+elem.id+'" class="btn btn-warning addIgnore">Ignore TS Identity</button>'
+            + '</li>';
+    }
+    
+    function handleIgnore(cid) {
+        $.ajax({
+            url: URL,
+            type: 'post',
+            dataType: "json",
+            data: {
+                'site' : VAR_SITE,
+                'ajaxCont' : 'data',
+                'type' : 'ignore-ts3-id',
+                'tsID' : cid,
+            }
+        }).done(function(data){
+            $('#li-'+cid).remove();
+        }).fail(function(data){
+            $('#error').html(formatErrorData(data));
+            $('#error').show();
+            $('#loading').hide();
+        });
+    }
+    
+    function handleAccountAdd(cid) {
+        var acc = $('#accountSelect'+cid).select2('data')[0];
+        $.ajax({
+            url: URL,
+            type: 'post',
+            dataType: "json",
+            data: {
+                'site' : VAR_SITE,
+                'ajaxCont' : 'data',
+                'type' : 'add-ts3-relation',
+                'id' : acc.id,
+                'tsID' : cid,
+                'name' : "",
+            }
+        }).done(function(data){
+            $('#li-'+cid).remove();
+        }).fail(function(data){
+            $('#error').html(formatErrorData(data));
+            $('#error').show();
+            $('#loading').hide();
+        });
+    }
+    </script>
+    <?php 
 }
 
 function getTSTopView() {
@@ -3999,6 +4142,8 @@ function getTSView() {
             
             initTableTool();
             
+            checkTSIdentities();
+            
             var inputDate = $('#dateDiff');
             
             inputAcc.on('select2:select', function (e) {
@@ -4045,6 +4190,30 @@ function getTSView() {
                 inputAcc.select2('open');
             <?php } ?>
         });
+        
+        function checkTSIdentities() {
+            $.ajax({
+                url: 'index.php',
+                type: 'get',
+                dataType: "json",
+                data: {
+                    'site' : VAR_SITE,
+                    'ajaxCont' : 'data',
+                    'type' : 'has-ts3-unknown-identities',
+                }
+            }).done(function(data){
+                if(data) {
+                    $('#identityWarn').show();
+                } else {
+                    $('#identityWarn').hide();
+                }
+                $('#error').hide();
+            }).fail(function(data){
+                $('#error').html(formatErrorData(data));
+                $('#error').show();
+                updateTableTool();
+            });
+        }
         
         function renderTSChart() {
             var picker = $('#dateDiff');
@@ -4202,6 +4371,10 @@ function getTSView() {
         <div id="dateInfo" class="alert alert-warning" style="display: none;">
             <h2>No data for selected range!</h2>
             Entweder es fehlen Daten für die Auswahl oder es wurden noch keine Erhoben.
+        </div>
+        <div id="identityWarn" class="alert alert-warning" style="display: none;">
+            <h2>Unknown TS3 Identities!</h2>
+            Es gibt unbekannte TS3 Identitäten mit Member-Gruppen! <a href="index.php?site=clantool2&view=tsIdentity">Mehr</a>
         </div>
         <p>Data incorrect ? <a href="index.php?site=clantool2&view=ts3&id=<?=TS_REFERENCE_ACCOUNT?>">This account</a> has to have 100% online time!</p>
         <div class="form-horizontal">
@@ -4555,17 +4728,17 @@ function getSettingsView() {
                 </div>
             </div>
             <div class="form-group">
-                <label for="ts3-removal" class="control-label col-xs-2">TS3 Group removal</label>
+                <label for="ts3-check" class="control-label col-xs-2">TS3 Identity Check</label>
                 <div class="col-xs-10">
                     <div class="checkbox">
-                        <label><input type="checkbox" name="ts3-removal" id="ts3-removal" checked="checked"> TS3 Group removal</label>
+                        <label><input type="checkbox" name="ts3-check" id="ts3-check" checked="checked"> TS3 Member unknown IDs check</label>
                     </div>
                 </div>
             </div>
             <div class="form-group">
-                <label for="ts3-whitelist" class="control-label col-xs-2">TS3 Group whitelist</label>
+                <label for="ts3-member-groups" class="control-label col-xs-2">TS3 Member Groups</label>
                 <div class="col-xs-10">
-                    <input type="text" name="ts3-whitelist" required="" autocomplete="on" class="form-control" id="ts3-whitelist" placeholder="Groups staying after leave">
+                    <input type="text" name="ts3-member-groups" required="" autocomplete="on" class="form-control" id="ts3-member-groups" placeholder="TS3 Groups that a member has">
                 </div>
             </div>
             <div class="form-group">
@@ -4594,8 +4767,8 @@ function getSettingsView() {
                 if(data != null){
                     $('#leave-detection').prop('checked',data['leave-detection']);
                     $('#leave-cause').val(data['leave-cause']);
-                    $('#ts3-removal').prop('checked',data['ts3-removal']);
-                    $('#ts3-whitelist').val(data['ts3-whitelist']);
+                    $('#ts3-check').prop('checked',data['ts3-check']);
+                    $('#ts3-member-groups').val(data['ts3-member-groups']);
                 }
                 loadingDiv.hide();
             }).fail(function(data){
@@ -4715,7 +4888,7 @@ function getLogView() {
                     str += '<tr><td>';
                     str += row.date;
                     str += '</td><td>';
-                    str += row.msg;
+                    str += escapeHtml(row.msg);
                     str += '</td></tr>';
                 });
                 log.html(str);

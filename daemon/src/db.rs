@@ -77,7 +77,8 @@ pub fn update_unknown_ts_ids(conn: &mut PooledConn, member_clients: &[usize]) ->
     create_temp_ts3_table(conn, "t_member_clients")?;
     {
         // insert every member client id into temp table, ignore multi-group clients
-        let mut stmt = conn.prepare("INSERT IGNORE INTO `t_member_clients` (`client_id`) VALUES (?)")?;
+        let mut stmt =
+            conn.prepare("INSERT IGNORE INTO `t_member_clients` (`client_id`) VALUES (?)")?;
         for client in member_clients {
             stmt.execute((&client,))?;
         }

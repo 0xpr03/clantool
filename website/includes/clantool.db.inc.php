@@ -611,12 +611,77 @@ class clanDB extends dbException {
     }
     
     /**
-     * Insert member ts ID relation
+     * Add a ts ID to the ignore table for unknown-id checks
+     * @param ts_client_id ts client ID to link
+     * @throws dbException
+     */
+    public function ignoreTS3Identity($ts_client_id) {
+        if($query = $this->db->prepare (
+            'INSERT INTO `ignore_ts_ids` (`client_id`) VALUES(?) ON DUPLICATE KEY UPDATE `client_id` = `client_id`')) {
+            $query->bind_param('i',$ts_client_id);
+            if(!$query->execute()){
+                throw new dbException($this->db->error);
+            }
+        } else {
+            throw new dbException ( $this->db->error );
+        }
+    }
+    
+    /**
+     * Check if any unknown ts ids are existing
+     * @throws dbException
+     */
+    public function hasUnknownTs3IDs() {
+        if($query = $this->db->prepare (
+            'SELECT EXISTS(SELECT 1 FROM `unknown_ts_unignored`) AS `has_ids`')) {
+            if(!$query->execute()){
+                throw new dbException($this->db->error);
+            }
+            
+            $result = $query->get_result();
+            if ($result->num_rows == 0) {
+                throw new dbException ( 'Empty data set' );
+            }
+            return $nr = $result->fetch_assoc()['has_ids'] == 1;
+        } else {
+            throw new dbException ( $this->db->error );
+        }
+    }
+    
+    /**
+     * Insert member ts ID relation & remove from unknown ts list  
+     * This function should be used with a transaction!
      * @param id account ID
      * @param ts_client_id ts client ID to link
      * @throws dbException
      */
     public function insertTSRelation($id,$ts_client_id) {
+        $this->_insertTSRelation($id,$ts_client_id);
+        $this->removeTSUnknownID($ts_client_id);
+    }
+    
+    /**
+     * Remove TS ID from unknown_ts_ids
+     * @param ts_client_id ts client ID to link
+     */
+    private function removeTSUnknownID($ts_client_id) {
+        if($query = $this->db->prepare (
+            'DELETE FROM `unknown_ts_ids` WHERE `client_id` = ?')) {
+            $query->bind_param('i',$ts_client_id);
+            if(!$query->execute()){
+                throw new dbException($this->db->error);
+            }
+        } else {
+            throw new dbException ( $this->db->error );
+        }
+    }
+    
+    /**
+     * Insert ts-id<->account id relation
+     * @param id account ID
+     * @param ts_client_id ts client ID to link
+     */
+    private function _insertTSRelation($id,$ts_client_id) {
         if($query = $this->db->prepare (
             'INSERT INTO `ts_relation` (`id`,`client_id`) VALUES(?,?) ON DUPLICATE KEY UPDATE `client_id` = `client_id`')) {
             $query->bind_param('ii',$id,$ts_client_id);
@@ -1738,6 +1803,35 @@ class clanDB extends dbException {
             $result->close();
             
             return $amount;
+        } else {
+            throw new dbException ( '500' );
+        }
+    }
+    
+    public function getUnknownTSIdentities() {
+        if ($query = $this->db->prepare ( 'SELECT v.`client_id`,`name` FROM `unknown_ts_unignored` v
+            LEFT JOIN `'.DB_TS3_NAMES.'` names ON v.`client_id` = names.`client_id`' )) {
+            $query->execute();
+            $result = $query->get_result ();
+            
+            if (! $result) {
+                throw new dbException ( $this->db->error, 500 );
+            }
+            
+            if ($result->num_rows == 0) {
+                $resultset = array();
+            } else {
+                $resultset = array ();
+                while ( $row = $result->fetch_assoc () ) {
+                    $resultset[] = array(
+                        'name' => $row['name'] . ' ('.$row['client_id'].')',
+                        'id' => $row['client_id']
+                    );
+                }
+            }
+            $result->close();
+            
+            return $resultset;
         } else {
             throw new dbException ( '500' );
         }
