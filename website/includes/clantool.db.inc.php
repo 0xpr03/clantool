@@ -718,10 +718,11 @@ class clanDB extends dbException {
      * @throws dbException
      */
     public function getMemberTSRelations($id) {
-        if ($query = $this->db->prepare ( 'SELECT names.`client_id`,names.`name` FROM `ts_relation` rel 
-        JOIN `'.DB_TS3_NAMES.'` names ON rel.`client_id` = names.`client_id` 
+        if ($query = $this->db->prepare ( 'SELECT rel.`client_id`,
+        IFNULL(names.`name`,?) as name FROM `ts_relation` rel 
+        LEFT JOIN `'.DB_TS3_NAMES.'` names ON rel.`client_id` = names.`client_id` 
         WHERE `id` = ?')) {
-            $query->bind_param('i',$id);
+            $query->bind_param('si',$this->name_default,$id);
             if(!$query->execute()){
                 throw new dbException($this->db->error);
             }
