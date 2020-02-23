@@ -463,7 +463,7 @@ pub fn insert_member_leave(
     ms_nr: i32,
     date_leave: NaiveDate,
     cause: &str,
-) -> Result<(u64)> {
+) -> Result<u64> {
     let trial_affected;
     {
         let mut stmt = conn.prepare("UPDATE `membership` SET `to` = ? WHERE `nr` = ?")?;
