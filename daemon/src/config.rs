@@ -165,7 +165,7 @@ ip = "127.0.0.1"
 # query port
 port = 1111
 user = "user"
-password = "password"
+password = "something"
 # port of the ts server instance to use
 server_port = 1101
 unknown_id_check_enabled = true
