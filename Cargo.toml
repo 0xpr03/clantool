@@ -3,6 +3,5 @@ lto = true
 
 [workspace]
 members = [
-    "daemon",
-    "ranked"
+    "daemon"
 ]

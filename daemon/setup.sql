@@ -142,35 +142,3 @@ CREATE OR REPLACE VIEW `unknown_ts_unignored` AS
 SELECT `t`.`client_id` from `unknown_ts_ids` t where `t`.`client_id` NOT IN (
     select `ignore_ts_ids`.`client_id` from `ignore_ts_ids`
 );
-
-/* module for ranked */
-
-CREATE TABLE `ranks` (
-  `usn` int(11) NOT NULL,
-  `season` int(11) NOT NULL,
-  `mode` int(11) NOT NULL,
-  `rank` int(11) NOT NULL,
-  `subrank` int(11) NOT NULL,
-  PRIMARY KEY (`usn`,`season`,`mode`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE `mode_names` (
-  `mode` int(11) NOT NULL,
-  `name` varchar(255) NOT NULL,
-  PRIMARY KEY (`mode`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE `rank_names` (
-  `rank` int(11) NOT NULL,
-  `name` varchar(255) NOT NULL,
-  PRIMARY KEY (`rank`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE OR REPLACE VIEW `ranked` AS
-SELECT mn.name as player_name,usn,season,r.mode,r.rank,subrank,
-    n.name as mode_name,rn.name as rank_name from ranks r
-JOIN mode_names n ON r.mode = n.mode
-JOIN rank_names rn ON r.rank = rn.rank
-JOIN member_names mn ON r.usn = mn.id AND mn.updated = (
-    SELECT MAX(updated) FROM member_names mnl WHERE mnl.id = r.usn
-);

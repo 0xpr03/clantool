@@ -28,8 +28,6 @@ The third application is [ts3-manager](https://github.com/0xpr03/ts3-manager), u
 [website/](/website) contains the website frontend
 [daemon/](/daemon) is the sourcecode for the rust backend
 
-[ranked/](/ranked) is an additional module that allows ranked data gathering for player-compatibility views
-
 ## Development & Testing
 For running DB tests a mariadb server instance wth an empty Database is required.  
 The default values are `root`:`root` for login and Database `test`.
@@ -42,5 +40,5 @@ Specifying only the user is interpreted as paswordless login.
 Tests have to run as `cargo test -- --test-threads=1` as the DB doesn't allow for parallel tests.
 
 ## Copyright
-Aron Heinecke 2017-2019 under the  
+Aron Heinecke 2017-2020 under the  
 Apache License, Version 2.0
