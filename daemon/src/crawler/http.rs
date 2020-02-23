@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 use reqwest::header::*;
-use reqwest::{Client, ClientBuilder};
+use reqwest::blocking::{Client, ClientBuilder};
 use std::io::Read;
 
 use crate::REFERER as REF;
