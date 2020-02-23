@@ -9,7 +9,6 @@ use ts3_query::*;
 
 /// Check for unknown identities with member group and update unknown_ts_ids
 pub fn find_unknown_identities(pool: &Pool, ts_cfg: &TSConfig) -> Result<()> {
-    dbg!(&ts_cfg);
     let mut conn = pool.get_conn()?;
     let group_ids = get_ts3_member_groups(&mut conn)?;
 
@@ -26,10 +25,11 @@ pub fn find_unknown_identities(pool: &Pool, ts_cfg: &TSConfig) -> Result<()> {
     let mut ids = Vec::new();
     for group in group_ids {
         ids.append(&mut connection.get_servergroup_client_list(group)?);
+        trace!("Retrieved ts clients for {}",group);
         sleep(Duration::from_millis(100));
-        dbg!(&ids);
     }
     db::update_unknown_ts_ids(&mut conn, &ids)?;
+    debug!("Performed TS identity check. {} IDs",ids.len());
     Ok(())
 }
 
