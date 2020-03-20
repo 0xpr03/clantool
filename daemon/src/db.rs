@@ -70,7 +70,7 @@ pub fn log_message_opt(conn: &mut PooledConn, message: &str) -> Result<()> {
     Ok(())
 }
 
-/// Updatae unknwon_ts_ids table based on member clients  
+/// Update unknown_ts_ids table based on member clients  
 /// Handles known member client_id filtering  
 /// Allows doubled group IDs in member_clients
 pub fn update_unknown_ts_ids(conn: &mut PooledConn, member_clients: &[usize]) -> Result<()> {
