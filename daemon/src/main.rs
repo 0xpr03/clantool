@@ -429,6 +429,11 @@ fn schedule_crawl_thread(pool: &Pool, config: &Config, retry_time: NaiveTime) ->
             debug!("Unknown-ts-identity-check enabled");
             if let Err(e) = ts::find_unknown_identities(&pool, &config.ts) {
                 error!("Error performing ts group check: {}", e);
+                db::log_message(
+                    &mut conn,
+                    "Failed to check ts-identities.",
+                    "unable to log message",
+                );
             }
         } else {
             info!("Unknown-ts-identity-check disabled, skipping");
@@ -759,6 +764,12 @@ pub struct Member {
     id: i32,
     exp: i32,
     contribution: i32,
+}
+
+/// TS client
+pub struct TsClient {
+    name: String,
+    db_id: i32
 }
 
 /// Left member data structure
