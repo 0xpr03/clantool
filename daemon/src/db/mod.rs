@@ -1,11 +1,11 @@
 // Copyright 2017-2020 Aron Heinecke
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //   http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -26,9 +26,9 @@ const TABLE_MISSING_DATES: &str = "t_missingdates"; // temporary table used to s
 const DATE_FORMAT: &str = "%Y-%m-%d";
 const DATETIME_FORMAT: &str = "%Y-%m-%d %H:%M:%S";
 
+pub mod crawler;
 pub mod import;
 pub mod ts;
-pub mod crawler;
 
 #[cfg(test)]
 mod testing;

@@ -1,11 +1,11 @@
 // Copyright 2017-2020 Aron Heinecke
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //   http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -13,8 +13,8 @@
 // limitations under the License.
 
 //! Member/Exp/CP crawler data functions
-use crate::*;
 use super::*;
+use crate::*;
 
 /// Insert a Vec of members under the given Timestamp
 /// This does affect table member and member_names
@@ -161,7 +161,6 @@ pub fn insert_missing_dates(conn: &mut PooledConn) -> Result<()> {
     Ok(())
 }
 
-
 /// Retrieves the oldest & newest date `clan` & `member` table combined
 /// Returns (min,max) dates as String
 fn get_min_max_date(conn: &mut PooledConn) -> Result<(NaiveDate, NaiveDate)> {
@@ -230,7 +229,6 @@ pub fn get_next_older_date(
         }
     }
 }
-
 
 /// Get left members from difference betweeen date1 & date2
 /// Expected date1 < date2
@@ -512,7 +510,6 @@ mod test {
         }
     }
 
-
     /// Check date valid with data function
     #[test]
     fn check_date_for_data_test() {
@@ -533,7 +530,6 @@ mod test {
         );
         assert_eq!(None, check_date_for_data(&mut conn, date_invalid).unwrap());
     }
-
 
     /// Test missing entry insertion
     #[test]
@@ -626,7 +622,6 @@ mod test {
         };
         insert_clan_update(&mut conn, &clan, &time).unwrap();
     }
-
 
     #[test]
     fn insert_member_leave_test() {
