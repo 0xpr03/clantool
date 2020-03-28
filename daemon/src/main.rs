@@ -53,7 +53,7 @@ use chrono::Timelike;
 
 use mysql::{Pool, PooledConn};
 
-use error::Error;
+pub use error::Error;
 
 use config::Config;
 

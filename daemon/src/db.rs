@@ -18,12 +18,7 @@ use chrono::naive::NaiveDateTime;
 use mysql::{from_row_opt, Opts, OptsBuilder, Pool, PooledConn, Row, Transaction};
 use regex;
 
-use crate::error::Error;
-use crate::import;
-use crate::Clan;
-use crate::LeftMember;
-use crate::Member;
-use crate::Result;
+use crate::*;
 
 const POOL_MIN_CONN: usize = 1; // minimum amount of running connection per pool
 const POOL_MAX_CONN: usize = 100; // maximum amount of running connections per pool
