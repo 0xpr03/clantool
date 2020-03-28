@@ -156,7 +156,7 @@ fn main() {
             let simulate = sub_m.is_present("simulate");
             let date_s = sub_m.value_of("date").unwrap();
             let date = NaiveDate::parse_from_str(date_s, DATE_FORMAT_DAY).unwrap();
-            let datetime = match db::check_date_for_data(&mut conn, date) {
+            let datetime = match db::crawler::check_date_for_data(&mut conn, date) {
                 Ok(Some(v)) => {
                     info!("Using exact dataset {}", v);
                     v
@@ -344,12 +344,12 @@ fn validator_date(input: String) -> ::std::result::Result<(), String> {
 /// Check DB for missing entries
 fn run_checkdb(pool: Pool, simulate: bool) -> Result<()> {
     let mut conn = pool.get_conn()?;
-    let missing_dates = db::get_missing_dates(&mut conn)?;
+    let missing_dates = db::crawler::get_missing_dates(&mut conn)?;
 
     if simulate {
         info!("Simulation mode, discarding result");
     } else {
-        db::insert_missing_dates(&mut conn)?;
+        db::crawler::insert_missing_dates(&mut conn)?;
     }
 
     for date in missing_dates {
@@ -511,7 +511,7 @@ fn run_leave_detection(
         }
     };
 
-    match db::get_next_older_date(&mut conn, date, max_age) {
+    match db::crawler::get_next_older_date(&mut conn, date, max_age) {
         Err(e) => {
             db::log_message(
                 &mut conn,
@@ -522,7 +522,7 @@ fn run_leave_detection(
         }
         Ok(Some(previous_date)) => {
             debug!("Date1 {} Date2 {}", previous_date, date);
-            match db::get_member_left(&mut conn, &previous_date, date) {
+            match db::crawler::get_member_left(&mut conn, &previous_date, date) {
                 Err(e) => {
                     db::log_message(
                         &mut conn,
@@ -538,7 +538,7 @@ fn run_leave_detection(
                                 if simulate {
                                     info!("Found leave for {} {}", m.id, m.get_name());
                                 } else {
-                                    match db::insert_member_leave(
+                                    match db::crawler::insert_member_leave(
                                         &mut conn,
                                         m.id,
                                         nr,
@@ -672,7 +672,7 @@ fn send_mail(config: &Config, subject: &str, message: &str) {
 /// wrapper to write missing date
 /// allowing for error return
 fn write_missing(timestamp: &NaiveDateTime, pool: &Pool, missing_member: bool) -> Result<()> {
-    db::insert_missing_entry(timestamp, &mut pool.get_conn()?, missing_member)?;
+    db::crawler::insert_missing_entry(timestamp, &mut pool.get_conn()?, missing_member)?;
     Ok(())
 }
 
@@ -712,7 +712,7 @@ fn run_update_member(pool: &Pool, config: &Config, time: &NaiveDateTime) -> Resu
         trace!("fetched site {}", site);
     }
     debug!("Fetched {} member entries", members.len());
-    db::insert_members(&mut pool.get_conn()?, &members, time)?;
+    db::crawler::insert_members(&mut pool.get_conn()?, &members, time)?;
     Ok(())
 }
 
@@ -721,7 +721,7 @@ fn run_update_clan(pool: &Pool, config: &Config, time: &NaiveDateTime) -> Result
     trace!("run_update_clan");
     let raw_http_clan = crawler::http::get(&config.main.clan_url, HeaderType::Html)?;
     let clan = crawler::parser::parse_clan(&raw_http_clan)?;
-    db::insert_clan_update(&mut pool.get_conn()?, &clan, &time)?;
+    db::crawler::insert_clan_update(&mut pool.get_conn()?, &clan, &time)?;
     Ok(())
 }
 
