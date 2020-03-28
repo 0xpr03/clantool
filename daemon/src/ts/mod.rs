@@ -126,8 +126,13 @@ pub fn get_online_clients(conn: &mut Connection) -> Result<HashSet<TsClient>> {
     Ok(clients)
 }
 
-/// Returns channels on TS.
-pub fn get_channels(conn: &mut Connection) -> Result<Vec<Channel>> {
+/// Update ts channel list
+pub fn update_channels(conn: &mut Connection, pool: &Pool) -> Result<()> {
+    db::ts::upsert_channels(&mut pool.get_conn()?, &get_channels(conn)?)?;
+    Ok(())
+}
+
+fn get_channels(conn: &mut Connection) -> Result<Vec<Channel>> {
     let res = raw::parse_multi_hashmap(conn.get()?.raw_command("channellist")?, false);
     res.into_iter()
         .map(|e| {

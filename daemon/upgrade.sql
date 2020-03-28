@@ -79,7 +79,7 @@ CREATE TABLE `ts_activity` (
   `channel_id` int(11) NOT NULL,
   `date` date NOT NULL,
   `client_id` int(11) NOT NULL,
-  PRIMARY KEY (`date`.`client_id`,`channel_id`),
+  PRIMARY KEY (`date`,`client_id`,`channel_id`),
   KEY `client_date` (`date`,`client_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
@@ -87,5 +87,12 @@ CREATE TABLE `ts_names` (
   `name` VARCHAR(100) NOT NULL,
   `client_id` int(11) NOT NULL,
   PRIMARY KEY (`client_id`),
+  KEY `name` (`name`)
+) ENGINE=InnoDB CHARACTER SET 'utf8mb4' ROW_FORMAT=COMPRESSED;
+
+CREATE TABLE `ts_channels` (
+  `name` VARCHAR(100) NOT NULL,
+  `channel_id` int(11) NOT NULL,
+  PRIMARY KEY (`channel_id`),
   KEY `name` (`name`)
 ) ENGINE=InnoDB CHARACTER SET 'utf8mb4' ROW_FORMAT=COMPRESSED;

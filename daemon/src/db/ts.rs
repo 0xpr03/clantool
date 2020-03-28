@@ -63,6 +63,17 @@ fn create_temp_ts3_table(conn: &mut PooledConn, tbl_name: &'static str) -> Resul
     Ok(())
 }
 
+/// Update/Insert ts3 channel names
+pub fn upsert_channels(conn: &mut PooledConn, channels: &[Channel]) -> Result<()> {
+    let mut stmt = conn.prepare(
+        "INSERT INTO `ts_channels` (`channel_id`,`name`) VALUES (?,?) ON DUPLICATE KEY UPDATE `name`=VALUES(`name`)",
+    )?;
+    for e in channels {
+        stmt.execute((e.id, &e.name))?;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -113,5 +124,62 @@ mod test {
             .collect();
 
         assert_eq!(data, vec![5, 6]);
+    }
+
+    fn get_channels_ordered(conn: &mut PooledConn) -> Result<Vec<(ChannelID, String)>> {
+        let res = conn.prep_exec(
+            "SELECT channel_id,name FROM `ts_channels` ORDER BY channel_id",
+            (),
+        )?;
+        let data: Vec<_> = res
+            .map(|row| {
+                let row: (ChannelID, String) = from_row(row.unwrap());
+                row
+            })
+            .collect();
+        Ok(data)
+    }
+
+    #[test]
+    fn test_upsert_channels() {
+        let (mut conn, _guard) = setup_db();
+
+        let channels = vec![
+            Channel {
+                id: 2,
+                name: "äüö2".to_string(),
+            },
+            Channel {
+                id: 1,
+                name: "äöü".to_string(),
+            },
+        ];
+
+        upsert_channels(&mut conn, &channels).unwrap();
+
+        let data = get_channels_ordered(&mut conn).unwrap();
+        assert_eq!(data, vec![(1, "äöü".to_string()), (2, "äüö2".to_string())]);
+
+        // we inserted, let's update one, insert another
+        let channels = vec![
+            Channel {
+                id: 1,
+                name: "123".to_string(),
+            },
+            Channel {
+                id: 3,
+                name: "345".to_string(),
+            },
+        ];
+        upsert_channels(&mut conn, &channels).unwrap();
+        let data = get_channels_ordered(&mut conn).unwrap();
+        assert_eq!(
+            data,
+            vec![
+                (1, "123".to_string()),
+                (2, "äüö2".to_string()),
+                (3, "345".to_string())
+            ]
+        );
     }
 }
