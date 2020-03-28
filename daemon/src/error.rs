@@ -126,5 +126,9 @@ quick_error! {
             description("Required settings key not found in db")
             display("Key {} not found in db!",key)
         }
+        TsMissingValue(value: &'static str) {
+            description("Missing value in ts3-server response")
+            display("Missing value for {} in ts3-server response",value)
+        }
     }
 }

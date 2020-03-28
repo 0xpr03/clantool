@@ -25,8 +25,13 @@ regex = "1"
 mysql = "17"
 timer = "0.2"
 csv = "1"
-ts3-query = "0.1"
 
 [dependencies.reqwest]
 version = "0.10"
 features = ["blocking","gzip"]
+
+[dependencies.ts3-query]
+features = ["backtrace"]
+version ="0.1.5"
+git = 'https://github.com/0xpr03/ts3_query'
+branch = "0.1.5"

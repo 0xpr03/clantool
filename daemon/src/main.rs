@@ -767,9 +767,12 @@ pub struct Member {
 }
 
 /// TS client
+#[derive(Debug)]
 pub struct TsClient {
     name: String,
-    db_id: i32
+    db_id: i32,
+    channel: i32,
+    groups: Vec<i32>,
 }
 
 /// Left member data structure
