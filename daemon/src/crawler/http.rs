@@ -13,8 +13,8 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-use reqwest::header::*;
 use reqwest::blocking::{Client, ClientBuilder};
+use reqwest::header::*;
 use std::io::Read;
 
 use crate::REFERER as REF;
