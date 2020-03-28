@@ -142,3 +142,18 @@ CREATE OR REPLACE VIEW `unknown_ts_unignored` AS
 SELECT `t`.`client_id` from `unknown_ts_ids` t where `t`.`client_id` NOT IN (
     select `ignore_ts_ids`.`client_id` from `ignore_ts_ids`
 );
+
+CREATE TABLE `ts_activity` (
+  `channel_id` int(11) NOT NULL,
+  `date` date NOT NULL,
+  `client_id` int(11) NOT NULL,
+  PRIMARY KEY (`date`.`client_id`,`channel_id`),
+  KEY `client_date` (`date`,`client_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+CREATE TABLE `ts_names` (
+  `name` VARCHAR(100) NOT NULL,
+  `client_id` int(11) NOT NULL,
+  PRIMARY KEY (`client_id`),
+  KEY `name` (`name`)
+) ENGINE=InnoDB CHARACTER SET 'utf8mb4' ROW_FORMAT=COMPRESSED;
