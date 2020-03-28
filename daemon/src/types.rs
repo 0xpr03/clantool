@@ -1,6 +1,9 @@
 use std::hash::Hash;
 use std::hash::Hasher;
 
+pub type ChannelID = i32;
+pub type TsDBID = i32;
+
 /// Clan data structure
 #[derive(Debug, PartialEq, PartialOrd)]
 pub struct Clan {
@@ -23,8 +26,8 @@ pub struct Member {
 #[derive(Debug)]
 pub struct TsClient {
     pub name: String,
-    pub db_id: i32,
-    pub channel: i32,
+    pub db_id: TsDBID,
+    pub channel: ChannelID,
     pub groups: Vec<i32>,
 }
 
@@ -42,6 +45,12 @@ impl PartialEq for TsClient {
     }
 }
 impl Eq for TsClient {}
+
+#[derive(Debug)]
+pub struct Channel {
+    pub id: ChannelID,
+    pub name: String,
+}
 
 /// Left member data structure
 #[derive(Debug, PartialEq, PartialOrd)]

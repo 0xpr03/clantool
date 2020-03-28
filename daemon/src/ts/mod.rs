@@ -2,19 +2,25 @@ use crate::config::TSConfig;
 use crate::db;
 use crate::error::Error;
 use crate::Result;
-use crate::TsClient;
+use crate::*;
+use connection::Connection;
 use mysql::{Pool, PooledConn};
 use std::collections::HashSet;
 use std::thread::sleep;
 use std::time::Duration;
 use ts3_query::*;
 
+const CHANNEL_NAME: &str = "channel_name";
+const CHANNEL_ID: &str = "cid";
+
 const CLIENT_TYPE: &str = "client_type";
 const CLIENT_TYPE_NORMAL: &str = "0";
 const CLIENT_ID: &str = "client_database_id";
 const CLIENT_GROUPS: &str = "client_servergroups";
-const CLIENT_CHANNEL: &str = "cid";
+const CLIENT_CHANNEL: &str = CHANNEL_ID;
 const CLIENT_NAME: &str = "client_nickname";
+
+mod connection;
 
 /// Check for unknown identities with member group and update unknown_ts_ids
 pub fn find_unknown_identities(pool: &Pool, ts_cfg: &TSConfig) -> Result<()> {
@@ -72,18 +78,13 @@ pub fn get_ts3_member_groups(conn: &mut PooledConn) -> Result<Option<Vec<usize>>
     db::read_list_setting(conn, crate::TS3_MEMBER_GROUP)
 }
 
-/// Get clients on ts
-pub fn get_online_clients(ts_cfg: &TSConfig) -> Result<()> {
-    //-> Result<Vec<TsClient>> {
-    let mut connection = QueryClient::new(format!("{}:{}", ts_cfg.ip, ts_cfg.port))?;
-    connection.login(&ts_cfg.user, &ts_cfg.password)?;
-    connection.select_server_by_port(ts_cfg.server_port)?;
-    //connection.rename("bot2134564651321")?;
-    let res = raw::parse_multi_hashmap(connection.raw_command("clientlist -groups")?, false);
+/// Get clients on ts. Returns last entry for multiple connection of same ID.
+pub fn get_online_clients(conn: &mut Connection) -> Result<HashSet<TsClient>> {
+    let res = raw::parse_multi_hashmap(conn.get()?.raw_command("clientlist -groups")?, false);
     dbg!(res.len());
     dbg!(&res);
     let clients = res
-        .iter()
+        .into_iter()
         .filter(|e| e.get(CLIENT_TYPE).map(String::as_str) == Some(CLIENT_TYPE_NORMAL))
         .map(|e| {
             Ok(TsClient {
@@ -108,8 +109,26 @@ pub fn get_online_clients(ts_cfg: &TSConfig) -> Result<()> {
             })
         })
         .collect::<Result<HashSet<TsClient>>>()?;
-    dbg!(clients);
-    Ok(())
+    Ok(clients)
+}
+
+/// Returns channels on TS.
+pub fn get_channels(conn: &mut Connection) -> Result<Vec<Channel>> {
+    let res = raw::parse_multi_hashmap(conn.get()?.raw_command("channellist")?, false);
+    res.into_iter()
+        .map(|e| {
+            Ok(Channel {
+                id: e
+                    .get(CHANNEL_ID)
+                    .ok_or_else(|| Error::TsMissingValue(CHANNEL_ID))?
+                    .parse()?,
+                name: e
+                    .get(CHANNEL_NAME)
+                    .map(raw::unescape_val)
+                    .ok_or_else(|| Error::TsMissingValue(CHANNEL_NAME))?,
+            })
+        })
+        .collect::<Result<Vec<_>>>()
 }
 
 #[cfg(test)]
@@ -133,7 +152,10 @@ mod tests {
             unknown_id_check_enabled: true,
         };
         dbg!(&cfg);
-        let clients = get_online_clients(&cfg).unwrap();
+        let mut conn = Connection::new(&cfg).unwrap();
+        let clients = get_online_clients(&mut conn).unwrap();
         dbg!(clients);
+        let channels = get_channels(&mut conn).unwrap();
+        dbg!(channels);
     }
 }
