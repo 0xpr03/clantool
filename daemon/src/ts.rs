@@ -4,6 +4,7 @@ use crate::error::Error;
 use crate::Result;
 use crate::TsClient;
 use mysql::{Pool, PooledConn};
+use std::collections::HashSet;
 use std::thread::sleep;
 use std::time::Duration;
 use ts3_query::*;
@@ -106,7 +107,7 @@ pub fn get_online_clients(ts_cfg: &TSConfig) -> Result<()> {
                     .collect::<Result<Vec<_>>>()?,
             })
         })
-        .collect::<Result<Vec<TsClient>>>()?;
+        .collect::<Result<HashSet<TsClient>>>()?;
     dbg!(clients);
     Ok(())
 }

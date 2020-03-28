@@ -29,6 +29,9 @@ mod db;
 mod error;
 mod import;
 mod ts;
+mod types;
+
+pub use types::*;
 
 use crate::crawler::http::HeaderType;
 
@@ -198,7 +201,7 @@ fn main() {
         }
         _ => {
             info!("Entering daemon mode");
-            run_timer(pool.clone(), config.clone(), &timer);
+            run_timer(pool, config, &timer);
             loop {
                 std::thread::sleep(std::time::Duration::from_millis(1000));
             }
@@ -746,53 +749,6 @@ pub fn get_executable_folder() -> Result<std::path::PathBuf> {
     let mut folder = current_exe()?;
     folder.pop();
     Ok(folder)
-}
-
-/// Clan data structure
-#[derive(Debug, PartialEq, PartialOrd)]
-pub struct Clan {
-    members: u8,
-    wins: u16,
-    losses: u16,
-    draws: u16,
-}
-
-/// Member data structure
-#[derive(Debug, PartialEq, PartialOrd, Clone)]
-pub struct Member {
-    name: String,
-    id: i32,
-    exp: i32,
-    contribution: i32,
-}
-
-/// TS client
-#[derive(Debug)]
-pub struct TsClient {
-    name: String,
-    db_id: i32,
-    channel: i32,
-    groups: Vec<i32>,
-}
-
-/// Left member data structure
-#[derive(Debug, PartialEq, PartialOrd)]
-pub struct LeftMember {
-    id: i32,
-    // account name, can be None if same day join&leave
-    name: Option<String>,
-    // membership nr which can be closed
-    membership_nr: Option<i32>,
-}
-
-impl LeftMember {
-    /// Return account-name of member or spacer if no name found
-    pub fn get_name(&self) -> &str {
-        match self.name {
-            Some(ref v) => v,
-            None => "<unnamed>",
-        }
-    }
 }
 
 #[cfg(test)]
