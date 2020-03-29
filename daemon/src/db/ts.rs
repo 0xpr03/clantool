@@ -215,19 +215,23 @@ mod test {
         );
     }
 
-    fn get_ts_activity_ordered(conn: &mut PooledConn) -> Result<Vec<(NaiveDate,TsActivity)>> {
+    fn get_ts_activity_ordered(conn: &mut PooledConn) -> Result<Vec<(NaiveDate, TsActivity)>> {
         let res = conn.prep_exec(
             "SELECT client_id,channel_id,time,date FROM `ts_activity` ORDER BY client_id,channel_id",
             (),
         )?;
         let data: Vec<_> = res
             .map(|row| {
-                let (client, channel, time,date): (TsClDBID, ChannelID, i32, NaiveDate) = from_row(row.unwrap());
-                (date,TsActivity {
-                    client,
-                    channel,
-                    time,
-                })
+                let (client, channel, time, date): (TsClDBID, ChannelID, i32, NaiveDate) =
+                    from_row(row.unwrap());
+                (
+                    date,
+                    TsActivity {
+                        client,
+                        channel,
+                        time,
+                    },
+                )
             })
             .collect();
         Ok(data)
@@ -259,9 +263,9 @@ mod test {
 
         let res = get_ts_activity_ordered(&mut conn).unwrap();
         for i in 0..res.len() {
-            let (r_date,act) = &res[i];
-            assert_eq!(*r_date,date);
-            assert_eq!(act,&data[i]);
+            let (r_date, act) = &res[i];
+            assert_eq!(*r_date, date);
+            assert_eq!(act, &data[i]);
         }
 
         // now update it
@@ -295,8 +299,11 @@ mod test {
                 time: 13,
                 channel: 1,
             },
-        ].drain(..).map(|v|(date.clone(),v)).collect();
-        assert_eq!(expected,res);
+        ]
+        .drain(..)
+        .map(|v| (date.clone(), v))
+        .collect();
+        assert_eq!(expected, res);
     }
 
     fn get_ts_names_ordered(conn: &mut PooledConn) -> Result<Vec<TsClient>> {
@@ -311,7 +318,7 @@ mod test {
                     clid: client,
                     name,
                     channel: 0,
-                    groups: Vec::new()
+                    groups: Vec::new(),
                 }
             })
             .collect();
@@ -338,7 +345,7 @@ mod test {
         update_ts_names(&mut conn, &data).unwrap();
 
         let res = get_ts_names_ordered(&mut conn).unwrap();
-        assert_eq!(res,data);
+        assert_eq!(res, data);
         // update
         let data = vec![
             TsClient {
@@ -352,7 +359,7 @@ mod test {
                 clid: 3,
                 groups: Vec::new(),
                 name: "123".to_string(),
-            }
+            },
         ];
         update_ts_names(&mut conn, &data).unwrap();
         let res = get_ts_names_ordered(&mut conn).unwrap();
@@ -374,8 +381,8 @@ mod test {
                 clid: 3,
                 groups: Vec::new(),
                 name: "123".to_string(),
-            }
+            },
         ];
-        assert_eq!(res,expected);
+        assert_eq!(res, expected);
     }
 }
