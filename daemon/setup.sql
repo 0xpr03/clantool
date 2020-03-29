@@ -146,6 +146,7 @@ SELECT `t`.`client_id` from `unknown_ts_ids` t where `t`.`client_id` NOT IN (
 CREATE TABLE `ts_activity` (
   `channel_id` int(11) NOT NULL,
   `date` date NOT NULL,
+  `time` INT NOT NULL,
   `client_id` int(11) NOT NULL,
   PRIMARY KEY (`date`,`client_id`,`channel_id`),
   KEY `client_date` (`date`,`client_id`)
