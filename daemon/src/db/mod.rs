@@ -15,7 +15,7 @@
 //! Database functions
 use chrono::naive::NaiveDate;
 use chrono::naive::NaiveDateTime;
-use mysql::{from_row_opt, Opts, OptsBuilder, Pool, PooledConn, Row};
+use mysql::{from_row_opt, IsolationLevel, Opts, OptsBuilder, Pool, PooledConn, Row};
 use regex;
 
 use crate::*;

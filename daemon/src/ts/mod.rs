@@ -106,7 +106,7 @@ pub fn get_online_clients(conn: &mut Connection) -> Result<HashSet<TsClient>> {
                     .get(CLIENT_NAME)
                     .map(raw::unescape_val)
                     .ok_or_else(|| Error::TsMissingValue(CLIENT_NAME))?,
-                db_id: e
+                clid: e
                     .get(CLIENT_ID)
                     .ok_or_else(|| Error::TsMissingValue(CLIENT_ID))?
                     .parse()?,

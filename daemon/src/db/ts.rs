@@ -15,6 +15,8 @@
 //! TS data handling functions
 
 use super::*;
+use chrono::naive::NaiveDate;
+
 /// Update unknown_ts_ids table based on member clients  
 /// Handles known member client_id filtering  
 /// Allows doubled group IDs in member_clients
@@ -71,6 +73,36 @@ pub fn upsert_channels(conn: &mut PooledConn, channels: &[Channel]) -> Result<()
     for e in channels {
         stmt.execute((e.id, &e.name))?;
     }
+    Ok(())
+}
+
+pub fn update_ts_names(conn: &mut PooledConn, names: &[TsClient]) -> Result<()> {
+    let mut stm_names = conn.prepare(
+        "INSERT INTO `ts_names` (`client_id`,`name`) VALUES (?,?) ON DUPLICATE KEY UPDATE `name` = VALUES(`name`)"
+    )?;
+    for e in names {
+        stm_names.execute((e.clid, &e.name))?;
+    }
+    Ok(())
+}
+
+/// Update ts online times & names
+pub fn update_ts_activity(
+    conn: &mut PooledConn,
+    date: &NaiveDate,
+    times: &[TsActivity],
+) -> Result<()> {
+    let mut transaction = conn.start_transaction(false, None, None)?;
+    {
+        let mut stm_time = transaction.prepare(
+        "INSERT INTO `ts_activity` (`date`,`client_id`,`channel_id`,`time`) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE `time` = `time`+VALUES(`time`)",
+        )?;
+
+        for e in times {
+            stm_time.execute((date, e.client, e.channel, e.time))?;
+        }
+    }
+    transaction.commit()?;
     Ok(())
 }
 
@@ -181,5 +213,89 @@ mod test {
                 (3, "345".to_string())
             ]
         );
+    }
+
+    fn get_ts_activity_ordered(conn: &mut PooledConn) -> Result<Vec<(NaiveDate,TsActivity)>> {
+        let res = conn.prep_exec(
+            "SELECT client_id,channel_id,time,date FROM `ts_activity` ORDER BY client_id,channel_id",
+            (),
+        )?;
+        let data: Vec<_> = res
+            .map(|row| {
+                let (client, channel, time,date): (TsClDBID, ChannelID, i32, NaiveDate) = from_row(row.unwrap());
+                (date,TsActivity {
+                    client,
+                    channel,
+                    time,
+                })
+            })
+            .collect();
+        Ok(data)
+    }
+
+    #[test]
+    fn test_update_ts_activity() {
+        let (mut conn, _guard) = setup_db();
+
+        let data = vec![
+            TsActivity {
+                client: 1,
+                time: 1,
+                channel: 1,
+            },
+            TsActivity {
+                client: 1,
+                time: 2,
+                channel: 2,
+            },
+            TsActivity {
+                client: 2,
+                time: 3,
+                channel: 1,
+            },
+        ];
+        let date = NaiveDate::from_ymd(2020, 03, 29);
+        update_ts_activity(&mut conn, &date, &data).unwrap();
+
+        let res = get_ts_activity_ordered(&mut conn).unwrap();
+        for i in 0..res.len() {
+            let (r_date,act) = &res[i];
+            assert_eq!(*r_date,date);
+            assert_eq!(act,&data[i]);
+        }
+
+        // now update it
+        let data = vec![
+            TsActivity {
+                client: 1,
+                time: 10,
+                channel: 1,
+            },
+            TsActivity {
+                client: 2,
+                time: 10,
+                channel: 1,
+            },
+        ];
+        update_ts_activity(&mut conn, &date, &data).unwrap();
+        let res = get_ts_activity_ordered(&mut conn).unwrap();
+        let expected: Vec<_> = vec![
+            TsActivity {
+                client: 1,
+                time: 11,
+                channel: 1,
+            },
+            TsActivity {
+                client: 1,
+                time: 2,
+                channel: 2,
+            },
+            TsActivity {
+                client: 2,
+                time: 13,
+                channel: 1,
+            },
+        ].drain(..).map(|v|(date.clone(),v)).collect();
+        assert_eq!(expected,res);
     }
 }
