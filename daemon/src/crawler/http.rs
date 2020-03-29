@@ -109,12 +109,14 @@ mod test {
 
     /// Run z8 test
     #[test]
+    #[ignore]
     fn get_ajax_z8() {
         let b_ajax = get("http://crossfire.z8games.com/clan/1", HeaderType::Ajax).unwrap();
         assert!(b_ajax.contains("Clan1"));
     }
 
     #[test]
+    #[ignore]
     fn get_ajax_z8_member() {
         let b_ajax = get("http://crossfire.z8games.com/rest/clanmembers.json?clanID=68910&page=1&perPage=10&rankType=user", HeaderType::Ajax).unwrap();
         assert!(b_ajax.contains("Dr.Alptraum"));
