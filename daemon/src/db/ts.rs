@@ -298,4 +298,84 @@ mod test {
         ].drain(..).map(|v|(date.clone(),v)).collect();
         assert_eq!(expected,res);
     }
+
+    fn get_ts_names_ordered(conn: &mut PooledConn) -> Result<Vec<TsClient>> {
+        let res = conn.prep_exec(
+            "SELECT client_id,name FROM `ts_names` ORDER BY client_id",
+            (),
+        )?;
+        let data: Vec<_> = res
+            .map(|row| {
+                let (client, name): (TsClDBID, String) = from_row(row.unwrap());
+                TsClient {
+                    clid: client,
+                    name,
+                    channel: 0,
+                    groups: Vec::new()
+                }
+            })
+            .collect();
+        Ok(data)
+    }
+
+    #[test]
+    fn test_update_ts_names() {
+        let (mut conn, _guard) = setup_db();
+        let data = vec![
+            TsClient {
+                channel: 0,
+                clid: 1,
+                groups: Vec::new(),
+                name: "abc".to_string(),
+            },
+            TsClient {
+                channel: 0,
+                clid: 2,
+                groups: Vec::new(),
+                name: "クマ".to_string(),
+            },
+        ];
+        update_ts_names(&mut conn, &data).unwrap();
+
+        let res = get_ts_names_ordered(&mut conn).unwrap();
+        assert_eq!(res,data);
+        // update
+        let data = vec![
+            TsClient {
+                channel: 0,
+                clid: 1,
+                groups: Vec::new(),
+                name: "def".to_string(),
+            },
+            TsClient {
+                channel: 0,
+                clid: 3,
+                groups: Vec::new(),
+                name: "123".to_string(),
+            }
+        ];
+        update_ts_names(&mut conn, &data).unwrap();
+        let res = get_ts_names_ordered(&mut conn).unwrap();
+        let expected = vec![
+            TsClient {
+                channel: 0,
+                clid: 1,
+                groups: Vec::new(),
+                name: "def".to_string(),
+            },
+            TsClient {
+                channel: 0,
+                clid: 2,
+                groups: Vec::new(),
+                name: "クマ".to_string(),
+            },
+            TsClient {
+                channel: 0,
+                clid: 3,
+                groups: Vec::new(),
+                name: "123".to_string(),
+            }
+        ];
+        assert_eq!(res,expected);
+    }
 }
