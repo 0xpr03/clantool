@@ -53,8 +53,10 @@ pub enum ConfigError {
 }
 
 /// Config struct
+pub type Config = ::std::sync::Arc<InnerConfig>;
+
 #[derive(Debug, Deserialize)]
-pub struct Config {
+pub struct InnerConfig {
     pub db: DBConfig,
     pub main: MainConfig,
     pub ts: TSConfig,
@@ -149,7 +151,7 @@ fn write_config_file(path: &Path, data: &str) -> Result<(), ConfigError> {
 }
 
 /// Create a new config.
-pub fn default_config() -> String {
+fn default_config() -> String {
     trace!("Creating config..");
     let toml = r#"[db]
 user = "user"
@@ -197,4 +199,13 @@ mail_from = "noreply@localhost"
 "#;
 
     toml.to_owned()
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    fn test_default_parse() {
+        parse_config(default_config()).unwrap();
+    }
 }

@@ -82,7 +82,7 @@ fn main() {
     }
     info!("Clan tools crawler v{}", VERSION);
 
-    let config = Arc::new(config::init_config());
+    let config = config::init_config();
     let pool = init_db(&config, Dur::from_secs(60 * 10));
     let timer = timer::Timer::new();
 
@@ -99,7 +99,7 @@ fn main() {
         ("fcrawl", _) => {
             info!("Performing force crawl");
             let local_pool = &pool;
-            let local_config = &*config;
+            let local_config = &config;
             let rt_time = NaiveTime::from_num_seconds_from_midnight(20, 0);
             debug!(
                 "Result: {:?}",
@@ -109,7 +109,7 @@ fn main() {
         }
         ("printconfig", _) => {
             let local_pool = &pool;
-            let local_config = &*config;
+            let local_config = &config;
             let mut conn = match local_pool.get_conn() {
                 Err(e) => {
                     error!("Unable to get db conn {}", e);
@@ -137,7 +137,7 @@ fn main() {
         ("mail-test", _) => {
             info!("Sending test mail");
             send_mail(
-                &*config,
+                &config,
                 "Clantool test mail",
                 "This is a manually triggered test mail.",
             );
@@ -170,9 +170,9 @@ fn main() {
             };
             let message: String = match sub_m.value_of("message") {
                 Some(v) => v.to_owned(),
-                None => format!("{} manual check", get_leave_message(&mut conn, &*config)),
+                None => format!("{} manual check", get_leave_message(&mut conn, &config)),
             };
-            run_leave_detection(&pool, &*config, &datetime, &message, simulate);
+            run_leave_detection(&pool, &config, &datetime, &message, simulate);
             info!("Finished");
         }
         ("init", _) => {
@@ -199,9 +199,10 @@ fn main() {
         }
         _ => {
             info!("Entering daemon mode");
-            run_timer(pool, config, &timer);
-            loop {
-                std::thread::sleep(std::time::Duration::from_millis(1000));
+            if let Err(e) = run_daemon(pool.clone(), config, &timer) {
+                let fmt = format!("Error starting daemon {}", e);
+                error!("{}", &fmt);
+                panic!(fmt);
             }
         }
     }
@@ -358,7 +359,7 @@ fn run_checkdb(pool: Pool, simulate: bool) -> Result<()> {
 }
 
 /// Initialize timed task
-fn run_timer(pool: Pool, config: Arc<Config>, timer: &timer::Timer) {
+fn run_daemon(pool: Pool, config: Config, timer: &timer::Timer) -> Result<()> {
     let date_time = Local::now(); // get current datetime
     let today = Local::today();
     let target_naive_time = match NaiveTime::parse_from_str(&config.main.time, "%H:%M") {
@@ -392,16 +393,21 @@ fn run_timer(pool: Pool, config: Arc<Config>, timer: &timer::Timer) {
     }
     info!("First execution will be on {}", schedule_time);
 
-    let a = timer.schedule(
+    let pool_c = pool.clone();
+    let config_c = config.clone();
+    let _guard = timer.schedule(
         schedule_time,
         Some(chrono::Duration::hours(INTERVALL_H)),
         move || {
-            if let Err(e) = schedule_crawl_thread(&pool, &*config, retry_time) {
+            if let Err(e) = schedule_crawl_thread(&pool_c, &config_c, retry_time) {
                 error!("Error in crawler thread {}", e);
             }
         },
     );
-    a.ignore();
+    
+    loop {
+        std::thread::sleep(std::time::Duration::from_millis(1000));
+    }
 }
 
 fn schedule_crawl_thread(pool: &Pool, config: &Config, retry_time: NaiveTime) -> Result<()> {
@@ -638,7 +644,7 @@ fn run_update(pool: &Pool, config: &Config, retry_time: NaiveTime) -> Option<Nai
                     ,x,retry_time.num_seconds_from_midnight()*x,!member_success,!clan_success);
 
             if config.main.send_error_mail {
-                send_mail(config, "Clantool error", &message);
+                send_mail(&config, "Clantool error", &message);
             }
         } else {
             let wait_time = retry_time.num_seconds_from_midnight() * x;

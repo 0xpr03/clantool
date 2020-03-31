@@ -153,12 +153,12 @@ fn get_channels(conn: &mut Connection) -> Result<Vec<Channel>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::TSConfig;
+    use crate::config::{default_cfg_testing, TSConfig};
 
     #[test]
     #[ignore]
     fn perform_get_online_clients() {
-        let cfg = TSConfig {
+        let ts_cfg = TSConfig {
             ip: option_env!("ts_ip").unwrap_or("localhost").to_string(),
             port: option_env!("ts_port").unwrap_or("11001").parse().unwrap(),
             user: option_env!("ts_user").unwrap_or("serveradmin").to_string(),
@@ -169,8 +169,12 @@ mod tests {
                 .unwrap(),
             unknown_id_check_enabled: true,
         };
-        dbg!(&cfg);
-        let mut conn = Connection::new(&cfg).unwrap();
+        // create default cfg, change to use our ts config
+        let mut def = default_cfg_testing();
+        Arc::get_mut(&mut def).unwrap().ts = ts_cfg;
+        dbg!(&def);
+
+        let mut conn = Connection::new(def).unwrap();
         let clients = get_online_clients(&mut conn).unwrap();
         dbg!(clients);
         let channels = get_channels(&mut conn).unwrap();
