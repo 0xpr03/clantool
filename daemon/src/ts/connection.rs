@@ -12,29 +12,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::config::Config;
 use crate::config::TSConfig;
 use crate::*;
 use ts3_query::*;
+use ::std::time::Duration;
+
+// Safety: see module tick interval
+const TIMEOUT_CONN: Duration = Duration::from_millis(1500);
+const TIMEOUT_CMD: Duration = Duration::from_millis(1500);
 
 /// QueryClient wrapper with connection-check on access
-pub struct Connection<'a> {
+pub struct Connection {
     conn: QueryClient,
-    cfg: &'a TSConfig,
+    cfg: Config,
 }
 
-impl<'a> Connection<'a> {
+impl Connection {
     fn connect(cfg: &TSConfig) -> Result<QueryClient> {
-        let mut conn = QueryClient::new((cfg.ip.as_str(), cfg.port))?;
+        // let mut conn = QueryClient::new((cfg.ip.as_ref(), cfg.port))?;
+        let mut conn = QueryClient::with_timeout((cfg.ip.as_ref(), cfg.port),Some(TIMEOUT_CONN),Some(TIMEOUT_CMD))?;
         conn.login(&cfg.user, &cfg.password)?;
         conn.select_server_by_port(cfg.server_port)?;
         Ok(conn)
     }
 
-    pub fn new(ts_cfg: &'a TSConfig) -> Result<Connection> {
-        Ok(Self {
-            conn: Self::connect(ts_cfg)?,
-            cfg: ts_cfg,
-        })
+    pub fn new(cfg: Config) -> Result<Connection> {
+        let conn = Self::connect(&cfg.ts)?;
+        Ok(Self { conn, cfg })
     }
 
     /// Returns the active connection or tries to create a new one
@@ -43,7 +48,7 @@ impl<'a> Connection<'a> {
             Ok(_) => &mut self.conn,
             Err(e) => {
                 debug!("Previous connection died: {}", e);
-                self.conn = Self::connect(self.cfg)?;
+                self.conn = Self::connect(&self.cfg.ts)?;
                 &mut self.conn
             }
         })

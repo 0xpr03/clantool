@@ -76,12 +76,13 @@ pub fn upsert_channels(conn: &mut PooledConn, channels: &[Channel]) -> Result<()
     Ok(())
 }
 
-pub fn update_ts_names(conn: &mut PooledConn, names: &[TsClient]) -> Result<()> {
+/// Update ts client names
+pub fn update_ts_names(conn: &mut PooledConn, names: &[(TsClDBID, &str)]) -> Result<()> {
     let mut stm_names = conn.prepare(
         "INSERT INTO `ts_names` (`client_id`,`name`) VALUES (?,?) ON DUPLICATE KEY UPDATE `name` = VALUES(`name`)"
     )?;
-    for e in names {
-        stm_names.execute((e.clid, &e.name))?;
+    for (id, name) in names {
+        stm_names.execute((id, name))?;
     }
     Ok(())
 }
@@ -306,20 +307,15 @@ mod test {
         assert_eq!(expected, res);
     }
 
-    fn get_ts_names_ordered(conn: &mut PooledConn) -> Result<Vec<TsClient>> {
+    fn get_ts_names_ordered(conn: &mut PooledConn) -> Result<Vec<(TsClDBID, String)>> {
         let res = conn.prep_exec(
             "SELECT client_id,name FROM `ts_names` ORDER BY client_id",
             (),
         )?;
         let data: Vec<_> = res
             .map(|row| {
-                let (client, name): (TsClDBID, String) = from_row(row.unwrap());
-                TsClient {
-                    clid: client,
-                    name,
-                    channel: 0,
-                    groups: Vec::new(),
-                }
+                let v: (TsClDBID, String) = from_row(row.unwrap());
+                v
             })
             .collect();
         Ok(data)
@@ -328,60 +324,23 @@ mod test {
     #[test]
     fn test_update_ts_names() {
         let (mut conn, _guard) = setup_db();
-        let data = vec![
-            TsClient {
-                channel: 0,
-                clid: 1,
-                groups: Vec::new(),
-                name: "abc".to_string(),
-            },
-            TsClient {
-                channel: 0,
-                clid: 2,
-                groups: Vec::new(),
-                name: "クマ".to_string(),
-            },
-        ];
+        let name_a = "abc".to_string();
+        let name_b = "クマ".to_string();
+        let data = [(1, name_a.as_str()), (2, name_b.as_str())];
         update_ts_names(&mut conn, &data).unwrap();
 
         let res = get_ts_names_ordered(&mut conn).unwrap();
-        assert_eq!(res, data);
+        assert_eq!(res, vec![(1, name_a), (2, name_b)]);
         // update
-        let data = vec![
-            TsClient {
-                channel: 0,
-                clid: 1,
-                groups: Vec::new(),
-                name: "def".to_string(),
-            },
-            TsClient {
-                channel: 0,
-                clid: 3,
-                groups: Vec::new(),
-                name: "123".to_string(),
-            },
-        ];
+        let name_a = "def".to_string();
+        let name_c = "123".to_string();
+        let data = [(1, name_a.as_str()), (3, name_c.as_str())];
         update_ts_names(&mut conn, &data).unwrap();
         let res = get_ts_names_ordered(&mut conn).unwrap();
         let expected = vec![
-            TsClient {
-                channel: 0,
-                clid: 1,
-                groups: Vec::new(),
-                name: "def".to_string(),
-            },
-            TsClient {
-                channel: 0,
-                clid: 2,
-                groups: Vec::new(),
-                name: "クマ".to_string(),
-            },
-            TsClient {
-                channel: 0,
-                clid: 3,
-                groups: Vec::new(),
-                name: "123".to_string(),
-            },
+            (1, "def".to_string()),
+            (2, "クマ".to_string()),
+            (3, "123".to_string()),
         ];
         assert_eq!(res, expected);
     }

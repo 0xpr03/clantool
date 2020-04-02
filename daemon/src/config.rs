@@ -71,6 +71,7 @@ pub struct TSConfig {
     pub password: String,
     pub server_port: u16,
     pub unknown_id_check_enabled: bool,
+    pub check_activity: bool,
 }
 
 /// Main config struct
@@ -130,6 +131,11 @@ fn parse_config(input: String) -> Result<Config, Error> {
     Ok(a)
 }
 
+#[cfg(test)]
+pub fn default_cfg_testing() -> Config {
+    parse_config(default_config()).unwrap()
+}
+
 /// Read config from file.
 pub fn read_config(file: &Path) -> Result<String, ConfigError> {
     let mut f = OpenOptions::new()
@@ -170,6 +176,7 @@ password = "something"
 # port of the ts server instance to use
 server_port = 1101
 unknown_id_check_enabled = true
+check_activity = true
 
 [main]
 clan_ajax_url = "http://crossfire.z8games.com/rest/clanmembers.json?clanID=68910&page=%Page&perPage=10&rankType=user&startrow=%StartRow&endrow=%EndRow"

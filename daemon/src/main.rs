@@ -222,6 +222,8 @@ fn cli<'a, 'b>() -> clap::App<'a, 'b> {
                 .takes_value(true)
                 .required(true))
             */    )
+        .subcommand(SubCommand::with_name("run-daemon-ts")
+            .about("Run only ts-daemon, has to be enabled in config also"))
         .subcommand(SubCommand::with_name("check-ts")
             .about("Manually check ts identities for unknown member IDs"))
         .subcommand(SubCommand::with_name("printconfig")
@@ -404,7 +406,7 @@ fn run_daemon(pool: Pool, config: Config, timer: &timer::Timer) -> Result<()> {
             }
         },
     );
-    
+    let _guard_ts = ts::start_daemon(pool, config)?;
     loop {
         std::thread::sleep(std::time::Duration::from_millis(1000));
     }
