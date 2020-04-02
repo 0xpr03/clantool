@@ -18,8 +18,8 @@ env:
   - TEST_DB_USER=root
 before_cache:
   - rm -f ~/.cargo/registry/lock
-  - rm -r target/debug/config
-  - rm -r target/debug/log
+  - rm -r config
+  - rm -r log
 script:
   - cargo build --verbose
   - mysql -e 'DROP DATABASE IF EXISTS test;'
@@ -29,10 +29,10 @@ script:
   - mysql -e 'CREATE DATABASE test;'
 # init config
   - cargo run --bin clantool -- --help || true
-  - sed -i -e 's/"user"/"root"/g' target/debug/config/config.toml
-  - sed -i -e 's/password = "password"//g' target/debug/config/config.toml
-  - sed -i -e 's/"clantool"/"test"/g' target/debug/config/config.toml
-  - cat target/debug/config/config.toml
+  - sed -i -e 's/"user"/"root"/g' config/config.toml
+  - sed -i -e 's/password = "password"//g' config/config.toml
+  - sed -i -e 's/"clantool"/"test"/g' config/config.toml
+  - cat config/config.toml
 # init db & run crawl
   - RUST_BACKTRACE=1 cargo run --bin clantool -- init
   - RUST_BACKTRACE=1 cargo run --bin clantool -- fcrawl
