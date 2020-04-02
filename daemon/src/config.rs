@@ -24,8 +24,6 @@ use std::process::exit;
 
 use crate::CONFIG_PATH;
 
-use crate::get_executable_folder;
-
 use crate::error::Error;
 
 // pub mod config;
@@ -107,7 +105,7 @@ pub struct DBConfig {
 
 /// Init config, reading from file or creating such
 pub fn init_config() -> Config {
-    let mut path = l_expect(get_executable_folder(), "config folder"); // PathBuf
+    let mut path = l_expect(::std::env::current_dir(), "config folder"); // PathBuf
     path.push(CONFIG_PATH); // set_file_name doesn't return smth -> needs to be run on mut path
     trace!("config path {:?}", path);
     let data: String;

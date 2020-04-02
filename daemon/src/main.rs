@@ -33,7 +33,7 @@ pub use types::*;
 
 use crate::crawler::http::HeaderType;
 
-use std::env::current_exe;
+use std::env::current_dir;
 use std::fs::DirBuilder;
 use std::fs::{metadata, File};
 use std::io::Write;
@@ -734,7 +734,7 @@ fn run_update_clan(pool: &Pool, config: &Config, time: &NaiveDateTime) -> Result
 /// Init log system
 /// Creating a default log file if not existing
 fn init_log() -> Result<()> {
-    let mut log_path = get_executable_folder()?;
+    let mut log_path = current_dir()?;
     log_path.push(LOG_PATH);
     let mut log_dir = log_path.clone();
     println!("LogPath: {:?}", &log_path);
@@ -748,13 +748,6 @@ fn init_log() -> Result<()> {
     }
     log4rs::init_file(log_path, Default::default())?;
     Ok(())
-}
-
-/// Returns the current executable folder
-pub fn get_executable_folder() -> Result<std::path::PathBuf> {
-    let mut folder = current_exe()?;
-    folder.pop();
-    Ok(folder)
 }
 
 #[cfg(test)]
