@@ -147,7 +147,7 @@ impl Drop for TsStatCtrl {
 
 /// Start TS daemon, returns scheduler-guards
 pub fn start_daemon(pool: Pool, config: Config) -> Result<Vec<Timer>> {
-    if config.ts.check_activity {
+    if config.ts.enabled {
         debug!("Starting TS activity check");
         let timer_1 = Timer::new();
         // TODO: better threading sync, quick hack currently that blocks ticks on flush
@@ -316,7 +316,7 @@ mod tests {
                 .parse()
                 .unwrap(),
             unknown_id_check_enabled: true,
-            check_activity: true,
+            enabled: true,
         };
         // create default cfg, change to use our ts config
         let mut def = default_cfg_testing();

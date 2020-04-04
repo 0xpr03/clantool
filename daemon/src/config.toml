@@ -1,3 +1,7 @@
+# configuration for daemon
+# some settings are can be set through
+# entries in the settings table
+
 [db]
 user = "user"
 #comment out to login without password
@@ -7,6 +11,9 @@ port = 3306
 ip = "127.0.0.1"
 
 [ts]
+# enables activity statistics
+# and allows guest-poke functionality
+enabled = true
 ip = "127.0.0.1"
 # query port
 port = 1111
@@ -14,8 +21,9 @@ user = "user"
 password = "something"
 # port of the ts server instance to use
 server_port = 1101
+# enables check for non-attributed ts identities
+# that have a member group
 unknown_id_check_enabled = true
-check_activity = true
 
 [main]
 clan_ajax_url = "http://crossfire.z8games.com/rest/clanmembers.json?clanID=68910&page=%Page&perPage=10&rankType=user&startrow=%StartRow&endrow=%EndRow"
