@@ -22,7 +22,7 @@ use mysql::{Pool, PooledConn};
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::convert::TryInto;
-use std::thread::sleep;
+use std::thread::{self, sleep};
 use std::time::Duration;
 use std::{sync::RwLock, time::Instant};
 use timer::*;
@@ -33,7 +33,10 @@ const CHANNEL_ID: &str = "cid";
 
 const CLIENT_TYPE: &str = "client_type";
 const CLIENT_TYPE_NORMAL: &str = "0";
-const CLIENT_ID: &str = "client_database_id";
+/// Per-Identity ID
+const CLIENT_DB_ID: &str = "client_database_id";
+/// Per-connection ID
+const CLIENT_CONN_ID: &str = "clid";
 const CLIENT_GROUPS: &str = "client_servergroups";
 const CLIENT_CHANNEL: &str = CHANNEL_ID;
 const CLIENT_NAME: &str = "client_nickname";
@@ -41,6 +44,7 @@ const CLIENT_NAME: &str = "client_nickname";
 /// Safety: connection timeout has to be short enough that no request blocks others!
 const INTERVAL_ACTIVITY_S: i64 = 30;
 const INTERVAL_FLUSH_M: i64 = 15;
+const COOLDOWN_POKE_S: u64 = 60 * 20;
 
 mod connection;
 
@@ -51,16 +55,26 @@ struct TsStatCtrl {
     pool: Pool,
     conn: Connection,
     names: HashMap<TsClDBID, String>,
-    times: HashMap<(TsClDBID, ChannelID), i32>,
-    last_channel: HashMap<TsClDBID, ChannelID>,
+    times: HashMap<(TsClDBID, TsChannelID), i32>,
+    last_channel: HashMap<TsClDBID, TsChannelID>,
     last_date: chrono::naive::NaiveDate,
-    last_guest_poke: Option<Instant>,
     last_update: Instant,
+    last_guest_poke: Option<Instant>,
+    /// none also if no poke enabled
+    poke_config: Option<PokeConfig>,
+}
+
+#[derive(Default)]
+struct PokeConfig {
+    poke_group: TsGroupID,
+    guest_group: TsGroupID,
+    guest_channel: TsGroupID,
+    poke_msg: String,
 }
 
 impl TsStatCtrl {
     fn new(pool: Pool, config: Config) -> Result<Self> {
-        Ok(Self {
+        let mut data = Self {
             pool,
             conn: Connection::new(config)?,
             last_date: Local::today().naive_local(),
@@ -69,7 +83,52 @@ impl TsStatCtrl {
             times: Default::default(),
             last_channel: Default::default(),
             last_guest_poke: Default::default(),
-        })
+            poke_config: Default::default(),
+        };
+        data.inner_update_settings(true)?;
+        Ok(data)
+    }
+
+    /// Update dynamic settings from DB
+    pub fn update_settings(&mut self) -> Result<()> {
+        self.inner_update_settings(false)
+    }
+
+    /// Update dynamic settings from DB. first_run controls log-output
+    fn inner_update_settings(&mut self, first_run: bool) -> Result<()> {
+        // shouldn't name Pool & TsConnection conn..
+        let old_enabled = self.poke_config.is_some();
+        let mut conn = self.pool.get_conn()?;
+        self.poke_config = if is_ts3_guest_check_enabled(&mut conn, &self.conn.config()) {
+            let poke_group = db::read_setting(&mut conn, crate::TS3_GUEST_WATCHER_GROUP_KEY)?;
+            let guest_group = db::read_setting(&mut conn, crate::TS3_GUEST_GROUP_KEY)?;
+            let guest_channel = db::read_setting(&mut conn, crate::TS3_GUEST_CHANNEL_KEY)?;
+            let poke_msg = db::read_string_setting(&mut conn, crate::TS3_GUEST_POKE_MSG)?
+                .unwrap_or("Guest arrived!".to_string());
+
+            if let (Some(poke_group), Some(guest_group), Some(guest_channel)) =
+                (poke_group, guest_group, guest_channel)
+            {
+                Some(PokeConfig {
+                    poke_group,
+                    guest_group,
+                    guest_channel,
+                    poke_msg,
+                })
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        if self.poke_config.is_some() != old_enabled || first_run {
+            let msg = match self.poke_config.is_some() {
+                true => "Ts-Poke enabled",
+                false => "Ts-Poke disabled",
+            };
+            db::log_message(&mut conn, msg, "unable to log poke config change");
+        }
+        Ok(())
     }
 
     /// Check online clients, update activity & send notifications
@@ -86,8 +145,20 @@ impl TsStatCtrl {
         self.last_update = new_timestamp;
 
         let mut new_channel = HashMap::with_capacity(data.len());
+
+        let mut poke_clients: Vec<TsConID> = Vec::new();
+        let mut poke = false;
+        let poke_cfg = if self
+            .last_guest_poke
+            .map_or(false, |v| v.elapsed().as_secs() > COOLDOWN_POKE_S)
+        {
+            self.poke_config.as_ref()
+        } else {
+            None
+        };
+
         for client in data {
-            let id = client.clid;
+            let id = client.cldbid;
             self.names.insert(id, client.name);
             // add elapsed time to last channel, or current if no previous is known
             let chan = self.last_channel.get(&id).unwrap_or(&client.channel);
@@ -99,12 +170,57 @@ impl TsStatCtrl {
                 self.times.insert(k, elapsed);
             }
 
+            if let Some(ref cfg) = poke_cfg {
+                if cfg.guest_channel == client.channel && client.groups.contains(&cfg.guest_group) {
+                    poke = true;
+                } else if client.groups.contains(&cfg.poke_group) {
+                    poke_clients.push(client.conid);
+                }
+            }
+
             // remember current channel for next time
             new_channel.insert(id, client.channel);
             // TODO: group check
         }
+
         // excludes disconnected clients
         self.last_channel = new_channel;
+
+        if poke {
+            self.poke_clients(poke_clients)?;
+        }
+        Ok(())
+    }
+
+    /// poke clients, runs new thread
+    fn poke_clients(&mut self, clients: Vec<TsConID>) -> Result<()> {
+        self.last_guest_poke = Some(Instant::now());
+        let cooldown = match self.conn.config().ts.cmd_limit_secs {
+            0 => None,
+            // subtract
+            v => Some(Duration::from_millis(1000 / (v as u64))),
+        };
+        let msg: &str = match self.poke_config.as_ref().map(|v| &v.poke_msg) {
+            Some(v) => v,
+            None => unreachable!("Unreachable! poke_clients invoked without poke_config!"),
+        };
+        let escaped = raw::escape_arg(msg);
+        let mut conn = self.conn.clone()?;
+        thread::spawn(move || {
+            let res = || -> Result<()> {
+                for client in clients {
+                    if let Some(cooldown) = cooldown {
+                        sleep(cooldown);
+                    }
+                    conn.get()?
+                        .raw_command(&format!("poke clid={} msg={}", client, &escaped))?;
+                }
+                Ok(())
+            };
+            if let Err(e) = res() {
+                error!("Guest-Notification failed: {}", e);
+            }
+        });
         Ok(())
     }
 
@@ -175,12 +291,15 @@ pub fn start_daemon(pool: Pool, config: Config) -> Result<Vec<Timer>> {
                 if let Err(e) = guard.flush_data() {
                     error!("Flushing TS Data to DB! {}", e);
                 }
+                if let Err(e) = guard.update_settings() {
+                    error!("Updating TS config from DB! {}", e);
+                }
             })
             .ignore();
 
         Ok(vec![timer_1, timer_2])
     } else {
-        info!("TS activity check disabled, skipping");
+        info!("TS activity check disabled, guest-poke disabled");
         Ok(Vec::new())
     }
 }
@@ -247,6 +366,21 @@ pub fn get_ts3_member_groups(conn: &mut PooledConn) -> Result<Option<Vec<usize>>
     db::read_list_setting(conn, crate::TS3_MEMBER_GROUP)
 }
 
+/// Read ts3 unknown identity settings from DB
+fn is_ts3_guest_check_enabled(conn: &mut PooledConn, config: &Config) -> bool {
+    match db::read_bool_setting(conn, TS3_GUEST_NOTIFY_ENABLE_KEY) {
+        Ok(Some(v)) => v,
+        Ok(None) => config.ts.unknown_id_check_enabled,
+        Err(e) => {
+            error!(
+                "Error retrieving '{}' setting: {}",
+                TS3_GUEST_NOTIFY_ENABLE_KEY, e
+            );
+            config.ts.unknown_id_check_enabled
+        }
+    }
+}
+
 /// Get clients on ts. Returns last entry for multiple connection of same ID.
 fn get_online_clients(conn: &mut Connection) -> Result<HashSet<TsClient>> {
     let res = raw::parse_multi_hashmap(conn.get()?.raw_command("clientlist -groups")?, false);
@@ -261,9 +395,13 @@ fn get_online_clients(conn: &mut Connection) -> Result<HashSet<TsClient>> {
                     .get(CLIENT_NAME)
                     .map(raw::unescape_val)
                     .ok_or_else(|| Error::TsMissingValue(CLIENT_NAME))?,
-                clid: e
-                    .get(CLIENT_ID)
-                    .ok_or_else(|| Error::TsMissingValue(CLIENT_ID))?
+                cldbid: e
+                    .get(CLIENT_DB_ID)
+                    .ok_or_else(|| Error::TsMissingValue(CLIENT_DB_ID))?
+                    .parse()?,
+                conid: e
+                    .get(CLIENT_CONN_ID)
+                    .ok_or_else(|| Error::TsMissingValue(CLIENT_CONN_ID))?
                     .parse()?,
                 channel: e
                     .get(CLIENT_CHANNEL)
@@ -318,6 +456,7 @@ mod tests {
                 .unwrap(),
             unknown_id_check_enabled: true,
             enabled: true,
+            cmd_limit_secs: 4,
         };
         // create default cfg, change to use our ts config
         let mut def = default_cfg_testing();
@@ -325,11 +464,15 @@ mod tests {
         dbg!(&def);
 
         let mut conn = Connection::new(def).unwrap();
-        // let clients = get_online_clients(&mut conn).unwrap();
-        // dbg!(clients);
+        let clients = get_online_clients(&mut conn).unwrap();
+        dbg!(clients);
         // let channels = get_channels(&mut conn).unwrap();
         // dbg!(channels);
-        let snapshot = conn.get().unwrap().raw_command("serversnapshotcreate").unwrap();
-        dbg!(snapshot);
+        // let snapshot = conn
+        //     .get()
+        //     .unwrap()
+        //     .raw_command("serversnapshotcreate")
+        //     .unwrap();
+        // dbg!(snapshot);
     }
 }

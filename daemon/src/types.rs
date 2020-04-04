@@ -16,9 +16,13 @@ use std::hash::Hash;
 use std::hash::Hasher;
 
 /// Ts channel ID
-pub type ChannelID = i32;
+pub type TsChannelID = i32;
 /// Ts client DB-ID
 pub type TsClDBID = i32;
+/// Ts group ID
+pub type TsGroupID = i32;
+/// Ts client connection ID
+pub type TsConID = i32;
 
 /// Clan data structure
 #[derive(Debug, PartialEq, PartialOrd)]
@@ -43,36 +47,39 @@ pub struct Member {
 pub struct TsActivity {
     pub client: TsClDBID,
     pub time: i32,
-    pub channel: ChannelID,
+    pub channel: TsChannelID,
 }
 
 /// TS client
 #[derive(Debug)]
 pub struct TsClient {
     pub name: String,
-    pub clid: TsClDBID,
-    pub channel: ChannelID,
+    /// Database ID
+    pub cldbid: TsClDBID,
+    /// Connection ID
+    pub conid: TsConID,
+    pub channel: TsChannelID,
     pub groups: Vec<i32>,
 }
 
 /// Custom hash impl to allow dedup of multiple connections
 impl Hash for TsClient {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.clid.hash(state);
+        self.cldbid.hash(state);
     }
 }
 
 /// See hash impl
 impl PartialEq for TsClient {
     fn eq(&self, other: &Self) -> bool {
-        self.clid == other.clid
+        self.cldbid == other.cldbid
     }
 }
 impl Eq for TsClient {}
 
 #[derive(Debug)]
 pub struct Channel {
-    pub id: ChannelID,
+    pub id: TsChannelID,
     pub name: String,
 }
 

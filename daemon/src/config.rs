@@ -70,6 +70,7 @@ pub struct TSConfig {
     pub server_port: u16,
     pub unknown_id_check_enabled: bool,
     pub enabled: bool,
+    pub cmd_limit_secs: u16,
 }
 
 /// Main config struct

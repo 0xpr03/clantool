@@ -71,6 +71,12 @@ const LEAVE_ENABLE_KEY: &str = "auto_leave_enable";
 /// Check for unknown identities in member group
 const TS3_UNKNOWN_CHECK_KEY: &str = "ts3_check_identities_enable";
 const TS3_MEMBER_GROUP: &str = "ts3_check_member_groups";
+/// Whether to poke on guests
+const TS3_GUEST_NOTIFY_ENABLE_KEY: &str = "ts3_guest_notify_enable";
+const TS3_GUEST_WATCHER_GROUP_KEY: &str = "ts3_guest_watcher_group";
+const TS3_GUEST_GROUP_KEY: &str = "ts3_guest_group";
+const TS3_GUEST_CHANNEL_KEY: &str = "ts3_guest_channel";
+const TS3_GUEST_POKE_MSG: &str = "ts3_guest_poke_msg";
 
 pub type Result<T> = ::std::result::Result<T, Error>;
 

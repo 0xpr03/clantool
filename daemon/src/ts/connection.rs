@@ -41,6 +41,15 @@ impl Connection {
         Ok(conn)
     }
 
+    /// Try creating a second connection
+    pub fn clone(&self) -> Result<Self> {
+        Self::new(self.cfg.clone())
+    }
+
+    pub fn config(&self) -> &Config {
+        &self.cfg
+    }
+
     pub fn new(cfg: Config) -> Result<Connection> {
         let conn = Self::connect(&cfg.ts)?;
         Ok(Self { conn, cfg })

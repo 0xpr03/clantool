@@ -159,14 +159,14 @@ mod test {
         assert_eq!(data, vec![5, 6]);
     }
 
-    fn get_channels_ordered(conn: &mut PooledConn) -> Result<Vec<(ChannelID, String)>> {
+    fn get_channels_ordered(conn: &mut PooledConn) -> Result<Vec<(TsChannelID, String)>> {
         let res = conn.prep_exec(
             "SELECT channel_id,name FROM `ts_channels` ORDER BY channel_id",
             (),
         )?;
         let data: Vec<_> = res
             .map(|row| {
-                let row: (ChannelID, String) = from_row(row.unwrap());
+                let row: (TsChannelID, String) = from_row(row.unwrap());
                 row
             })
             .collect();
@@ -223,7 +223,7 @@ mod test {
         )?;
         let data: Vec<_> = res
             .map(|row| {
-                let (client, channel, time, date): (TsClDBID, ChannelID, i32, NaiveDate) =
+                let (client, channel, time, date): (TsClDBID, TsChannelID, i32, NaiveDate) =
                     from_row(row.unwrap());
                 (
                     date,
