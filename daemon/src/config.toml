@@ -1,6 +1,7 @@
 # configuration for daemon
-# some settings are can be set through
+# some settings can be set through
 # entries in the settings table
+# making them dynamic via DB calls
 
 [db]
 user = "user"

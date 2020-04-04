@@ -40,6 +40,7 @@ const CLIENT_NAME: &str = "client_nickname";
 
 /// Safety: connection timeout has to be short enough that no request blocks others!
 const INTERVAL_ACTIVITY_S: i64 = 30;
+const INTERVAL_FLUSH_M: i64 = 15;
 
 mod connection;
 
@@ -117,7 +118,7 @@ impl TsStatCtrl {
             .map(|(id, name)| (*id, name.as_str()))
             .collect();
         db::ts::update_ts_names(&mut conn, values.as_slice())?;
-        trace!("Flushed {} name entries",self.names.len());
+        trace!("Flushed {} name entries", self.names.len());
         self.names.clear();
 
         let values: Vec<_> = self
@@ -130,7 +131,7 @@ impl TsStatCtrl {
             })
             .collect();
         db::ts::update_ts_activity(&mut conn, &self.last_date, values.as_slice())?;
-        trace!("Flushed {} time entries",self.times.len());
+        trace!("Flushed {} time entries", self.times.len());
         self.times.clear();
         self.last_date = Local::today().naive_local();
         Ok(())
@@ -150,7 +151,7 @@ pub fn start_daemon(pool: Pool, config: Config) -> Result<Vec<Timer>> {
     if config.ts.enabled {
         debug!("Starting TS activity check");
         let timer_1 = Timer::new();
-        // TODO: better threading sync, quick hack currently that blocks ticks on flush
+        // TODO: better threading sync, blocks ticks on flush
         let ts_handler = Arc::new(RwLock::new(TsStatCtrl::new(pool.clone(), config.clone())?));
         let handler_c = ts_handler.clone();
         timer_1
@@ -158,21 +159,21 @@ pub fn start_daemon(pool: Pool, config: Config) -> Result<Vec<Timer>> {
                 trace!("Performing ts handler tick");
                 let mut guard = handler_c.write().unwrap();
                 if let Err(e) = guard.tick() {
-                    error!("{}", e);
+                    error!("Ticking ts-activity: {}", e);
                 }
             })
             .ignore();
         let timer_2 = Timer::new();
         let mut conn = Connection::new(config)?;
         timer_2
-            .schedule_repeating(chrono::Duration::minutes(15), move || {
+            .schedule_repeating(chrono::Duration::minutes(INTERVAL_FLUSH_M), move || {
                 trace!("Performing channel update & data flush");
                 if let Err(e) = update_channels(&pool, &mut conn) {
-                    error!("Error performing TS channel update! {}", e);
+                    error!("Performing TS channel update! {}", e);
                 }
                 let mut guard = ts_handler.write().unwrap();
                 if let Err(e) = guard.flush_data() {
-                    error!("Error flushing TS Data to DB! {}", e);
+                    error!("Flushing TS Data to DB! {}", e);
                 }
             })
             .ignore();

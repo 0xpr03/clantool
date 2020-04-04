@@ -14,7 +14,6 @@
 
 //! Member/Exp/CP crawler data functions
 use super::*;
-use crate::*;
 
 /// Insert a Vec of members under the given Timestamp
 /// This does affect table member and member_names

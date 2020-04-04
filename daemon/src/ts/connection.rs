@@ -15,8 +15,8 @@
 use crate::config::Config;
 use crate::config::TSConfig;
 use crate::*;
-use ts3_query::*;
 use ::std::time::Duration;
+use ts3_query::*;
 
 // Safety: see module tick interval
 const TIMEOUT_CONN: Duration = Duration::from_millis(1500);
@@ -31,7 +31,11 @@ pub struct Connection {
 impl Connection {
     fn connect(cfg: &TSConfig) -> Result<QueryClient> {
         // let mut conn = QueryClient::new((cfg.ip.as_ref(), cfg.port))?;
-        let mut conn = QueryClient::with_timeout((cfg.ip.as_ref(), cfg.port),Some(TIMEOUT_CONN),Some(TIMEOUT_CMD))?;
+        let mut conn = QueryClient::with_timeout(
+            (cfg.ip.as_ref(), cfg.port),
+            Some(TIMEOUT_CONN),
+            Some(TIMEOUT_CMD),
+        )?;
         conn.login(&cfg.user, &cfg.password)?;
         conn.select_server_by_port(cfg.server_port)?;
         Ok(conn)
