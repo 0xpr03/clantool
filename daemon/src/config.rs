@@ -157,51 +157,7 @@ fn write_config_file(path: &Path, data: &str) -> Result<(), ConfigError> {
 /// Create a new config.
 fn default_config() -> String {
     trace!("Creating config..");
-    let toml = r#"[db]
-user = "user"
-#comment out to login without password
-password = "password"
-db = "clantool"
-port = 3306
-ip = "127.0.0.1"
-
-[ts]
-ip = "127.0.0.1"
-# query port
-port = 1111
-user = "user"
-password = "something"
-# port of the ts server instance to use
-server_port = 1101
-unknown_id_check_enabled = true
-check_activity = true
-
-[main]
-clan_ajax_url = "http://crossfire.z8games.com/rest/clanmembers.json?clanID=68910&page=%Page&perPage=10&rankType=user&startrow=%StartRow&endrow=%EndRow"
-clan_ajax_site_key = "%Page"
-clan_ajax_exptected_per_site = 10
-clan_ajax_start_row_key = "%StartRow"
-clan_ajax_end_row_key = "%EndRow"
-# maximum amount of sites, after which to abort
-clan_ajax_max_sites = 10
-# required for referer
-clan_url = "http://crossfire.z8games.com/clan/68910"
-# enable automatic leave handling
-auto_leave_enabled = true
-# max days distance of date to compare to for leave detection
-auto_leave_max_age = 4
-auto_leave_message_default = "auto leave detection"
-# time of the day the crawler should run
-time = "12:00"
-retries = 5
-# retry number * retry_interval = maximum time waited
-retry_interval = "00:05"
-# send mail on failure
-send_error_mail = true
-# list of email address to send errors
-mail = ["root@localhost"]
-mail_from = "noreply@localhost"
-"#;
+    let toml = include_str!("config.toml");
 
     toml.to_owned()
 }
