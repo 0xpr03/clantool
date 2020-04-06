@@ -14,7 +14,7 @@
 
 //! TS data handling functions
 
-use super::*;
+use super::prelude::*;
 use chrono::naive::NaiveDate;
 
 /// Update unknown_ts_ids table based on member clients  
@@ -22,68 +22,44 @@ use chrono::naive::NaiveDate;
 /// Allows doubled group IDs in member_clients
 pub fn update_unknown_ts_ids(conn: &mut PooledConn, member_clients: &[usize]) -> Result<()> {
     create_temp_ts3_table(conn, "t_member_clients")?;
-    {
-        // insert every member client id into temp table, ignore multi-group clients
-        let mut stmt =
-            conn.prepare("INSERT IGNORE INTO `t_member_clients` (`client_id`) VALUES (?)")?;
-        for client in member_clients {
-            stmt.execute((&client,))?;
-        }
-    }
-
-    {
-        // filter everything out that has a member assigned
-        conn.prep_exec("DELETE FROM t1 USING `t_member_clients` t1 INNER JOIN `ts_relation` t2 ON ( t1.client_id = t2.client_id )", ())?;
-    }
-
-    {
-        // truncate unknown ts ids table
-        conn.prep_exec("TRUNCATE `unknown_ts_ids`", ())?;
-    }
-
-    {
-        // replace with correct values
-        conn.prep_exec(
-            "INSERT INTO `unknown_ts_ids` SELECT * FROM `t_member_clients`",
-            (),
-        )?;
-    }
-
+    // insert every member client id into temp table, ignore multi-group clients
+    conn.exec_batch(
+        "INSERT IGNORE INTO `t_member_clients` (`client_id`) VALUES (?)",
+        member_clients.iter().map(|m| (m,)),
+    )?;
+    // filter everything out that has a member assigned
+    conn.query_drop("DELETE FROM t1 USING `t_member_clients` t1 INNER JOIN `ts_relation` t2 ON ( t1.client_id = t2.client_id )")?;
+    // truncate unknown ts ids table
+    conn.query_drop("TRUNCATE `unknown_ts_ids`")?;
+    // replace with correct values
+    conn.query_drop("INSERT INTO `unknown_ts_ids` SELECT * FROM `t_member_clients`")?;
     Ok(())
 }
 
 /// Creates a temporary, single client_id column table with the specified name
 fn create_temp_ts3_table(conn: &mut PooledConn, tbl_name: &'static str) -> Result<()> {
-    let mut stmt = conn.prepare(format!(
+    conn.query_drop(format!(
         "CREATE TEMPORARY TABLE `{}` (
-                        `client_id` int(11) NOT NULL PRIMARY KEY
-                        ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
-                        ",
+        `client_id` int(11) NOT NULL PRIMARY KEY
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8;",
         tbl_name
     ))?;
-    stmt.execute(())?;
     Ok(())
 }
 
 /// Update/Insert ts3 channel names
 pub fn upsert_channels(conn: &mut PooledConn, channels: &[Channel]) -> Result<()> {
-    let mut stmt = conn.prepare(
+    conn.exec_batch(
         "INSERT INTO `ts_channels` (`channel_id`,`name`) VALUES (?,?) ON DUPLICATE KEY UPDATE `name`=VALUES(`name`)",
-    )?;
-    for e in channels {
-        stmt.execute((e.id, &e.name))?;
-    }
+        channels.iter().map(|e|(e.id, &e.name)))?;
     Ok(())
 }
 
 /// Update ts client names
 pub fn update_ts_names(conn: &mut PooledConn, names: &[(TsClDBID, &str)]) -> Result<()> {
-    let mut stm_names = conn.prepare(
-        "INSERT INTO `ts_names` (`client_id`,`name`) VALUES (?,?) ON DUPLICATE KEY UPDATE `name` = VALUES(`name`)"
-    )?;
-    for (id, name) in names {
-        stm_names.execute((id, name))?;
-    }
+    conn.exec_batch(
+        "INSERT INTO `ts_names` (`client_id`,`name`) VALUES (?,?) ON DUPLICATE KEY UPDATE `name` = VALUES(`name`)",
+        names.iter())?;
     Ok(())
 }
 
@@ -93,16 +69,10 @@ pub fn update_ts_activity(
     date: &NaiveDate,
     times: &[TsActivity],
 ) -> Result<()> {
-    let mut transaction = conn.start_transaction(false, None, None)?;
-    {
-        let mut stm_time = transaction.prepare(
+    let mut transaction = conn.start_transaction(TxOpts::default())?;
+    transaction.exec_batch(
         "INSERT INTO `ts_activity` (`date`,`client_id`,`channel_id`,`time`) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE `time` = `time`+VALUES(`time`)",
-        )?;
-
-        for e in times {
-            stm_time.execute((date, e.client, e.channel, e.time))?;
-        }
-    }
+        times.iter().map(|e|(date, e.client, e.channel, e.time)))?;
     transaction.commit()?;
     Ok(())
 }
@@ -120,57 +90,39 @@ mod test {
     #[test]
     fn test_update_unknown_ts_ids() {
         let (mut conn, _guard) = setup_db();
-        {
-            // insert some ids into member ts relation
-            let mut stmt = conn
-                .prepare("INSERT INTO `ts_relation` (`client_id`,`id`) VALUES (?,1)")
-                .unwrap();
-            for i in 0..5 {
-                stmt.execute((i,)).unwrap();
-            }
-        }
+        // insert some ids into member ts relation
+        conn.exec_batch(
+            "INSERT INTO `ts_relation` (`client_id`,`id`) VALUES (?,1)",
+            (0..5).map(|i| (i,)),
+        )
+        .unwrap();
 
-        {
-            // insert some "old" values into the table
-            let mut stmt = conn
-                .prepare("INSERT INTO `unknown_ts_ids` (`client_id`) VALUES (?)")
-                .unwrap();
-            for i in 0..10 {
-                stmt.execute((i,)).unwrap();
-            }
-        }
+        // insert some "old" values into the table
+        conn.exec_batch(
+            "INSERT INTO `unknown_ts_ids` (`client_id`) VALUES (?)",
+            (0..10).map(|i| (i,)),
+        )
+        .unwrap();
 
         // include double ids, allows two relevant groups for same client
         update_unknown_ts_ids(&mut conn, &vec![2, 3, 6, 4, 5, 6]).unwrap();
 
-        let res = conn
-            .prep_exec(
+        let res: Vec<isize> = conn
+            .query_map(
                 "SELECT client_id FROM `unknown_ts_ids` ORDER BY client_id",
-                (),
+                |id| id,
             )
             .unwrap();
-        let data: Vec<isize> = res
-            .map(|row| {
-                let id = from_row(row.unwrap());
-                id
-            })
-            .collect();
 
-        assert_eq!(data, vec![5, 6]);
+        assert_eq!(res, vec![5, 6]);
     }
 
     fn get_channels_ordered(conn: &mut PooledConn) -> Result<Vec<(TsChannelID, String)>> {
-        let res = conn.prep_exec(
+        let res: Vec<(TsChannelID, String)> = conn.query_map(
             "SELECT channel_id,name FROM `ts_channels` ORDER BY channel_id",
-            (),
+            |row| row,
         )?;
-        let data: Vec<_> = res
-            .map(|row| {
-                let row: (TsChannelID, String) = from_row(row.unwrap());
-                row
-            })
-            .collect();
-        Ok(data)
+        Ok(res)
     }
 
     #[test]
@@ -217,24 +169,14 @@ mod test {
     }
 
     fn get_ts_activity_ordered(conn: &mut PooledConn) -> Result<Vec<(NaiveDate, TsActivity)>> {
-        let res = conn.prep_exec(
+        let data = conn.query_map(
             "SELECT client_id,channel_id,time,date FROM `ts_activity` ORDER BY client_id,channel_id",
-            (),
+            |(client, channel, time, date)|(date,TsActivity {
+                client,
+                channel,
+                time,
+            }),
         )?;
-        let data: Vec<_> = res
-            .map(|row| {
-                let (client, channel, time, date): (TsClDBID, TsChannelID, i32, NaiveDate) =
-                    from_row(row.unwrap());
-                (
-                    date,
-                    TsActivity {
-                        client,
-                        channel,
-                        time,
-                    },
-                )
-            })
-            .collect();
         Ok(data)
     }
 
@@ -308,16 +250,10 @@ mod test {
     }
 
     fn get_ts_names_ordered(conn: &mut PooledConn) -> Result<Vec<(TsClDBID, String)>> {
-        let res = conn.prep_exec(
+        let data = conn.query_map(
             "SELECT client_id,name FROM `ts_names` ORDER BY client_id",
-            (),
+            |r| r,
         )?;
-        let data: Vec<_> = res
-            .map(|row| {
-                let v: (TsClDBID, String) = from_row(row.unwrap());
-                v
-            })
-            .collect();
         Ok(data)
     }
 

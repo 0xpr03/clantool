@@ -13,19 +13,19 @@
 // limitations under the License.
 
 //! Database functions
-use chrono::naive::NaiveDate;
-use chrono::naive::NaiveDateTime;
-use mysql::{from_row_opt, IsolationLevel, Opts, OptsBuilder, Pool, PooledConn, Row};
+use prelude::*;
 use regex;
 
-use crate::*;
+mod prelude {
+    pub use crate::*;
+    pub use mysql::prelude::*;
+    pub use mysql::{from_row_opt, Opts, OptsBuilder, Pool, PooledConn, QueryResult, Row, TxOpts};
+    pub const DATE_FORMAT: &str = "%Y-%m-%d";
+    pub const DATETIME_FORMAT: &str = "%Y-%m-%d %H:%M:%S";
+}
 
 const POOL_MIN_CONN: usize = 1; // minimum amount of running connection per pool
 const POOL_MAX_CONN: usize = 100; // maximum amount of running connections per pool
-const TABLE_MISSING_DATES: &str = "t_missingdates"; // temporary table used to store missing dates
-const DATE_FORMAT: &str = "%Y-%m-%d";
-const DATETIME_FORMAT: &str = "%Y-%m-%d %H:%M:%S";
-
 pub mod crawler;
 pub mod import;
 pub mod ts;
@@ -41,15 +41,14 @@ pub fn new(
     password: Option<String>,
     db: String,
 ) -> Result<Pool> {
-    let mut builder = OptsBuilder::new();
-    builder
+    let opts: Opts = OptsBuilder::new()
         .ip_or_hostname(Some(address))
         .db_name(Some(db))
         .tcp_port(port)
         .prefer_socket(false)
         .user(Some(user))
-        .pass(password);
-    let opts: Opts = builder.into();
+        .pass(password)
+        .into();
     let pool = Pool::new_manual(POOL_MIN_CONN, POOL_MAX_CONN, opts)?;
     Ok(pool)
 }
@@ -67,8 +66,10 @@ pub fn log_message(conn: &mut PooledConn, message: &str, error_msg: &str) {
 
 /// Insert log message for current timestamp
 pub fn log_message_opt(conn: &mut PooledConn, message: &str) -> Result<()> {
-    let mut stmt = conn.prepare("INSERT INTO `log` (`date`,`msg`) VALUES (NOW(),?)")?;
-    stmt.execute((message,))?;
+    conn.exec_drop(
+        "INSERT INTO `log` (`date`,`msg`) VALUES (NOW(),?)",
+        (message,),
+    )?;
     Ok(())
 }
 
@@ -103,13 +104,12 @@ pub fn read_setting<T>(conn: &mut PooledConn, key: &str) -> Result<Option<T>>
 where
     T: mysql::prelude::FromValue,
 {
-    let mut stmt = conn.prepare("SELECT `value` FROM settings WHERE `key` = ?")?;
-    let mut result = stmt.execute((key,))?;
-    match result.next() {
+    let result: Option<Row> =
+        conn.exec_first("SELECT `value` FROM settings WHERE `key` = ?", (key,))?;
+    match result {
         None => Ok(None),
         Some(v) => {
-            let row = v?;
-            let value: Option<T> = from_row_opt(row)?;
+            let value: Option<T> = from_row_opt(v)?;
             Ok(value)
         }
     }
@@ -130,10 +130,10 @@ pub fn read_bool_setting(conn: &mut PooledConn, key: &str) -> Result<Option<bool
 pub fn init_tables(pool: &Pool) -> Result<()> {
     let tables = get_db_create_sql();
 
-    let mut transaction = pool.start_transaction(false, None, None)?;
+    let mut transaction = pool.start_transaction(TxOpts::default())?;
 
     for table in tables {
-        transaction.prep_exec(table, ())?;
+        transaction.query_drop(table)?;
     }
 
     transaction.commit()?;
@@ -191,10 +191,9 @@ mod test {
 
         let date_check: NaiveDate = Local::now().naive_local().date();
 
-        let mut stmt = conn.prepare("SELECT date,msg FROM log").unwrap();
+        let res = conn.query_iter("SELECT date,msg FROM log").unwrap();
 
-        let result = stmt.execute(()).unwrap();
-        for row in result {
+        for row in res {
             let (date, msg): (NaiveDateTime, String) = from_row(row.unwrap());
             assert_eq!(date_check, date.date());
             assert_eq!(msg_insert, msg);

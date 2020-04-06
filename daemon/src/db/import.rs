@@ -13,8 +13,8 @@
 // limitations under the License.
 
 //! DB function for CSV import
+use super::prelude::*;
 use crate::import::*;
-use crate::*;
 use mysql::Transaction;
 
 /// Import account data inserter
@@ -29,7 +29,7 @@ impl<'a> ImportAccountInserter<'a> {
     /// date_name_insert: date to use for name insertion & update field
     pub fn new(pool: &'a Pool, comment_addition: &'a str) -> Result<ImportAccountInserter<'a>> {
         Ok(ImportAccountInserter {
-            transaction: pool.start_transaction(false, None, None)?,
+            transaction: pool.start_transaction(TxOpts::default())?,
             comment_addition,
         })
     }
@@ -48,12 +48,12 @@ impl<'a> ImportAccountInserter<'a> {
     /// Insert account data
     /// return total amount memberships,inserted for account
     pub fn insert_account(&mut self, acc: &ImportMembership) -> Result<(usize, usize)> {
-        self.transaction.prep_exec(
+        self.transaction.exec_drop(
             "INSERT IGNORE INTO `member_names` (`id`,`name`,`date`,`updated`) VALUES (?,?,?,?)",
             (acc.id, &acc.name, acc.date_name, acc.date_name),
         )?;
         let comment = self.get_formated_comment(acc);
-        self.transaction.prep_exec(
+        self.transaction.exec_drop(
             "INSERT IGNORE INTO `member_addition` (`id`,`name`,`vip`,`comment`) VALUES (?,?,?,?)
             ON DUPLICATE KEY UPDATE comment=CONCAT(comment,\"\n\",VALUES(`comment`))",
             (acc.id, &acc.vname, acc.vip, comment),
@@ -62,17 +62,17 @@ impl<'a> ImportAccountInserter<'a> {
         let mut membership_inserted = 0;
 
         for membership in &acc.memberships {
-            let nr;
-            {
-                let result = self.transaction.prep_exec(
-                    "INSERT IGNORE INTO `membership` (`id`,`from`,`to`) VALUES (?,?,?)",
-                    (acc.id, membership.from, membership.to),
-                )?;
-                nr = result.last_insert_id() as i32;
-            }
+            self.transaction.exec_drop(
+                "INSERT IGNORE INTO `membership` (`id`,`from`,`to`) VALUES (?,?,?)",
+                (acc.id, membership.from, membership.to),
+            )?;
+            let nr = self
+                .transaction
+                .last_insert_id()
+                .ok_or(Error::NoValue("No last insert ID!"))? as i32;
 
             if nr != 0 {
-                self.transaction.prep_exec(
+                self.transaction.exec_drop(
                     "INSERT INTO `membership_cause` (`nr`,`kicked`,`cause`) VALUES (?,?,?)",
                     (nr, false, IMPORT_MEMBERSHIP_CAUSE),
                 )?;
@@ -95,10 +95,8 @@ mod test {
 
     /// Get member_addition for specified id return (id,name,vip,comment)
     fn get_member_addition(conn: &mut PooledConn, id: &i32) -> (i32, String, bool, String) {
-        let mut stmt = conn.prepare("SELECT `id`,`name`,CAST(`vip` AS INT) as `vip`,`comment` FROM `member_addition` WHERE `id` = ?").unwrap();
-        let mut result = stmt.execute((id,)).unwrap();
-        let result = result.next().unwrap().unwrap();
-        from_row(result)
+        let res = conn.exec_first("SELECT `id`,`name`,CAST(`vip` AS INT) as `vip`,`comment` FROM `member_addition` WHERE `id` = ?",(id,)).unwrap();
+        res.unwrap()
     }
 
     /// Get first member_names entry for specified id, return (id,name,date,updated)
@@ -106,14 +104,13 @@ mod test {
         conn: &mut PooledConn,
         id: &i32,
     ) -> (i32, String, NaiveDateTime, NaiveDateTime) {
-        let mut stmt = conn
-            .prepare(
+        let res = conn
+            .exec_first(
                 "SELECT `id`,`name`,`date`,`updated` FROM `member_names` WHERE `id` = ? LIMIT 1",
+                (id,),
             )
             .unwrap();
-        let mut result = stmt.execute((id,)).unwrap();
-        let result = result.next().unwrap().unwrap();
-        from_row(result)
+        res.unwrap()
     }
 
     /// Test import for account with existing comments
@@ -138,7 +135,9 @@ mod test {
         // insert comment into member_addition
         guard
             .pool
-            .prep_exec(
+            .get_conn()
+            .unwrap()
+            .exec_drop(
                 "INSERT INTO `member_addition` (`id`,`name`,`vip`,`comment`) VALUES (?,?,?,?)",
                 (&account.id, &orig_name, &orig_vip, &orig_comment),
             )

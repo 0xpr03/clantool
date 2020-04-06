@@ -16,7 +16,9 @@
 use super::*;
 pub use crate::*;
 use chrono::naive::NaiveDate;
-pub use mysql::{from_row, from_row_opt, Opts, OptsBuilder, Pool, PooledConn, Row, Transaction};
+// pub use mysql::{from_row, from_row_opt, Opts, OptsBuilder, Pool, PooledConn, Row, Transaction};
+pub use super::prelude::*;
+pub use mysql::from_row;
 use regex;
 
 // change these settings to connect to another DB
@@ -47,15 +49,14 @@ impl CleanupGuard {
 
 impl Drop for CleanupGuard {
     fn drop(&mut self) {
+        let mut conn = self.pool.get_conn().unwrap();
         for view in &self.views {
-            self.pool
-                .prep_exec(format!("DROP VIEW IF EXISTS `{}`;", view), ())
+            conn.query_drop(format!("DROP VIEW IF EXISTS `{}`;", view))
                 .unwrap();
             println!("dropped view {}", view);
         }
         for table in &self.tables {
-            self.pool
-                .prep_exec(format!("DROP TABLE IF EXISTS `{}`;", table), ())
+            conn.query_drop(format!("DROP TABLE IF EXISTS `{}`;", table))
                 .unwrap();
             println!("dropped table {}", table);
         }
@@ -70,21 +71,18 @@ pub fn setup_tables(pool: Pool) -> Result<CleanupGuard> {
     let reg_tables = regex::Regex::new(r"CREATE TABLE `([\-_a-zA-Z]+)` \(").unwrap();
     let reg_views = regex::Regex::new(REGEX_VIEW).unwrap();
     let mut guard = CleanupGuard::new(pool);
+    let mut conn = guard.pool.get_conn()?;
     for a in tables {
         if let Some(cap) = reg_tables.captures(&a) {
             let table = cap[1].to_string();
-            guard
-                .pool
-                .prep_exec(format!("DROP TABLE IF EXISTS `{}`;", &table), ())?;
+            conn.query_drop(format!("DROP TABLE IF EXISTS `{}`;", &table))?;
+            conn.query_drop(a)?;
             guard.tables.push(table);
-            guard.pool.prep_exec(a, ())?;
         } else if let Some(cap) = reg_views.captures(&a) {
             let view = cap[2].to_string();
-            guard
-                .pool
-                .prep_exec(format!("DROP VIEW IF EXISTS `{}`;", &view), ())?;
+            conn.query_drop(format!("DROP VIEW IF EXISTS `{}`;", &view))?;
+            conn.query_drop(a)?;
             guard.views.push(view);
-            guard.pool.prep_exec(a, ())?;
         } else {
             return Err(Error::InvalidDBSetup(format!(
                 "Expected table/view, found {}",
@@ -109,16 +107,15 @@ pub fn connect_db() -> Pool {
         }
     };
 
-    let mut builder = OptsBuilder::new();
-    builder
+    let opts: Opts = OptsBuilder::new()
         .ip_or_hostname(Some("foo"))
         .db_name(Some(TEST_DB))
         .user(Some(user))
         .pass(password)
         .tcp_port(TEST_PORT)
         .ip_or_hostname(Some(TEST_IP))
-        .prefer_socket(false);
-    let opts: Opts = builder.into();
+        .prefer_socket(false)
+        .into();
     Pool::new_manual(POOL_MIN_CONN, POOL_MAX_CONN, opts).unwrap() // min 6, check_import_account_insert will deadlock otherwise
 }
 
@@ -127,8 +124,8 @@ pub fn connect_db() -> Pool {
 /// new connection retrieved from the pool can't interact with these
 pub fn setup_db() -> (PooledConn, CleanupGuard) {
     let pool = connect_db();
+    let guard = setup_tables(pool.clone()).unwrap();
     let conn = pool.get_conn().unwrap();
-    let guard = setup_tables(pool).unwrap();
     (conn, guard)
 }
 
@@ -163,35 +160,41 @@ pub fn insert_membership(
     join: &NaiveDate,
     leave: Option<&NaiveDate>,
 ) -> i32 {
-    let mut stmt = conn
-        .prepare("INSERT INTO `membership` (`id`,`from`,`to`) VALUES (?,?,?)")
-        .unwrap();
-    let res = stmt.execute((id, join, leave)).unwrap();
-    res.last_insert_id() as i32
+    conn.exec_drop(
+        "INSERT INTO `membership` (`id`,`from`,`to`) VALUES (?,?,?)",
+        (id, join, leave),
+    )
+    .unwrap();
+    let nr = conn.last_insert_id();
+    assert_ne!(0, nr, "no last insertion ID!");
+    nr as i32
 }
 
 /// Insert open trial for id
 pub fn insert_trial(conn: &mut PooledConn, id: &i32, start: &NaiveDate) {
-    let mut stmt = conn
-        .prepare("INSERT INTO `member_trial` (`id`,`from`,`to`) VALUES (?,?,NULL)")
-        .unwrap();
-    stmt.execute((id, start)).unwrap();
+    conn.exec_drop(
+        "INSERT INTO `member_trial` (`id`,`from`,`to`) VALUES (?,?,NULL)",
+        (id, start),
+    )
+    .unwrap();
 }
 
 /// Insert membership cause
 pub fn insert_membership_cause(conn: &mut PooledConn, nr: &i32, cause: &str, kicked: bool) {
-    let mut stmt = conn
-        .prepare("INSERT INTO `membership_cause` (`nr`,`kicked`,`cause`) VALUES (?,?,?)")
-        .unwrap();
-    let _ = stmt.execute((nr, kicked, cause)).unwrap();
+    conn.exec_drop(
+        "INSERT INTO `membership_cause` (`nr`,`kicked`,`cause`) VALUES (?,?,?)",
+        (nr, kicked, cause),
+    )
+    .unwrap();
 }
 
 /// insert key-value entry into settings table
 pub fn insert_settings(conn: &mut PooledConn, key: &str, value: &str) {
-    let mut stmt = conn
-        .prepare("INSERT INTO `settings` (`key`,`value`) VALUES(?,?)")
-        .unwrap();
-    let _ = stmt.execute((key, value)).unwrap();
+    conn.exec_drop(
+        "INSERT INTO `settings` (`key`,`value`) VALUES(?,?)",
+        (key, value),
+    )
+    .unwrap();
 }
 
 #[cfg(test)]

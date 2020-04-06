@@ -13,7 +13,10 @@
 // limitations under the License.
 
 //! Member/Exp/CP crawler data functions
-use super::*;
+use super::prelude::*;
+use chrono::naive::NaiveDate;
+use chrono::naive::NaiveDateTime;
+const TABLE_MISSING_DATES: &str = "t_missingdates"; // temporary table used to store missing dates
 
 /// Insert a Vec of members under the given Timestamp
 /// This does affect table member and member_names
@@ -22,28 +25,22 @@ pub fn insert_members(
     members: &[Member],
     timestamp: &NaiveDateTime,
 ) -> Result<()> {
-    {
-        let mut stmt =
-            conn.prepare("INSERT INTO `member` (`id`,`date`,`exp`,`cp`) VALUES (?,?,?,?)")?;
-        for member in members {
-            stmt.execute((&member.id, timestamp, &member.exp, &member.contribution))?;
-        }
-    }
-    {
-        let mut stmt = conn.prepare(
-            "INSERT IGNORE INTO `member_names` (`id`,`name`,`date`,`updated`) VALUES (?,?,?,?)",
-        )?;
-        for member in members {
-            stmt.execute((&member.id, &member.name, timestamp, timestamp))?;
-        }
-    }
-    {
-        let mut stmt =
-            conn.prepare("UPDATE `member_names` SET `updated` = ? WHERE `id` = ? AND `name` = ?")?;
-        for member in members {
-            stmt.execute((timestamp, &member.id, &member.name))?;
-        }
-    }
+    conn.exec_batch(
+        "INSERT INTO `member` (`id`,`date`,`exp`,`cp`) VALUES (?,?,?,?)",
+        members
+            .iter()
+            .map(|m| (m.id, timestamp, m.exp, m.contribution)),
+    )?;
+    conn.exec_batch(
+        "INSERT IGNORE INTO `member_names` (`id`,`name`,`date`,`updated`) VALUES (?,?,?,?)",
+        members
+            .iter()
+            .map(|m| (m.id, &m.name, timestamp, timestamp)),
+    )?;
+    conn.exec_batch(
+        "UPDATE `member_names` SET `updated` = ? WHERE `id` = ? AND `name` = ?",
+        members.iter().map(|m| (timestamp, m.id, &m.name)),
+    )?;
     Ok(())
 }
 
@@ -53,10 +50,10 @@ pub fn insert_clan_update(
     clan: &Clan,
     timestamp: &NaiveDateTime,
 ) -> Result<()> {
-    let mut stmt = conn.prepare(
+    conn.exec_drop(
         "INSERT INTO `clan` (`date`,`wins`,`losses`,`draws`,`members`) VALUES (?,?,?,?,?)",
+        (timestamp, clan.wins, clan.losses, clan.draws, clan.members),
     )?;
-    stmt.execute((timestamp, clan.wins, clan.losses, clan.draws, clan.members))?;
     Ok(())
 }
 
@@ -68,8 +65,10 @@ pub fn insert_missing_entry(
     conn: &mut PooledConn,
     missing_member: bool,
 ) -> Result<()> {
-    let mut stmt = conn.prepare("INSERT INTO `missing_entries` (`date`,`member`) VALUES (?,?)")?;
-    stmt.execute((datetime, missing_member))?;
+    conn.exec_drop(
+        "INSERT INTO `missing_entries` (`date`,`member`) VALUES (?,?)",
+        (datetime, missing_member),
+    )?;
     Ok(())
 }
 
@@ -95,11 +94,11 @@ pub fn get_missing_dates(conn: &mut PooledConn) -> Result<Vec<NaiveDate>> {
     // {} required, stmt lives too long
     {
         // create date lookup table
-        let mut stmt = conn.prepare("INSERT INTO `t_dates` (`date`) VALUES (?)")?;
+        let stmt = conn.prep("INSERT INTO `t_dates` (`date`) VALUES (?)")?;
         let mut current = min.succ();
         let mut i = 0;
         while current != max {
-            stmt.execute((current,))?;
+            conn.exec_drop(&stmt, (current,))?;
             current = current.succ();
             i += 1;
             if i % step == 0 {
@@ -108,55 +107,43 @@ pub fn get_missing_dates(conn: &mut PooledConn) -> Result<Vec<NaiveDate>> {
         }
         debug!("lookup table size: {}", i);
     }
-    {
-        // get missing dates not already stored
-        // t_dates left join (clan JOIN member) left join missing_entries
-        // where right = null
-        // using datetime as date, won't match otherwise
-        let mut stmt = conn.prepare(format!(
-            "
-        INSERT INTO `{}` (`date`)
-        SELECT t0.`date` FROM `t_dates` t0 
-        LEFT JOIN (
-            SELECT t2.date FROM `clan` t2 
-            JOIN `member` t3 ON DATE(t2.date) = DATE(t3.date)
-        ) as t1
-        ON t0.date = DATE(t1.date)
-        LEFT JOIN `missing_entries` t4
-            ON t0.date = DATE(t4.date) AND t4.member = true
-        WHERE t1.date IS NULL
-        AND t4.date IS NULL",
-            TABLE_MISSING_DATES
-        ))?;
+    // get missing dates not already stored
+    // t_dates left join (clan JOIN member) left join missing_entries
+    // where right = null
+    // using datetime as date, won't match otherwise
+    conn.query_drop(format!(
+        "INSERT INTO `{}` (`date`)
+    SELECT t0.`date` FROM `t_dates` t0 
+    LEFT JOIN (
+        SELECT t2.date FROM `clan` t2 
+        JOIN `member` t3 ON DATE(t2.date) = DATE(t3.date)
+    ) as t1
+    ON t0.date = DATE(t1.date)
+    LEFT JOIN `missing_entries` t4
+        ON t0.date = DATE(t4.date) AND t4.member = true
+    WHERE t1.date IS NULL
+    AND t4.date IS NULL",
+        TABLE_MISSING_DATES
+    ))?;
 
-        stmt.execute(())?;
-    }
-
-    let mut dates: Vec<NaiveDate> = Vec::new();
-    {
-        // now retrieve missing dates for user information
-        let mut stmt = conn.prepare(format!(
+    // now retrieve missing dates for user information
+    let dates: Vec<NaiveDate> = conn.query_map(
+        format!(
             "SELECT date FROM `{}` order by date ASC",
             TABLE_MISSING_DATES
-        ))?;
-
-        for row in stmt.execute(())? {
-            dates.push(row?.take_opt("date").ok_or(Error::NoValue("date"))??);
-        }
-    }
+        ),
+        |date| date,
+    )?;
     Ok(dates)
 }
 
 /// Inserts TABLE_MISSING_DATES into `missing_entries`
 pub fn insert_missing_dates(conn: &mut PooledConn) -> Result<()> {
-    let mut stmt = conn.prepare(format!(
-        "
-        INSERT INTO `missing_entries` (`date`)
+    conn.query_drop(format!(
+        "INSERT INTO `missing_entries` (`date`)
         SELECT `date` FROM `{}`",
         TABLE_MISSING_DATES
     ))?;
-
-    stmt.execute(())?;
     Ok(())
 }
 
@@ -164,7 +151,7 @@ pub fn insert_missing_dates(conn: &mut PooledConn) -> Result<()> {
 /// Returns (min,max) dates as String
 fn get_min_max_date(conn: &mut PooledConn) -> Result<(NaiveDate, NaiveDate)> {
     // full outer join to get all
-    let mut stmt = conn.prepare(
+    let values = conn.query_first(
         "SELECT MIN(`date`) as min, MAX(`date`) as max FROM (
         SELECT t11.date FROM clan t11
         LEFT JOIN member t12 ON t11.date = t12.date
@@ -173,10 +160,7 @@ fn get_min_max_date(conn: &mut PooledConn) -> Result<(NaiveDate, NaiveDate)> {
         RIGHT JOIN member t22 ON t21.date = t22.date
     ) as T",
     )?;
-    let mut result = stmt.execute(())?;
-    let row: Row = result.next().ok_or(Error::NoValue("empty result"))??;
-    let values = from_row_opt(row)?;
-    Ok(values)
+    Ok(values.ok_or(Error::NoValue("empty result"))?)
 }
 
 /// Check whether date has data and is thus valid in member table
@@ -185,19 +169,11 @@ pub fn check_date_for_data(
     conn: &mut PooledConn,
     date: NaiveDate,
 ) -> Result<Option<NaiveDateTime>> {
-    let mut stmt = conn.prepare(
+    Ok(conn.exec_first(
         "SELECT `date` FROM member m
-    WHERE m.date LIKE ? LIMIT 1",
-    )?;
-    let mut result = stmt.execute((format!("{}%", date.format(DATE_FORMAT)),))?;
-    match result.next() {
-        None => Ok(None),
-        Some(v) => {
-            let row = v?;
-            let value = from_row_opt(row)?;
-            Ok(Some(value))
-        }
-    }
+        WHERE m.date LIKE ? LIMIT 1",
+        (format!("{}%", date.format(DATE_FORMAT)),),
+    )?)
 }
 
 /// Get next older date from specified datetime which is not marked as as missing entry
@@ -209,24 +185,19 @@ pub fn get_next_older_date(
     min: NaiveDate,
 ) -> Result<Option<NaiveDateTime>> {
     debug!("date: {} min: {}", date, min);
-    let mut stmt = conn.prepare(
+    // TODO: we can get a null-response, probably bad join
+    // so val is from type Mabye-Row(Maybe-Null-Value<NaiveDateTime>)
+    let val: Option<Option<NaiveDateTime>> = conn.exec_first(
         "SELECT MAX(m.`date`) as `date` FROM member m
-    LEFT OUTER JOIN missing_entries mi
-        ON ( DATE(m.date) = DATE(mi.date) AND mi.member = true)
-    WHERE m.date < ? AND m.date >= ? AND mi.date IS NULL",
+        LEFT OUTER JOIN missing_entries mi
+            ON ( DATE(m.date) = DATE(mi.date) AND mi.member = true)
+        WHERE m.date < ? AND m.date >= ? AND mi.date IS NULL",
+        (
+            date.format(DATETIME_FORMAT).to_string(),
+            format!("{}%", min.format(DATE_FORMAT)),
+        ),
     )?;
-    let mut result = stmt.execute((
-        date.format(DATETIME_FORMAT).to_string(),
-        format!("{}%", min.format(DATE_FORMAT)),
-    ))?;
-    match result.next() {
-        None => Ok(None),
-        Some(v) => {
-            let row = v?;
-            let value = from_row_opt(row)?;
-            Ok(value)
-        }
-    }
+    Ok(val.flatten())
 }
 
 /// Get left members from difference betweeen date1 & date2
@@ -239,48 +210,42 @@ pub fn get_member_left(
     if date1 >= date2 {
         return Err(Error::Other("invalid input, date1 < date2 expected!"));
     }
-    let mut stmt = conn.prepare(
+    let res = conn.exec_map(
         "SELECT name,a.id,ms.nr
-    FROM (
-        SELECT m1.id
-        FROM member m1
-            WHERE m1.date = :datetime1
-        UNION DISTINCT
-        SELECT ms.id
-        FROM membership ms
-            WHERE ms.`from` = :date1 AND ms.`to` IS NULL
-    ) a
-    LEFT JOIN `member_names` names ON a.id = names.id AND
-            `names`.updated = (SELECT MAX(n2.updated) 
-                FROM `member_names` n2 
-                WHERE n2.id = a.id
-            )
-    LEFT JOIN `membership` ms ON a.id = ms.id AND ms.to IS NULL
-    WHERE 
-    a.id NOT IN ( 
-        SELECT m2.id FROM member m2 
-        WHERE m2.id = a.id AND m2.date = :datetime2
-    )",
+        FROM (
+            SELECT m1.id
+            FROM member m1
+                WHERE m1.date = :datetime1
+            UNION DISTINCT
+            SELECT ms.id
+            FROM membership ms
+                WHERE ms.`from` = :date1 AND ms.`to` IS NULL
+        ) a
+        LEFT JOIN `member_names` names ON a.id = names.id AND
+                `names`.updated = (SELECT MAX(n2.updated) 
+                    FROM `member_names` n2 
+                    WHERE n2.id = a.id
+                )
+        LEFT JOIN `membership` ms ON a.id = ms.id AND ms.to IS NULL
+        WHERE 
+        a.id NOT IN ( 
+            SELECT m2.id FROM member m2 
+            WHERE m2.id = a.id AND m2.date = :datetime2
+        )",
+        params! {
+            // do not use datetime directly, as milliseconds will be given
+            // as there is no match for millseconds precise datetimes
+            "datetime1" => date1.format(DATETIME_FORMAT).to_string(),
+            "datetime2" => date2.format(DATETIME_FORMAT).to_string(),
+            "date1" => date1.date(),
+        },
+        |(name, id, membership_nr)| LeftMember {
+            id,
+            name,
+            membership_nr,
+        },
     )?;
-
-    let result = stmt.execute(params! {
-        // do not use datetime directly, as milliseconds will be given
-        // as there is no match for millseconds precise datetimes
-        "datetime1" => date1.format(DATETIME_FORMAT).to_string(),
-        "datetime2" => date2.format(DATETIME_FORMAT).to_string(),
-        "date1" => date1.date(),
-    })?;
-
-    result
-        .map(|res| {
-            let (name, id, nr) = from_row_opt(res?)?;
-            Ok(LeftMember {
-                id,
-                name,
-                membership_nr: nr,
-            })
-        })
-        .collect()
+    Ok(res)
 }
 
 /// Insert member leave
@@ -296,31 +261,33 @@ pub fn insert_member_leave(
     cause: &str,
 ) -> Result<u64> {
     let trial_affected;
+    conn.exec_drop(
+        "UPDATE `membership` SET `to` = ? WHERE `nr` = ?",
+        (date_leave, ms_nr),
+    )?;
     {
-        let mut stmt = conn.prepare("UPDATE `membership` SET `to` = ? WHERE `nr` = ?")?;
-        stmt.execute((date_leave, ms_nr))?.affected_rows();
+        let mut result = conn.exec_iter(
+            "UPDATE `member_trial` SET `to` = ? WHERE `id` = ?",
+            (date_leave, id),
+        )?;
+        trial_affected = result
+            .next_set()
+            .ok_or(Error::NoValue("No result"))??
+            .affected_rows();
     }
-    {
-        let mut stmt = conn.prepare("UPDATE `member_trial` SET `to` = ? WHERE `id` = ?")?;
-        trial_affected = stmt.execute((date_leave, id))?.affected_rows();
-    }
-    {
-        let mut stmt = conn.prepare("INSERT INTO `membership_cause` (`nr`,`kicked`,`cause`) VALUES(?,?,?) ON DUPLICATE KEY UPDATE `kicked` = VALUES(`kicked`), `cause` = VALUES(`cause`)")?;
-        stmt.execute((ms_nr, false, cause))?;
-    }
+    conn.exec_drop("INSERT INTO `membership_cause` (`nr`,`kicked`,`cause`) VALUES(?,?,?) ON DUPLICATE KEY UPDATE `kicked` = VALUES(`kicked`), `cause` = VALUES(`cause`)",(ms_nr, false, cause))?;
     Ok(trial_affected)
 }
 
 /// Creates a temporary, single date column table with the specified name
 fn create_temp_date_table(conn: &mut PooledConn, tbl_name: &'static str) -> Result<()> {
-    let mut stmt = conn.prepare(format!(
+    conn.query_drop(format!(
         "CREATE TEMPORARY TABLE `{}` (
-                        `date` datetime NOT NULL PRIMARY KEY
-                        ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
-                        ",
+        `date` datetime NOT NULL PRIMARY KEY
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+        ",
         tbl_name
     ))?;
-    stmt.execute(())?;
     Ok(())
 }
 
