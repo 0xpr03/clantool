@@ -104,15 +104,8 @@ pub fn read_setting<T>(conn: &mut PooledConn, key: &str) -> Result<Option<T>>
 where
     T: mysql::prelude::FromValue,
 {
-    let result: Option<Row> =
-        conn.exec_first("SELECT `value` FROM settings WHERE `key` = ?", (key,))?;
-    match result {
-        None => Ok(None),
-        Some(v) => {
-            let value: Option<T> = from_row_opt(v)?;
-            Ok(value)
-        }
-    }
+    let v = conn.exec_first_opt("SELECT `value` FROM settings WHERE `key` = ?", (key,))?;
+    v.transpose().map_err(From::from)
 }
 
 /// read entry in settings table as bool

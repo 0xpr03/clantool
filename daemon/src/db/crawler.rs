@@ -151,7 +151,7 @@ pub fn insert_missing_dates(conn: &mut PooledConn) -> Result<()> {
 /// Returns (min,max) dates as String
 fn get_min_max_date(conn: &mut PooledConn) -> Result<(NaiveDate, NaiveDate)> {
     // full outer join to get all
-    let values = conn.query_first(
+    let values = conn.query_first_opt(
         "SELECT MIN(`date`) as min, MAX(`date`) as max FROM (
         SELECT t11.date FROM clan t11
         LEFT JOIN member t12 ON t11.date = t12.date
@@ -160,7 +160,7 @@ fn get_min_max_date(conn: &mut PooledConn) -> Result<(NaiveDate, NaiveDate)> {
         RIGHT JOIN member t22 ON t21.date = t22.date
     ) as T",
     )?;
-    Ok(values.ok_or(Error::NoValue("empty result"))?)
+    Ok(values.ok_or(Error::NoValue("empty result"))??)
 }
 
 /// Check whether date has data and is thus valid in member table
@@ -169,11 +169,15 @@ pub fn check_date_for_data(
     conn: &mut PooledConn,
     date: NaiveDate,
 ) -> Result<Option<NaiveDateTime>> {
-    Ok(conn.exec_first(
+    let res = conn.exec_first_opt(
         "SELECT `date` FROM member m
         WHERE m.date LIKE ? LIMIT 1",
-        (format!("{}%", date.format(DATE_FORMAT)),),
-    )?)
+        (format!("{}%", date.format(DATE_FORMAT)),))?;
+    match res {
+        Some(Err(e)) => Err(e.into()),
+        None => Ok(None),
+        Some(Ok(v)) => Ok(Some(v)),
+    }
 }
 
 /// Get next older date from specified datetime which is not marked as as missing entry
@@ -185,7 +189,7 @@ pub fn get_next_older_date(
     min: NaiveDate,
 ) -> Result<Option<NaiveDateTime>> {
     debug!("date: {} min: {}", date, min);
-    // TODO: we can get a null-response, probably bad join
+    // TODO: we can get a null-response, probably doing a bad join
     // so val is from type Mabye-Row(Maybe-Null-Value<NaiveDateTime>)
     let val: Option<Option<NaiveDateTime>> = conn.exec_first(
         "SELECT MAX(m.`date`) as `date` FROM member m
