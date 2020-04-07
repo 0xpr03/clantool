@@ -26,6 +26,7 @@ const TIMEOUT_CMD: Duration = Duration::from_millis(1500);
 pub struct Connection {
     conn: QueryClient,
     cfg: Config,
+    last_ping: Instant,
 }
 
 impl Connection {
@@ -52,18 +53,27 @@ impl Connection {
 
     pub fn new(cfg: Config) -> Result<Connection> {
         let conn = Self::connect(&cfg.ts)?;
-        Ok(Self { conn, cfg })
+        Ok(Self {
+            conn,
+            cfg,
+            last_ping: Instant::now(),
+        })
     }
 
     /// Returns the active connection or tries to create a new one
     pub fn get(&mut self) -> Result<&mut QueryClient> {
-        Ok(match self.conn.ping() {
+        if self.last_ping.elapsed() < Duration::from_secs(0) {
+            return Ok(&mut self.conn);
+        }
+        let conn = match self.conn.ping() {
             Ok(_) => &mut self.conn,
             Err(e) => {
                 debug!("Previous connection died: {}", e);
                 self.conn = Self::connect(&self.cfg.ts)?;
                 &mut self.conn
             }
-        })
+        };
+        self.last_ping = Instant::now();
+        Ok(conn)
     }
 }
