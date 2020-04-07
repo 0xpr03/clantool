@@ -33,12 +33,12 @@ pub use types::*;
 
 use crate::crawler::http::HeaderType;
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::env::current_dir;
 use std::fs::DirBuilder;
 use std::fs::{metadata, File};
 use std::io::Write;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::sleep;
 use std::time::{Duration as Dur, Instant};

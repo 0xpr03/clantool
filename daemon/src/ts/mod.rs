@@ -265,8 +265,8 @@ impl Drop for TsGuard {
     fn drop(&mut self) {
         let mut stats = self.stats.write().unwrap();
         if let Err(e) = stats.flush_data() {
-            error!("Flushing data on exit: {}",e);
-            eprintln!("Flushing data on exit: {}",e);
+            error!("Flushing data on exit: {}", e);
+            eprintln!("Flushing data on exit: {}", e);
         }
     }
 }
@@ -279,8 +279,8 @@ pub fn start_daemon(pool: Pool, config: Config) -> Result<Option<TsGuard>> {
         // TODO: better threading sync, blocks ticks on flush
         let ts_handler = Arc::new(RwLock::new(TsStatCtrl::new(pool.clone(), config.clone())?));
         let handler_c = ts_handler.clone();
-        let guard_1 = timer_1
-            .schedule_repeating(chrono::Duration::seconds(INTERVAL_ACTIVITY_S), move || {
+        let guard_1 =
+            timer_1.schedule_repeating(chrono::Duration::seconds(INTERVAL_ACTIVITY_S), move || {
                 trace!("Performing ts handler tick");
                 let mut guard = handler_c.write().unwrap();
                 if let Err(e) = guard.tick() {
@@ -290,8 +290,8 @@ pub fn start_daemon(pool: Pool, config: Config) -> Result<Option<TsGuard>> {
         let timer_2 = Timer::new();
         let mut conn = Connection::new(config)?;
         let handler_c = ts_handler.clone();
-        let guard_2 = timer_2
-            .schedule_repeating(chrono::Duration::minutes(INTERVAL_FLUSH_M), move || {
+        let guard_2 =
+            timer_2.schedule_repeating(chrono::Duration::minutes(INTERVAL_FLUSH_M), move || {
                 trace!("Performing channel update & data flush");
                 if let Err(e) = update_channels(&pool, &mut conn) {
                     error!("Performing TS channel update! {}", e);
@@ -306,8 +306,8 @@ pub fn start_daemon(pool: Pool, config: Config) -> Result<Option<TsGuard>> {
             });
 
         Ok(Some(TsGuard {
-            _timer: vec![timer_1,timer_2],
-            _task_guards: vec![guard_1,guard_2],
+            _timer: vec![timer_1, timer_2],
+            _task_guards: vec![guard_1, guard_2],
             stats: ts_handler,
         }))
     } else {

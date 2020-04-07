@@ -172,7 +172,8 @@ pub fn check_date_for_data(
     let res = conn.exec_first_opt(
         "SELECT `date` FROM member m
         WHERE m.date LIKE ? LIMIT 1",
-        (format!("{}%", date.format(DATE_FORMAT)),))?;
+        (format!("{}%", date.format(DATE_FORMAT)),),
+    )?;
     match res {
         Some(Err(e)) => Err(e.into()),
         None => Ok(None),
