@@ -66,7 +66,7 @@ pub fn update_ts_names(conn: &mut PooledConn, names: &[(TsClDBID, &str)]) -> Res
 /// Update ts online times & names
 pub fn update_ts_activity(
     conn: &mut PooledConn,
-    date: &NaiveDate,
+    date: NaiveDate,
     times: &[TsActivity],
 ) -> Result<()> {
     let mut transaction = conn.start_transaction(TxOpts::default())?;
@@ -202,7 +202,7 @@ mod test {
             },
         ];
         let date = NaiveDate::from_ymd(2020, 03, 29);
-        update_ts_activity(&mut conn, &date, &data).unwrap();
+        update_ts_activity(&mut conn, date, &data).unwrap();
 
         let res = get_ts_activity_ordered(&mut conn).unwrap();
         for i in 0..res.len() {
@@ -224,7 +224,7 @@ mod test {
                 channel: 1,
             },
         ];
-        update_ts_activity(&mut conn, &date, &data).unwrap();
+        update_ts_activity(&mut conn, date, &data).unwrap();
         let res = get_ts_activity_ordered(&mut conn).unwrap();
         let expected: Vec<_> = vec![
             TsActivity {

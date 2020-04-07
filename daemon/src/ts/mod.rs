@@ -104,7 +104,7 @@ impl TsStatCtrl {
             let guest_group = db::read_setting(&mut conn, crate::TS3_GUEST_GROUP_KEY)?;
             let guest_channel = db::read_setting(&mut conn, crate::TS3_GUEST_CHANNEL_KEY)?;
             let poke_msg = db::read_string_setting(&mut conn, crate::TS3_GUEST_POKE_MSG)?
-                .unwrap_or("Guest arrived!".to_string());
+                .unwrap_or_else(|| "Guest arrived!".to_string());
 
             if let (Some(poke_group), Some(guest_group), Some(guest_channel)) =
                 (poke_group, guest_group, guest_channel)
@@ -122,9 +122,10 @@ impl TsStatCtrl {
             None
         };
         if self.poke_config.is_some() != old_enabled || first_run {
-            let msg = match self.poke_config.is_some() {
-                true => "Ts-Poke enabled",
-                false => "Ts-Poke disabled",
+            let msg = if self.poke_config.is_some() {
+                "Ts-Poke enabled"
+            } else {
+                "Ts-Poke disabled"
             };
             db::log_message(&mut conn, msg, "unable to log poke config change");
         }
@@ -165,7 +166,7 @@ impl TsStatCtrl {
 
             let k = (id, *chan);
             if let Some(time) = self.times.get_mut(&k) {
-                *time = *time + elapsed;
+                *time += elapsed;
             } else {
                 self.times.insert(k, elapsed);
             }
@@ -246,7 +247,7 @@ impl TsStatCtrl {
                 time: *time,
             })
             .collect();
-        db::ts::update_ts_activity(&mut conn, &self.last_date, values.as_slice())?;
+        db::ts::update_ts_activity(&mut conn, self.last_date, values.as_slice())?;
         trace!("Flushed {} time entries", self.times.len());
         self.times.clear();
         self.last_date = Local::today().naive_local();
@@ -289,7 +290,6 @@ pub fn start_daemon(pool: Pool, config: Config) -> Result<Option<TsGuard>> {
             });
         let timer_2 = Timer::new();
         let handler_c = ts_handler.clone();
-        let config_c = config.clone();
         let guard_2 =
             timer_2.schedule_repeating(chrono::Duration::minutes(INTERVAL_FLUSH_M), move || {
                 trace!("Performing channel update & data flush");
@@ -302,7 +302,7 @@ pub fn start_daemon(pool: Pool, config: Config) -> Result<Option<TsGuard>> {
                         error!("Updating TS config from DB! {}", e);
                     }
                 }
-                if let Err(e) = Connection::new(config_c.clone())
+                if let Err(e) = Connection::new(config.clone())
                     .map(|mut conn| update_channels(&pool, &mut conn))
                 {
                     error!("Performing TS channel update! {}", e);
