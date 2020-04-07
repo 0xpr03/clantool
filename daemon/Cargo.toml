@@ -1,6 +1,6 @@
 [package]
 name = "clantool"
-version = "0.4.1"
+version = "0.5.0"
 authors = ["Aron Heinecke"]
 edition = "2018"
 
@@ -32,7 +32,5 @@ version = "0.10"
 features = ["blocking","gzip"]
 
 [dependencies.ts3-query]
-features = ["backtrace"]
-version ="0.1.5"
-git = 'https://github.com/0xpr03/ts3_query'
-branch = "fix_underflow"
+features = ["backtrace","debug_response"]
+version ="0.2"
