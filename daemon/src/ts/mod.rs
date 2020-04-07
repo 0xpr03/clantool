@@ -254,53 +254,65 @@ impl TsStatCtrl {
     }
 }
 
-impl Drop for TsStatCtrl {
+/// Timer & data guard, ensures TS data write on drop
+pub struct TsGuard {
+    _timer: Vec<Timer>,
+    _task_guards: Vec<Guard>,
+    stats: Arc<RwLock<TsStatCtrl>>,
+}
+
+impl Drop for TsGuard {
     fn drop(&mut self) {
-        if let Err(e) = self.flush_data() {
-            error!("Error flushing TS data on cleanup: {}", e);
+        let mut stats = self.stats.write().unwrap();
+        if let Err(e) = stats.flush_data() {
+            error!("Flushing data on exit: {}",e);
+            eprintln!("Flushing data on exit: {}",e);
         }
     }
 }
 
 /// Start TS daemon, returns scheduler-guards
-pub fn start_daemon(pool: Pool, config: Config) -> Result<Vec<Timer>> {
+pub fn start_daemon(pool: Pool, config: Config) -> Result<Option<TsGuard>> {
     if config.ts.enabled {
         debug!("Starting TS activity check");
         let timer_1 = Timer::new();
         // TODO: better threading sync, blocks ticks on flush
         let ts_handler = Arc::new(RwLock::new(TsStatCtrl::new(pool.clone(), config.clone())?));
         let handler_c = ts_handler.clone();
-        timer_1
+        let guard_1 = timer_1
             .schedule_repeating(chrono::Duration::seconds(INTERVAL_ACTIVITY_S), move || {
                 trace!("Performing ts handler tick");
                 let mut guard = handler_c.write().unwrap();
                 if let Err(e) = guard.tick() {
                     error!("Ticking ts-activity: {}", e);
                 }
-            })
-            .ignore();
+            });
         let timer_2 = Timer::new();
         let mut conn = Connection::new(config)?;
-        timer_2
+        let handler_c = ts_handler.clone();
+        let guard_2 = timer_2
             .schedule_repeating(chrono::Duration::minutes(INTERVAL_FLUSH_M), move || {
                 trace!("Performing channel update & data flush");
                 if let Err(e) = update_channels(&pool, &mut conn) {
                     error!("Performing TS channel update! {}", e);
                 }
-                let mut guard = ts_handler.write().unwrap();
+                let mut guard = handler_c.write().unwrap();
                 if let Err(e) = guard.flush_data() {
                     error!("Flushing TS Data to DB! {}", e);
                 }
                 if let Err(e) = guard.update_settings() {
                     error!("Updating TS config from DB! {}", e);
                 }
-            })
-            .ignore();
+            });
 
-        Ok(vec![timer_1, timer_2])
+        Ok(Some(TsGuard {
+            _timer: vec![timer_1,timer_2],
+            _task_guards: vec![guard_1,guard_2],
+            stats: ts_handler,
+        }))
     } else {
         info!("TS activity check disabled, guest-poke disabled");
-        Ok(Vec::new())
+        Ok(None)
     }
 }
 

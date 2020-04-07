@@ -33,6 +33,7 @@ pub use types::*;
 
 use crate::crawler::http::HeaderType;
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::env::current_dir;
 use std::fs::DirBuilder;
 use std::fs::{metadata, File};
@@ -413,9 +414,16 @@ fn run_daemon(pool: Pool, config: Config, timer: &timer::Timer) -> Result<()> {
         },
     );
     let _guard_ts = ts::start_daemon(pool, config)?;
-    loop {
+
+    let term = Arc::new(AtomicBool::new(false));
+    signal_hook::flag::register(signal_hook::SIGTERM, Arc::clone(&term))?;
+    signal_hook::flag::register(signal_hook::SIGINT, Arc::clone(&term))?;
+    signal_hook::flag::register(signal_hook::SIGQUIT, Arc::clone(&term))?;
+    while !term.load(Ordering::Relaxed) {
         std::thread::sleep(std::time::Duration::from_millis(1000));
     }
+    info!("Sigterm, Exiting");
+    Ok(())
 }
 
 fn schedule_crawl_thread(pool: &Pool, config: &Config, retry_time: NaiveTime) -> Result<()> {
