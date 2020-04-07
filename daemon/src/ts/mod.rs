@@ -288,20 +288,24 @@ pub fn start_daemon(pool: Pool, config: Config) -> Result<Option<TsGuard>> {
                 }
             });
         let timer_2 = Timer::new();
-        let mut conn = Connection::new(config)?;
         let handler_c = ts_handler.clone();
+        let config_c = config.clone();
         let guard_2 =
             timer_2.schedule_repeating(chrono::Duration::minutes(INTERVAL_FLUSH_M), move || {
                 trace!("Performing channel update & data flush");
-                if let Err(e) = update_channels(&pool, &mut conn) {
+                {
+                    let mut guard = handler_c.write().unwrap();
+                    if let Err(e) = guard.flush_data() {
+                        error!("Flushing TS Data to DB! {}", e);
+                    }
+                    if let Err(e) = guard.update_settings() {
+                        error!("Updating TS config from DB! {}", e);
+                    }
+                }
+                if let Err(e) = Connection::new(config_c.clone())
+                    .map(|mut conn| update_channels(&pool, &mut conn))
+                {
                     error!("Performing TS channel update! {}", e);
-                }
-                let mut guard = handler_c.write().unwrap();
-                if let Err(e) = guard.flush_data() {
-                    error!("Flushing TS Data to DB! {}", e);
-                }
-                if let Err(e) = guard.update_settings() {
-                    error!("Updating TS config from DB! {}", e);
                 }
             });
 
