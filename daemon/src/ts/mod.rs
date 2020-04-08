@@ -187,7 +187,7 @@ impl TsStatCtrl {
         Ok(())
     }
 
-    /// poke clients, runs new thread
+    /// poke clients, inside new thread
     fn poke_clients(&mut self, clients: Vec<TsConID>) -> Result<()> {
         self.last_guest_poke = Some(Instant::now());
         let cooldown = match self.conn.config().ts.cmd_limit_secs {
@@ -341,8 +341,8 @@ pub fn start_daemon(pool: Pool, config: Config) -> Result<Option<TsGuard>> {
 }
 
 /// Error-Wrapper for updating TS channel list
-fn update_channels(pool: &Pool, mut conn: &mut Connection) -> Result<()> {
-    db::ts::upsert_channels(&mut pool.get_conn()?, &get_channels(&mut conn)?)?;
+fn update_channels(pool: &Pool, conn: &mut Connection) -> Result<()> {
+    db::ts::upsert_channels(&mut pool.get_conn()?, &get_channels(conn)?)?;
     Ok(())
 }
 
@@ -384,11 +384,7 @@ pub fn print_poke_config(conn: &mut PooledConn, config: &Config) -> Result<Strin
 }
 
 // use try {} when #31436 is stable
-fn find_unknown_inner(
-    group_ids: &[usize],
-    mut conn: &mut PooledConn,
-    ts_cfg: &TSConfig,
-) -> Result<()> {
+fn find_unknown_inner(group_ids: &[usize], conn: &mut PooledConn, ts_cfg: &TSConfig) -> Result<()> {
     trace!("Connect ts3");
     let mut connection = QueryClient::new(format!("{}:{}", ts_cfg.ip, ts_cfg.port))?;
     trace!("login");
@@ -402,7 +398,7 @@ fn find_unknown_inner(
         ids.append(&mut connection.get_servergroup_client_list(*group)?);
         trace!("Retrieved ts clients for {}", group);
     }
-    db::ts::update_unknown_ts_ids(&mut conn, &ids)?;
+    db::ts::update_unknown_ts_ids(conn, &ids)?;
 
     debug!("Performed TS identity check. {} IDs", ids.len());
     Ok(())

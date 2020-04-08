@@ -141,15 +141,15 @@ pub fn create_member(name: &str, id: i32, exp: i32, contribution: i32) -> Member
 
 /// Insert full membership with cause
 pub fn insert_full_membership(
-    mut conn: &mut PooledConn,
+    conn: &mut PooledConn,
     id: &i32,
     join: &NaiveDate,
     leave: &NaiveDate,
     cause: &str,
     kicked: bool,
 ) -> i32 {
-    let nr = insert_membership(&mut conn, &id, join, Some(leave));
-    insert_membership_cause(&mut conn, &nr, cause, kicked);
+    let nr = insert_membership(conn, &id, join, Some(leave));
+    insert_membership_cause(conn, &nr, cause, kicked);
     nr
 }
 
