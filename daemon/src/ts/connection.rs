@@ -21,12 +21,15 @@ use ts3_query::*;
 // Safety: see module tick interval
 const TIMEOUT_CONN: Duration = Duration::from_millis(1500);
 const TIMEOUT_CMD: Duration = Duration::from_millis(1500);
+/// Same as super::CLIENT_CONN_ID, but TS returns a different one on whoami
+const KEY_CLIENT_ID_SELF: &str = "client_id";
 
 /// QueryClient wrapper with connection-check on access
 pub struct Connection {
     conn: QueryClient,
     cfg: Config,
     last_ping: Instant,
+    conn_id: Option<TsConID>,
 }
 
 impl Connection {
@@ -40,6 +43,22 @@ impl Connection {
         conn.login(&cfg.user, &cfg.password)?;
         conn.select_server_by_port(cfg.server_port)?;
         Ok(conn)
+    }
+
+    /// Returns the current connection id (clid)
+    pub fn conn_id(&mut self) -> Result<TsConID> {
+        Ok(match self.conn_id {
+            Some(v) => v,
+            None => {
+                let res = self.get()?.whoami(false)?;
+                let clid = res
+                    .get(KEY_CLIENT_ID_SELF)
+                    .ok_or_else(|| Error::NoValue("No client id!"))?;
+                let clid = clid.parse()?;
+                self.conn_id = Some(clid);
+                clid
+            }
+        })
     }
 
     /// Try creating a second connection
@@ -57,6 +76,7 @@ impl Connection {
             conn,
             cfg,
             last_ping: Instant::now(),
+            conn_id: None,
         })
     }
 
@@ -70,6 +90,7 @@ impl Connection {
             Err(e) => {
                 debug!("Previous connection died: {}", e);
                 self.conn = Self::connect(&self.cfg.ts)?;
+                self.conn_id = None;
                 &mut self.conn
             }
         };

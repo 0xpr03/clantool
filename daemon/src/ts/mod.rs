@@ -404,10 +404,14 @@ fn is_ts3_guest_check_enabled(conn: &mut PooledConn, config: &Config) -> bool {
 fn get_online_clients(conn: &mut Connection) -> Result<HashSet<TsClient>> {
     let res = raw::parse_multi_hashmap(conn.get()?.raw_command("clientlist -groups")?, false);
     //dbg!(res.len());
-    //dbg!(&res);
+    // dbg!(&res);
+    let clid_str = conn.conn_id()?.to_string();
     let clients = res
         .into_iter()
-        .filter(|e| e.get(CLIENT_TYPE).map(String::as_str) == Some(CLIENT_TYPE_NORMAL))
+        .filter(|e| {
+            e.get(CLIENT_TYPE).map(String::as_str) == Some(CLIENT_TYPE_NORMAL)
+                || e.get(CLIENT_CONN_ID) == Some(&clid_str)
+        })
         .map(|e| {
             Ok(TsClient {
                 name: e
