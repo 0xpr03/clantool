@@ -1,7 +1,7 @@
 <?php
 /*
  * !
- * Copyright 2018-2019 Aron Heinecke
+ * Copyright 2018-2020 Aron Heinecke
  * aron.heinecke@t-online.de
  * All rights reserved.
  * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
@@ -70,6 +70,12 @@ define('KEY_AUTO_LEAVE', 'auto_leave_enable');
 define('KEY_LEAVE_CAUSE','auto_leave_message');
 define('KEY_TS3_CHECK','ts3_check_identities_enable');
 define('KEY_TS3_MEMBER_GROUPS','ts3_check_member_groups');
+
+define('KEY_TS3_GUEST_NOTIFY_ENABLE','ts3_guest_notify_enable');
+define('KEY_TS3_GUEST_WATCHER_GROUP','ts3_guest_watcher_group');
+define('KEY_TS3_GUEST_GROUP','ts3_guest_group');
+define('KEY_TS3_GUEST_POKE_MSG','ts3_guest_poke_msg');
+define('KEY_TS3_GUEST_CHANNEL','ts3_guest_channel');
 
 function getContent() {
     getCTTemplate();
@@ -539,6 +545,12 @@ function getAjax(){
                         'ts3-check' => $clanDB->getSetting(KEY_TS3_CHECK),
                         'ts3-member-groups' => $clanDB->getSetting(KEY_TS3_MEMBER_GROUPS),
                         'leave-detection' => $clanDB->getSetting(KEY_AUTO_LEAVE),
+                        
+                        'GUEST_NOTIFY_ENABLE' => $clanDB->getSetting(KEY_TS3_GUEST_NOTIFY_ENABLE),
+                        'GUEST_WATCHER_GROUP' => $clanDB->getSetting(KEY_TS3_GUEST_WATCHER_GROUP),
+                        'GUEST_GROUP' => $clanDB->getSetting(KEY_TS3_GUEST_GROUP),
+                        'GUEST_POKE_MSG' => $clanDB->getSetting(KEY_TS3_GUEST_POKE_MSG),
+                        'GUEST_CHANNEL' => $clanDB->getSetting(KEY_TS3_GUEST_CHANNEL)
                     )
                 );
                 break;
@@ -548,6 +560,12 @@ function getAjax(){
                 $clanDB->setSetting(KEY_TS3_CHECK,isset($_POST['ts3-check']));
                 $clanDB->setSetting(KEY_TS3_MEMBER_GROUPS,$_POST['ts3-member-groups']);
                 $clanDB->setSetting(KEY_AUTO_LEAVE,isset($_POST['leave-detection']));
+                
+                $clanDB->setSetting(KEY_TS3_GUEST_NOTIFY_ENABLE,isset($_POST['GUEST_NOTIFY_ENABLE']));
+                $clanDB->setSetting(KEY_TS3_GUEST_WATCHER_GROUP,$_POST['GUEST_WATCHER_GROUP']);
+                $clanDB->setSetting(KEY_TS3_GUEST_GROUP,$_POST['GUEST_GROUP']);
+                $clanDB->setSetting(KEY_TS3_GUEST_POKE_MSG,$_POST['GUEST_POKE_MSG']);
+                $clanDB->setSetting(KEY_TS3_GUEST_CHANNEL,$_POST['GUEST_CHANNEL']);
                 
                 echo json_encode(true);
                 break;
@@ -4742,6 +4760,38 @@ function getSettingsView() {
                 </div>
             </div>
             <div class="form-group">
+                <label for="GUEST_NOTIFY_ENABLE" class="control-label col-xs-2">TS3 Guest Poke</label>
+                <div class="col-xs-10">
+                    <div class="checkbox">
+                        <label><input type="checkbox" name="GUEST_NOTIFY_ENABLE" id="GUEST_NOTIFY_ENABLE" checked="checked"> Ts3 Guest Poke Enabled</label>
+                    </div>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="GUEST_WATCHER_GROUP" class="control-label col-xs-2">Poke group</label>
+                <div class="col-xs-10">
+                    <input type="text" name="GUEST_WATCHER_GROUP" required="" autocomplete="on" class="form-control" id="GUEST_WATCHER_GROUP" placeholder="TS3 Group ID should be poked/notified.">
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="GUEST_GROUP" class="control-label col-xs-2">Guest Group</label>
+                <div class="col-xs-10">
+                    <input type="text" name="GUEST_GROUP" required="" autocomplete="on" class="form-control" id="GUEST_GROUP" placeholder="TS3 Group ID for which should be poked.">
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="GUEST_POKE_MSG" class="control-label col-xs-2">Guest-Poke notify message</label>
+                <div class="col-xs-10">
+                    <input type="text" name="GUEST_POKE_MSG" required="" autocomplete="on" class="form-control" id="GUEST_POKE_MSG" placeholder="TS3 guest notify message.">
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="GUEST_CHANNEL" class="control-label col-xs-2">Guest Channel</label>
+                <div class="col-xs-10">
+                    <input type="text" name="GUEST_CHANNEL" required="" autocomplete="on" class="form-control" id="GUEST_CHANNEL" placeholder="Guest notify channel ID">
+                </div>
+            </div>
+            <div class="form-group">
                 <div class="col-xs-offset-2 col-xs-10">
                     <button type="submit" class="btn btn-warning" id="submitSettings"><i class="fas fa-save"></i> Save</button>
                 </div>
@@ -4769,6 +4819,12 @@ function getSettingsView() {
                     $('#leave-cause').val(data['leave-cause']);
                     $('#ts3-check').prop('checked',data['ts3-check']);
                     $('#ts3-member-groups').val(data['ts3-member-groups']);
+                    
+                    $('#GUEST_NOTIFY_ENABLE').prop('checked',data['GUEST_NOTIFY_ENABLE']);
+                    $('#GUEST_WATCHER_GROUP').val(data['GUEST_WATCHER_GROUP']);
+                    $('#GUEST_GROUP').val(data['GUEST_GROUP']);
+                    $('#GUEST_POKE_MSG').val(data['GUEST_POKE_MSG']);
+                    $('#GUEST_CHANNEL').val(data['GUEST_CHANNEL']);
                 }
                 loadingDiv.hide();
             }).fail(function(data){
