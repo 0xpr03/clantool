@@ -218,7 +218,7 @@ impl TsStatCtrl {
                         }
                         let cmd = &format!("clientpoke clid={} msg={}", client, &escaped);
                         if let Err(e) = conn.get()?.raw_command(&cmd) {
-                            if e.error_response().map_or(false,|v|v.id == 516) {
+                            if e.error_response().map_or(false, |v| v.id == 516) {
                                 // ignore invalid client type on console clients
                                 continue;
                             }
