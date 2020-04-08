@@ -28,6 +28,9 @@ use std::{sync::RwLock, time::Instant};
 use timer::*;
 use ts3_query::*;
 
+/// Client nick for guest poking
+const POKE_NICK: &str = "Guest-Notifier";
+
 const CHANNEL_NAME: &str = "channel_name";
 const CHANNEL_ID: &str = "cid";
 
@@ -137,7 +140,7 @@ impl TsStatCtrl {
         let mut has_lt = false;
         let poke_cfg = if self
             .last_guest_poke
-            .map_or(false, |v| v.elapsed().as_secs() > COOLDOWN_POKE_S)
+            .map_or(true, |v| v.elapsed().as_secs() > COOLDOWN_POKE_S)
         {
             self.poke_config.as_ref()
         } else {
@@ -162,7 +165,7 @@ impl TsStatCtrl {
                     if cfg.guest_channel == client.channel {
                         if client.groups.contains(&cfg.guest_group) {
                             new_guest = true;
-                        } else if client.groups.contains(&cfg.guest_group) {
+                        } else if client.groups.contains(&cfg.poke_group) {
                             has_lt = true;
                         }
                     } else if client.groups.contains(&cfg.poke_group) {
@@ -201,16 +204,26 @@ impl TsStatCtrl {
         };
         let escaped = raw::escape_arg(msg);
         let mut conn = self.conn.clone()?;
+        if let Err(e) = conn.get()?.rename(POKE_NICK) {
+            warn!("Can't change name for notification: {}", e);
+        }
         thread::Builder::new()
             .name("ts-poke".to_string())
             .spawn(move || {
+                trace!("Guest-Poking..");
                 let res = || -> Result<()> {
                     for client in clients {
                         if let Some(cooldown) = cooldown {
                             sleep(cooldown);
                         }
-                        conn.get()?
-                            .raw_command(&format!("poke clid={} msg={}", client, &escaped))?;
+                        let cmd = &format!("clientpoke clid={} msg={}", client, &escaped);
+                        if let Err(e) = conn.get()?.raw_command(&cmd) {
+                            if e.error_response().map_or(false,|v|v.id == 516) {
+                                // ignore invalid client type on console clients
+                                continue;
+                            }
+                            return Err(e.into());
+                        }
                     }
                     Ok(())
                 };
@@ -270,6 +283,7 @@ fn read_poke_config(conn: &mut PooledConn) -> Result<Option<PokeConfig>> {
                 poke_msg,
             })
         } else {
+            warn!("Missing values for poke config!");
             None
         },
     )
