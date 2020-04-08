@@ -58,7 +58,7 @@ use config::Config;
 
 use clap::{App, Arg, SubCommand};
 
-const VERSION: &str = "0.3.0";
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 const USER_AGENT: &str = "Mozilla/5.0 (Windows NT 6.1; WOW64; rv:54.0) Gecko/20100101 Firefox/70.0";
 const REFERER: &str = "https://crossfire.z8games.com/";
 const CONFIG_PATH: &str = "config/config.toml";
