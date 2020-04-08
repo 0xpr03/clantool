@@ -131,7 +131,10 @@ impl TsStatCtrl {
         let mut new_channel = HashMap::with_capacity(data.len());
 
         let mut poke_clients: Vec<TsConID> = Vec::new();
-        let mut poke = false;
+        // new guest
+        let mut new_guest = false;
+        // poke-receiver at place
+        let mut has_lt = false;
         let poke_cfg = if self
             .last_guest_poke
             .map_or(false, |v| v.elapsed().as_secs() > COOLDOWN_POKE_S)
@@ -154,24 +157,32 @@ impl TsStatCtrl {
                 self.times.insert(k, elapsed);
             }
 
-            if let Some(ref cfg) = poke_cfg {
-                if cfg.guest_channel == client.channel && client.groups.contains(&cfg.guest_group) {
-                    poke = true;
-                } else if client.groups.contains(&cfg.poke_group) {
-                    poke_clients.push(client.conid);
+            if let Some(cfg) = poke_cfg {
+                if !has_lt {
+                    if cfg.guest_channel == client.channel {
+                        if client.groups.contains(&cfg.guest_group) {
+                            new_guest = true;
+                        } else if client.groups.contains(&cfg.guest_group) {
+                            has_lt = true;
+                        }
+                    } else if client.groups.contains(&cfg.poke_group) {
+                        poke_clients.push(client.conid);
+                    }
                 }
             }
 
             // remember current channel for next time
             new_channel.insert(id, client.channel);
-            // TODO: group check
         }
 
         // excludes disconnected clients
         self.last_channel = new_channel;
 
-        if poke {
+        if new_guest && !has_lt {
             self.poke_clients(poke_clients)?;
+        } else if has_lt {
+            // reset cooldown time if poke-receiver at place
+            self.last_guest_poke = Some(Instant::now());
         }
         Ok(())
     }
