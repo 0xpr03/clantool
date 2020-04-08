@@ -67,6 +67,7 @@ struct TsStatCtrl {
     poke_config: Option<PokeConfig>,
 }
 
+/// Guest-Poke configuration read by TsStatCtrl
 #[derive(Default, Debug)]
 struct PokeConfig {
     poke_group: TsGroupID,
@@ -103,7 +104,11 @@ impl TsStatCtrl {
         let old_enabled = self.poke_config.is_some();
         let mut conn = self.pool.get_conn()?;
         self.poke_config = if is_ts3_guest_check_enabled(&mut conn, &self.conn.config()) {
-            read_poke_config(&mut conn)?
+            let cfg = read_poke_config(&mut conn)?;
+            if cfg.is_none() {
+                warn!("Missing values for poke config!");
+            }
+            cfg
         } else {
             None
         };
@@ -216,7 +221,7 @@ impl TsStatCtrl {
                         if let Some(cooldown) = cooldown {
                             sleep(cooldown);
                         }
-                        let cmd = &format!("clientpoke clid={} msg={}", client, &escaped);
+                        let cmd = format!("clientpoke clid={} msg={}", client, &escaped);
                         if let Err(e) = conn.get()?.raw_command(&cmd) {
                             if e.error_response().map_or(false, |v| v.id == 516) {
                                 // ignore invalid client type on console clients
@@ -265,6 +270,7 @@ impl TsStatCtrl {
     }
 }
 
+/// Read PokeConfig from DB, if existing
 fn read_poke_config(conn: &mut PooledConn) -> Result<Option<PokeConfig>> {
     let poke_group = db::read_setting(conn, crate::TS3_GUEST_WATCHER_GROUP_KEY)?;
     let guest_group = db::read_setting(conn, crate::TS3_GUEST_GROUP_KEY)?;
@@ -283,7 +289,6 @@ fn read_poke_config(conn: &mut PooledConn) -> Result<Option<PokeConfig>> {
                 poke_msg,
             })
         } else {
-            warn!("Missing values for poke config!");
             None
         },
     )
@@ -385,6 +390,7 @@ pub fn find_unknown_identities(pool: &Pool, ts_cfg: &TSConfig) -> Result<()> {
     unreachable!();
 }
 
+/// Print PokeConfig, used by printconfig subcommand
 pub fn print_poke_config(conn: &mut PooledConn, config: &Config) -> Result<String> {
     Ok(if is_ts3_guest_check_enabled(conn, config) {
         let cfg = read_poke_config(conn)?;
@@ -481,6 +487,7 @@ fn get_online_clients(conn: &mut Connection) -> Result<HashSet<TsClient>> {
     Ok(clients)
 }
 
+/// Get list of TS channels
 fn get_channels(conn: &mut Connection) -> Result<Vec<Channel>> {
     let res = raw::parse_multi_hashmap(conn.get()?.raw_command("channellist")?, false);
     res.into_iter()
