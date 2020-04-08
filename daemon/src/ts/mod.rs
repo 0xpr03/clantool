@@ -207,21 +207,24 @@ impl TsStatCtrl {
         };
         let escaped = raw::escape_arg(msg);
         let mut conn = self.conn.clone()?;
-        thread::spawn(move || {
-            let res = || -> Result<()> {
-                for client in clients {
-                    if let Some(cooldown) = cooldown {
-                        sleep(cooldown);
+        thread::Builder::new()
+            .name("ts-poke".to_string())
+            .spawn(move || {
+                let res = || -> Result<()> {
+                    for client in clients {
+                        if let Some(cooldown) = cooldown {
+                            sleep(cooldown);
+                        }
+                        conn.get()?
+                            .raw_command(&format!("poke clid={} msg={}", client, &escaped))?;
                     }
-                    conn.get()?
-                        .raw_command(&format!("poke clid={} msg={}", client, &escaped))?;
+                    Ok(())
+                };
+                if let Err(e) = res() {
+                    error!("Guest-Notification failed: {}", e);
                 }
-                Ok(())
-            };
-            if let Err(e) = res() {
-                error!("Guest-Notification failed: {}", e);
-            }
-        });
+            })
+            .expect("Can't spawn poke-thread!");
         Ok(())
     }
 
