@@ -137,6 +137,10 @@ fn main() {
                 ts::get_ts3_member_groups(&mut conn).unwrap()
             );
             info!(
+                "{}",
+                ts::print_poke_config(&mut conn, &local_config).unwrap()
+            );
+            info!(
                 "TS3 unknown IDs check: {}",
                 get_ts3_check_enabled(&mut conn, &local_config)
             );
