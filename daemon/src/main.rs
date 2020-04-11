@@ -84,7 +84,7 @@ pub type Result<T> = ::std::result::Result<T, Error>;
 #[allow(clippy::cognitive_complexity)]
 fn main() {
     match init_log() {
-        Err(e) => println!("Error on config initialization: {}", e),
+        Err(e) => eprintln!("Error on config initialization: {}", e),
         Ok(_) => println!("Initialized log"),
     }
     info!("Clan tools crawler v{}", VERSION);
@@ -210,13 +210,14 @@ fn main() {
         }
         _ => {
             info!("Entering daemon mode");
-            if let Err(e) = run_daemon(pool.clone(), config, &timer) {
+            if let Err(e) = run_daemon(pool, config, &timer) {
                 let fmt = format!("Error starting daemon {}", e);
                 error!("{}", &fmt);
                 panic!(fmt);
             }
         }
     }
+    info!("Exit");
 }
 
 fn cli<'a, 'b>() -> clap::App<'a, 'b> {
@@ -426,7 +427,7 @@ fn run_daemon(pool: Pool, config: Config, timer: &timer::Timer) -> Result<()> {
     while !term.load(Ordering::Relaxed) {
         std::thread::sleep(std::time::Duration::from_millis(1000));
     }
-    info!("Sigterm, Exiting");
+    info!("SIGTERM/SIGINT/SIGQUIT, Exiting");
     Ok(())
 }
 

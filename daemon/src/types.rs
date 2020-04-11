@@ -77,6 +77,7 @@ impl PartialEq for TsClient {
 }
 impl Eq for TsClient {}
 
+/// TS channel
 #[derive(Debug)]
 pub struct Channel {
     pub id: TsChannelID,
