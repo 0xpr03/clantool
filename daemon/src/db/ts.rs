@@ -21,23 +21,31 @@ use chrono::naive::NaiveDate;
 /// Handles known member client_id filtering  
 /// Allows doubled group IDs in member_clients
 pub fn update_unknown_ts_ids(conn: &mut PooledConn, member_clients: &[usize]) -> Result<()> {
-    create_temp_ts3_table(conn, "t_member_clients")?;
+    let t_table = "t_member_clients";
+    create_temp_ts3_table(conn, t_table)?;
     // insert every member client id into temp table, ignore multi-group clients
     conn.exec_batch(
-        "INSERT IGNORE INTO `t_member_clients` (`client_id`) VALUES (?)",
+        format!("INSERT IGNORE INTO `{}` (`client_id`) VALUES (?)", t_table),
         member_clients.iter().map(|m| (m,)),
     )?;
     // filter everything out that has a member assigned
-    conn.query_drop("DELETE FROM t1 USING `t_member_clients` t1 INNER JOIN `ts_relation` t2 ON ( t1.client_id = t2.client_id )")?;
+    conn.query_drop(format!("DELETE FROM t1 USING `{}` t1 INNER JOIN `ts_relation` t2 ON ( t1.client_id = t2.client_id )",t_table))?;
     // truncate unknown ts ids table
     conn.query_drop("TRUNCATE `unknown_ts_ids`")?;
     // replace with correct values
-    conn.query_drop("INSERT INTO `unknown_ts_ids` SELECT * FROM `t_member_clients`")?;
+    conn.query_drop(format!(
+        "INSERT INTO `unknown_ts_ids` SELECT * FROM `{}`",
+        t_table
+    ))?;
+
+    // cleanup temporary table
+    conn.query_drop(format!("DROP TEMPORARY TABLE `{}`", t_table))?;
     Ok(())
 }
 
 /// Creates a temporary, single client_id column table with the specified name
-fn create_temp_ts3_table(conn: &mut PooledConn, tbl_name: &'static str) -> Result<()> {
+fn create_temp_ts3_table(conn: &mut PooledConn, tbl_name: &str) -> Result<()> {
+    conn.query_drop(format!("DROP TEMPORARY TABLE IF EXISTS `{}`", tbl_name))?;
     conn.query_drop(format!(
         "CREATE TEMPORARY TABLE `{}` (
         `client_id` int(11) NOT NULL PRIMARY KEY
@@ -80,11 +88,44 @@ pub fn update_ts_activity(
 #[cfg(test)]
 mod test {
     use super::*;
+    use ::std::time::{SystemTime, UNIX_EPOCH};
     use db::testing::*;
+
     #[test]
     fn test_create_temp_ts3_table() {
         let (mut conn, _guard) = setup_db();
         create_temp_ts3_table(&mut conn, "temp_table").unwrap();
+    }
+
+    #[test]
+    fn test_create_temp_ts3_table_existing() {
+        let (mut conn, mut guard) = setup_db();
+        // test drop temporary before creating
+        let table = "temp_table";
+        conn.query_drop(format!(
+            "CREATE TEMPORARY TABLE `{}`(`date` datetime NOT NULL PRIMARY KEY)",
+            table
+        ))
+        .unwrap();
+        create_temp_ts3_table(&mut conn, table).unwrap();
+
+        // test non-drop of permanent table, use unique to avoid conflicts
+        let table = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis()
+            .to_string();
+        conn.query_drop(format!(
+            "CREATE TABLE `{}`(`date` datetime NOT NULL PRIMARY KEY)",
+            table
+        ))
+        .unwrap();
+        guard.add_table(table.clone());
+
+        // assert that no permanent table gets deleted by create_temp_ts3_table
+        create_temp_ts3_table(&mut conn, &table).unwrap();
+        conn.query_drop(format!("SELECT 1 FROM `{}` LIMIT 1", table))
+            .unwrap();
     }
 
     #[test]

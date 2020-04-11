@@ -45,6 +45,11 @@ impl CleanupGuard {
             views: Vec::new(),
         }
     }
+
+    /// Add table to drop on cleanup
+    pub fn add_table(&mut self, table: String) {
+        self.tables.push(table);
+    }
 }
 
 impl Drop for CleanupGuard {
