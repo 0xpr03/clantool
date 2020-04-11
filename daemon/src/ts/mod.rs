@@ -30,6 +30,8 @@ use ts3_query::*;
 
 /// Client nick for guest poking
 const POKE_NICK: &str = "Guest-Notifier";
+const DEFAULT_NICK: &str = "ct_bot";
+const FLUSH_NICK: &str = "ct_bot-flush";
 
 const CHANNEL_NAME: &str = "channel_name";
 const CHANNEL_ID: &str = "cid";
@@ -80,7 +82,7 @@ impl TsStatCtrl {
     fn new(pool: Pool, config: Config) -> Result<Self> {
         let mut data = Self {
             pool,
-            conn: Connection::new(config)?,
+            conn: Connection::new(config, Some(DEFAULT_NICK))?,
             last_date: Local::today().naive_local(),
             last_update: Instant::now(),
             names: Default::default(),
@@ -208,10 +210,7 @@ impl TsStatCtrl {
             None => unreachable!("Unreachable! poke_clients invoked without poke_config!"),
         };
         let escaped = raw::escape_arg(msg);
-        let mut conn = self.conn.clone()?;
-        if let Err(e) = conn.get()?.rename(POKE_NICK) {
-            warn!("Can't change name for notification: {}", e);
-        }
+        let mut conn = self.conn.clone(Some(POKE_NICK))?;
         thread::Builder::new()
             .name("ts-poke".to_string())
             .spawn(move || {
@@ -341,7 +340,7 @@ pub fn start_daemon(pool: Pool, config: Config) -> Result<Option<TsGuard>> {
                         error!("Updating TS config from DB! {}", e);
                     }
                 }
-                if let Err(e) = Connection::new(config.clone())
+                if let Err(e) = Connection::new(config.clone(), Some(FLUSH_NICK))
                     .map(|mut conn| update_channels(&pool, &mut conn))
                 {
                     error!("Performing TS channel update! {}", e);
@@ -396,7 +395,7 @@ pub fn print_poke_config(conn: &mut PooledConn, config: &Config) -> Result<Strin
         let cfg = read_poke_config(conn)?;
         match cfg {
             Some(v) => format!("Guest-Poke enabled: {:?}", v),
-            None => format!("Guest-Poke enabled but missing fields!"),
+            None => "Guest-Poke enabled but missing fields!".to_string(),
         }
     } else {
         String::from("Guest-Poke disabled")
@@ -532,7 +531,7 @@ mod tests {
         Arc::get_mut(&mut def).unwrap().ts = ts_cfg;
         dbg!(&def);
 
-        let mut conn = Connection::new(def).unwrap();
+        let mut conn = Connection::new(def, None).unwrap();
         let clients = get_online_clients(&mut conn).unwrap();
         dbg!(clients);
         // let channels = get_channels(&mut conn).unwrap();
