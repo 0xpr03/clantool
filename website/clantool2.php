@@ -861,7 +861,7 @@ function getAjax(){
                 }
                 echo json_encode($result);
                 break;
-            case 'member-ts':
+            case 'member-ts-old':
                 handleDateTS();
                 $start = $_REQUEST['dateFromTS'];
                 $end = $_REQUEST['dateToTS'];
@@ -876,7 +876,7 @@ function getAjax(){
                 
                 $diff_ok = $diff >= TS_DIFF_MIN;
                 $date = null;
-                
+                $start_time = microtime(true);
                 if ($diff_ok) {
                     $interval = new DateInterval('P1W');
                     $start_d->modify('sunday'); // start of week
@@ -893,7 +893,7 @@ function getAjax(){
                         $chunkstart = $date->format($FORMAT);
                         $chunkend = $date->modify('+'.(TS_DIFF_MIN-1).' day')->format($FORMAT); // go till (inclusive) sunday
                         
-                        $chunk = $clanDB->getMemberTSSummary($chunkstart,
+                        $chunk = $clanDB->getMemberTSSummaryOld($chunkstart,
                         $chunkend,$id);
                         
                         $data['date'][] = array(
@@ -904,6 +904,85 @@ function getAjax(){
                         $data['average'][] = $chunk['avg_raw'] == null ? 0 : $chunk['avg_raw'];
                     }
                 }
+                $data['elapsed'] = (microtime(true) - $start_time) / 1000;
+                echo json_encode($data);
+                break;
+            case 'member-ts':
+                handleDateTS();
+                $start = $_REQUEST['dateFromTS'];
+                $end = $_REQUEST['dateToTS'];
+                $id = $_REQUEST['id'];
+                
+                $start_d = new DateTime($start);
+                $end_d = new DateTime($end);
+                
+                $diff = $start_d->diff($end_d);
+                $diff = $diff->days;
+                $diff += 1; // +1 because current day inclusive
+                
+                $diff_ok = $diff >= TS_DIFF_MIN;
+                $date = null;
+                
+                // trick plotly into thinking this is a date
+                $zero = "1970-01-01 00:00:00";
+                $start_time = microtime(true);
+                $db_time = 0;
+                if ($diff_ok) {
+                    $interval = new DateInterval('P1W');
+                    $start_d->modify('sunday'); // start of week
+                    $daterange = new DatePeriod($start_d, $interval ,$end_d);
+                    
+                    $FORMAT = 'Y-m-d';
+                    $data = array(
+                        'days' => array(),
+                        'average' => array(),
+                        'date' => array(),
+                    );
+                    $i = 0;
+                    $average = &$data['average'];
+                    foreach($daterange as $date) {
+                        $chunkstart = $date->format($FORMAT);
+                        $chunkend = $date->modify('+'.(TS_DIFF_MIN-1).' day')->format($FORMAT); // go till (inclusive) sunday
+                        
+                        $db_start = microtime(true);
+                        $chunk = $clanDB->getMemberTSSummary($chunkstart,
+                        $chunkend,$id);
+                        $db_time += microtime(true) - $db_start;
+                        
+                        $data['date'][] = array(
+                            'start' => $chunkstart,
+                            'end' => $chunkend,
+                        );
+                        if ($chunk == null) {
+                            // fill up with 0 for every channel if no data
+                            foreach($average as &$channel) {
+                                $channel['data'][$i] = $zero;
+                            }
+                        } else {
+                            foreach($chunk as $cid => $channel) {
+                                if (!isset($average[$cid])) {
+                                    $average[$cid] = array('data' => array(),
+                                        'channel' => $channel['channel']);
+                                }
+                                $average[$cid]['data'][$i] = $channel['timeAvg'];
+                            }
+                        }
+                        $i++;
+                    }
+                    
+                    // now 0 out missing values, not all channels always have values
+                    foreach($average as $channel => $_unused) {
+                        for ($j = 0; $j < $i; $j++) {
+                            if (!isset($average[$channel]['data'][$j])) {
+                                $average[$channel]['data'][$j] = $zero;
+                            }
+                        }
+                    }
+                }
+                $time_elapsed_secs = microtime(true) - $start_time;
+                $data['elapsed'] = $time_elapsed_secs / 1000;
+                $data['db'] = $db_time / 1000;
+                $data['cleaned'] = ($time_elapsed_secs - $db_time) / 1000;
                 echo json_encode($data);
                 break;
             case 'member-trial-delete':
@@ -4166,6 +4245,7 @@ function getTSView() {
             
             inputAcc.on('select2:select', function (e) {
                 renderTSChart();
+                renderTSChartOld();
             });
             
             inputDate.daterangepicker({
@@ -4193,6 +4273,7 @@ function getTSView() {
                 "maxDate": moment(),
                 "autoUpdateInput": true
             }, function(start, end, label) {
+                renderTSChartOld();
                 renderTSChart();
             });
             
@@ -4276,7 +4357,103 @@ function getTSView() {
                 updateTableTool();
             });
         }
+        var objectToArray = function(obj) {
+            var arr =[];
+            for(let o in obj) {
+                if (obj.hasOwnProperty(o)) {
+                arr.push(obj[o]);
+                }
+            }
+            return arr;
+        };
         function drawTSChart(data) {
+            
+            const labelDateFormat = "DD.MM";
+            
+            let labels = [];
+            for(var i = 0; i < data.date.length; i++) {
+                var elem = data.date[i];
+                var fStart = moment(elem.start, DATE_FORMAT).format(labelDateFormat);
+                var fEnd = moment(elem.end, DATE_FORMAT).format(labelDateFormat);
+                labels.push('Week '+fStart + ' - '+ fEnd);
+            }
+            
+            /*let labels = [];
+            for(var i = 0; i < data.date.length; i++) {
+                labels.push(data.date[i].start);
+            }*/
+            
+            let datasets = [];
+            for(var key in data.average) {
+                datasets.push({
+                    x: labels,
+                    y: objectToArray(data.average[key].data),
+                    name: data.average[key].channel,
+                    type: 'bar',
+                    yaxis: 'y',
+                    xaxis: 'x',
+                });
+            }
+            console.log(datasets);
+            
+            let layout = {
+                /*xaxis: {                  // all "layout.xaxis" attributes: #layout-xaxis
+                    title: 'date'         // more about "layout.xaxis.title": #layout-xaxis-title
+                },*/
+                yaxis: {
+                    type: 'date',
+                    tickformat: '%H:%M:%S'
+                },
+                barmode: 'stack',
+            };
+            //cleanupCharts();
+            Plotly.newPlot('chart-ts',datasets,layout,{responsive: true, modeBarButtonsToRemove: ['sendDataToCloud', 'autoScale2d', 'resetScale2d'] ,displaylogo: false, showTips:false})
+        }
+        
+        function renderTSChartOld() {
+            var picker = $('#dateDiff');
+            var acc = $('#inputAccount').select2('data');
+            if(acc.length == 0){
+                cleanupCharts();
+                $('#member-table tbody').html("");
+                return;
+            }
+            $('#loading').show();
+            var id = acc[0].id;
+            var vFrom = picker.data('daterangepicker').startDate.format(DATE_FORMAT);
+            var vTo = picker.data('daterangepicker').endDate.format(DATE_FORMAT);
+            setURLParameter({'dateFromTS' : vFrom, 'dateToTS': vTo, 'id' : id});
+            $.ajax({
+                url: 'index.php',
+                type: 'post',
+                dataType: "json",
+                data: {
+                    'site' : VAR_SITE,
+                    'ajaxCont' : 'data',
+                    'type' : 'member-ts-old',
+                    'dateFromTS' : vFrom,
+                    'dateToTS' : vTo,
+                    'id' : id,
+                }
+            }).done(function(data){
+                if(data != null) {
+                    drawTSChartOld(data);
+                    $('#dateInfo').hide();
+                } else {
+                    $('#member-table tbody').empty();
+                    $('#dateInfo').show();
+                }
+                $('#memberLink').attr('href','<?=MEMBER_DETAIL_URL?>' + id);
+                $('#loading').hide();
+                $('#error').hide();
+            }).fail(function(data){
+                $('#error').html(formatErrorData(data));
+                $('#error').show();
+                $('#loading').hide();
+                updateTableTool();
+            });
+        }
+        function drawTSChartOld(data) {
             
             const labelDateFormat = "DD.MM";
             
@@ -4294,7 +4471,7 @@ function getTSView() {
             }
             
             cleanupCharts();
-            var ctx = document.getElementById("chart-ts");
+            var ctx = document.getElementById("chart-ts-old");
             charts.push(new Chart(ctx, {
                 type: 'bar',
                 data: {
@@ -4422,7 +4599,8 @@ function getTSView() {
                 </div>
             </div>
         </div>
-        <canvas id="chart-ts" width="auto" height="auto"></canvas>
+        <canvas id="chart-ts-old" width="auto" height="auto"></canvas>
+        <div id="chart-ts" width="auto" height="auto"></div>
     </div>
     <?php
 }

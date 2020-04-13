@@ -1,7 +1,7 @@
 <?php
 /*
  * !
- * Copyright 2018 Aron Heinecke
+ * Copyright 2018-2020 Aron Heinecke
  * aron.heinecke@t-online.de
  * All rights reserved.
  * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
@@ -13,7 +13,7 @@
  
 // This file relies also on the defines in clantool2.php !
 define('DB_TS3_DATA','mDSStats2_6243');
-define('DB_TS3_NAMES','mDSNames_6243');
+define('DB_TS3_NAMES','ts_names');
 define('DB_TS3_STATS','ModStats_6243');
 // used to trick seconds -> datetime to display values as time
 define('PLOTLY_START_DATE','1970-01-01 ');
@@ -2009,13 +2009,13 @@ class clanDB extends dbException {
     }
     
     /**
-     * Get ts3 summary for id
+     * Get ts3 summary for id, old non-channel data
      * @param $date1 first date
      * @param $date2 second date
      * @param $id account ID
      * @return sum,avg,days
      */
-    public function getMemberTSSummary($date1,$date2,$id) {
+    public function getMemberTSSummaryOld($date1,$date2,$id) {
         if ($query = $this->db->prepare (
         'select ROUND(SUM(  `time` )) as `timeSum`,
             ROUND(AVG(`time`)) as `avg`,
@@ -2037,11 +2037,61 @@ class clanDB extends dbException {
             } else {
                 if($row = $result->fetch_assoc ()){
                     $resultset = array(
-                        'sum' => date('H:i:s',$row['timeSum']),
-                        'avg' => date('H:i:s',$row['avg']),
+                        //'sum' => date('H:i:s',$row['timeSum']),
+                        //'avg' => date('H:i:s',$row['avg']),
                         'days' => $row['days'],
-                        'sum_raw' => $row['timeSum'],
+                        //'sum_raw' => $row['timeSum'],
                         'avg_raw' => $row['avg'],
+                    );
+                }
+            }
+            $result->close();
+            
+            return $resultset;
+        } else {
+            throw new dbException ( $this->db->error );
+        }
+    }
+    
+    /**
+     * Get ts3 summary for id
+     * @param $date1 first date
+     * @param $date2 second date
+     * @param $id account ID
+     * @return sum,avg,days
+     */
+    public function getMemberTSSummary($date1,$date2,$id) {
+        if ($query = $this->db->prepare (
+        'SELECT cid,cname,SEC_TO_TIME(ROUND(AVG(tsum))) as timeAvg FROM (
+            SELECT a.date,a.channel_id as cid,c.name as cname,SUM(time) as tsum
+                FROM ts_relation r
+                JOIN ts_activity a ON r.client_id = a.client_id
+                JOIN ts_channels c ON a.channel_id = c.channel_id
+                WHERE r.id = ? AND a.date BETWEEN ? AND ?
+                GROUP BY a.channel_id,a.date
+            ) d
+            GROUP BY cid')) {
+            /*SELECT cname,ROUND(AVG(tsum)) as tavg FROM
+(SELECT a.date,a.channel_id,c.name as cname,SUM(time) as tsum FROM ts_relation r JOIN ts_activity a ON r.client_id = a.client_id JOIN ts_channels c ON a.channel_id = c.channel_id
+        WHERE r.id = 123 GROUP BY a.channel_id,a.date) d
+GROUP BY channel_id;*/
+            $query->bind_param ( 'iss',$id, $date1, $date2 );
+            $query->execute();
+            $result = $query->get_result ();
+            
+            if (! $result) {
+                throw new dbException ( $this->db->error, 500 );
+            }
+            
+            if ($result->num_rows == 0) {
+                $resultset = null;
+            } else {
+                $resultset = array();
+                while ( $row = $result->fetch_assoc () ) {
+                    $resultset[$row['cid']] = array(
+                        //'timeAvg' => $row['timeAvg']*1000,
+                        'timeAvg' => PLOTLY_START_DATE.$row['timeAvg'],
+                        'channel' => $row['cname'],
                     );
                 }
             }
