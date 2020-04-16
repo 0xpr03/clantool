@@ -68,7 +68,13 @@ impl Connection {
                     .as_millis()
                     .to_string();
                 let remaining = MAX_LEN_NAME - name.len();
-                let offset = time.len() - remaining;
+                let offset = if remaining > time.len() {
+                    warn!("Name > time len");
+                    warn!("name: {} time: {}, remaining: {}",name,time,remaining);
+                    time.len()
+                } else {
+                    time.len() - remaining
+                };
                 conn.rename(&format!("{}{}", name, &time.as_str()[offset..]))?;
             }
         }
