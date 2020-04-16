@@ -958,8 +958,10 @@ function getAjax(){
                             foreach($average as &$channel) {
                                 $channel['data'][$i] = $zero;
                             }
+                            $data['days'][] = 0;
                         } else {
-                            foreach($chunk as $cid => $channel) {
+                            $data['days'][] = $chunk['days'];
+                            foreach($chunk['data'] as $cid => $channel) {
                                 if (!isset($average[$cid])) {
                                     $average[$cid] = array('data' => array(),
                                         'channel' => $channel['channel']);

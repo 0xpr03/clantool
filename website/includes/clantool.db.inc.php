@@ -144,7 +144,6 @@ class clanDB extends dbException {
             
             $resultvalue = null;
             if ($result->num_rows != 0) {
-                $resultvalue = null;
                 if ( $row = $result->fetch_assoc () ) {
                     $resultvalue = $row['value'];
                 }
@@ -2061,8 +2060,12 @@ class clanDB extends dbException {
      * @return sum,avg,days
      */
     public function getMemberTSSummary($date1,$date2,$id) {
+        $days = $this->getMemberTSActiveDays($date1,$date2,$id);
+        if ($days == null) {
+            return null;
+        }
         if ($query = $this->db->prepare (
-        'SELECT cid,cname,SEC_TO_TIME(ROUND(AVG(tsum))) as timeAvg FROM (
+        'SELECT cid,cname,SEC_TO_TIME(ROUND(SUM(tsum) / '.$days.' )) as timeAvg FROM (
             SELECT a.date,a.channel_id as cid,c.name as cname,SUM(time) as tsum
                 FROM ts_relation r
                 JOIN ts_activity a ON r.client_id = a.client_id
@@ -2071,10 +2074,6 @@ class clanDB extends dbException {
                 GROUP BY a.channel_id,a.date
             ) d
             GROUP BY cid')) {
-            /*SELECT cname,ROUND(AVG(tsum)) as tavg FROM
-(SELECT a.date,a.channel_id,c.name as cname,SUM(time) as tsum FROM ts_relation r JOIN ts_activity a ON r.client_id = a.client_id JOIN ts_channels c ON a.channel_id = c.channel_id
-        WHERE r.id = 123 GROUP BY a.channel_id,a.date) d
-GROUP BY channel_id;*/
             $query->bind_param ( 'iss',$id, $date1, $date2 );
             $query->execute();
             $result = $query->get_result ();
@@ -2087,17 +2086,47 @@ GROUP BY channel_id;*/
                 $resultset = null;
             } else {
                 $resultset = array();
+                $resultset['days'] = $days;
+                $data = array();
                 while ( $row = $result->fetch_assoc () ) {
-                    $resultset[$row['cid']] = array(
+                    $data[$row['cid']] = array(
                         //'timeAvg' => $row['timeAvg']*1000,
                         'timeAvg' => PLOTLY_START_DATE.$row['timeAvg'],
                         'channel' => $row['cname'],
                     );
                 }
+                $resultset['data'] = $data;
             }
             $result->close();
             
             return $resultset;
+        } else {
+            throw new dbException ( $this->db->error );
+        }
+    }
+    
+    private function getMemberTSActiveDays($date1,$date2,$id) {
+        if ($query = $this->db->prepare (
+        'SELECT COUNT(DISTINCT a.`date`) as days
+            FROM ts_relation r
+            JOIN ts_activity a ON r.client_id = a.client_id
+            WHERE r.id = ? AND a.date BETWEEN ? AND ?')) {
+            $query->bind_param ( 'iss',$id, $date1, $date2 );
+            $query->execute();
+            $result = $query->get_result ();
+            
+            if (! $result) {
+                throw new dbException ( $this->db->error, 500 );
+            }
+            
+            $days = null;
+            if ($result->num_rows != 0) {
+                if ( $row = $result->fetch_assoc () ) {
+                    $days = $row['days'];
+                }
+            }
+            $result->close();
+            return $days;
         } else {
             throw new dbException ( $this->db->error );
         }
