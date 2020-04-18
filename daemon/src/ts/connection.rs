@@ -62,23 +62,33 @@ impl Connection {
             if e.error_response().map_or(true, |r| r.id != ERR_NAME_TAKEN) {
                 return Err(e.into());
             } else {
-                let time = SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap()
-                    .as_millis()
-                    .to_string();
-                let remaining = MAX_LEN_NAME - name.len();
-                let offset = if remaining > time.len() {
-                    warn!("Name > time len");
-                    warn!("name: {} time: {}, remaining: {}",name,time,remaining);
-                    time.len()
-                } else {
-                    time.len() - remaining
-                };
-                conn.rename(&format!("{}{}", name, &time.as_str()[offset..]))?;
+                conn.rename(&Self::calc_name_retry(name))?;
             }
         }
         Ok(())
+    }
+
+    /// Calculate new name on retry
+    fn calc_name_retry(name: &str) -> String {
+        // leave room for 2 digits at least
+        let name = if name.len() >= MAX_LEN_NAME - 2 {
+            &name[0..MAX_LEN_NAME / 2]
+        } else {
+            name
+        };
+        let time = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis()
+            .to_string();
+        let reamining = MAX_LEN_NAME - name.len();
+        let time = if reamining > time.len() {
+            &time
+        } else {
+            &time.as_str()[time.len() - reamining..]
+        };
+
+        format!("{}{}", name, time)
     }
 
     /// Returns the current connection id (clid)
@@ -134,5 +144,74 @@ impl Connection {
         };
         self.last_ping = Instant::now();
         Ok(conn)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_name_empty() {
+        let name = Connection::calc_name_retry("");
+        assert!(name.len() <= MAX_LEN_NAME);
+        assert!(name.len() > 0);
+        dbg!(name);
+    }
+
+    #[test]
+    fn test_name_fallback_normal() {
+        // normal name, enough space for time-digits
+        let name = Connection::calc_name_retry("ct_bot-fallback");
+
+        assert!(name.starts_with("ct_bot-fallback"));
+        assert!(name.len() <= MAX_LEN_NAME);
+        assert!(name.len() > "ct_bot-fallback".len());
+        dbg!(name);
+    }
+
+    #[test]
+    fn test_name_fallback_underflow() {
+        // don't take timeString[-1...], just timeStirng[0...] in that case
+        let name = Connection::calc_name_retry("ct_bot");
+
+        assert!(name.starts_with("ct_bot"));
+        assert!(name.len() <= MAX_LEN_NAME);
+        assert!(name.len() > "ct_bot".len());
+        dbg!(name);
+    }
+
+    #[test]
+    fn test_name_fallback_fit() {
+        {
+            // no space left, should make space for name
+            let name_input = "1234567890123456789D";
+            let name = Connection::calc_name_retry(name_input);
+            dbg!(&name);
+            assert!(name.starts_with(&name_input[..MAX_LEN_NAME / 2]));
+            assert!(name.len() <= MAX_LEN_NAME);
+        }
+
+        // required for near-fit invariant
+        assert!(MAX_LEN_NAME > 3);
+        {
+            // assert even for non-fit we have at least 2 random digits at the end
+            let name_input = "123456789012345678";
+            let name = Connection::calc_name_retry(name_input);
+            dbg!(&name);
+            assert!(name.starts_with(&name_input[..MAX_LEN_NAME / 2]));
+            assert!(name.len() <= MAX_LEN_NAME);
+        }
+    }
+
+    #[test]
+    fn test_name_fallback_overflow() {
+        // assert even for non-fit we have at least 2 random digits at the end
+        let name_input = "1234567890123456789012345678901234567890";
+        assert!(name_input.len() > MAX_LEN_NAME);
+        let name = Connection::calc_name_retry(name_input);
+        dbg!(&name);
+        assert!(name.starts_with(&name_input[..MAX_LEN_NAME / 2]));
+        assert!(name.len() <= MAX_LEN_NAME);
     }
 }
