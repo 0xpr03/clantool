@@ -205,7 +205,7 @@ function getCTTemplate() {
         const CP_MAX = <?=MAX_CP_DAY?>; // max CP per day
         const EXP_MAX_CP = EXP_REQUIRED_CP * CP_MAX; // max exp for max CP per day
         const SITE_MEMBER = "<?=SITE_MEMBER?>";
-        const URL = "<?=URL?>"; // sites URL to do ajax on (relative)
+        const SITE_URL = "<?=URL?>"; // sites URL to do ajax on (relative)
         const DATE_FORMAT = "YYYY-MM-DD";
         const P_ACC_ID = 'id';
         const TS_DIFF_MIN = <?=TS_DIFF_MIN?>;
@@ -278,7 +278,7 @@ function getCTTemplate() {
         function ts3Select(element){
             element.select2({
                 ajax: {
-                    url: URL,
+                    url: SITE_URL,
                     type: 'get',
                     dataType: 'json',
                     delay: 500, // ms
@@ -295,6 +295,31 @@ function getCTTemplate() {
                 },
                 placeholder: "TS3 Account Namenssuche",
                 allowClear: true
+            });
+        }
+        
+        /* Init ts channel selector, container is modal container */
+        function tsChannelSelect(element,container){
+            element.select2({
+                ajax: {
+                    url: SITE_URL,
+                    type: 'get',
+                    dataType: 'json',
+                    delay: 500, // ms
+                    data: function(params) {
+                        var query = {
+                            'site' : VAR_SITE,
+                            'ajaxCont' : 'data',
+                            'type' : 'ts-channel-search-select2',
+                            'key' : params.term
+                        }
+                        
+                        return query;
+                    }
+                },
+                placeholder: "TS3 Channel Suche",
+                allowClear: true,
+                dropdownParent: container
             });
         }
         
@@ -355,7 +380,7 @@ function getCTTemplate() {
         function accountSelect(element){
             element.select2({
                 ajax: {
-                    url: URL,
+                    url: SITE_URL,
                     type: 'get',
                     dataType: 'json',
                     delay: 600, // ms
@@ -442,6 +467,38 @@ function getCTTemplate() {
         function formatErrorData(data) {
             return '<h3><span class="glyphicon glyphicon-exclamation-sign" aria-hidden="true"></span>'
                         +'<span class="sr-only">Error:</span>Error:</h3><br><b>Status:</b> '+data.status+' '+data.statusText+'<br>'+data.responseText;
+        }
+        
+        function processParams(type, addition) {
+            let params = new URLSearchParams(addition);
+            params.append('site',VAR_SITE);
+            params.append('type', type);
+            params.append('ajaxCont', 'data');
+            return params;
+        }
+        
+        function postJson(type,bodyAddition) {
+            let body = processParams(type,bodyAddition);
+            return fetch(SITE_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8',
+                    'Accept' : 'application/json, text/javascript, */*; q=0.01'
+                },
+                body: body
+            }).then(res => res.json());
+        }
+        
+        function getJson(type,bodyAddition) {
+            let url = new URL(window.location.href);
+            url.search = processParams(type,bodyAddition).toString();
+            return fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8',
+                    'Accept' : 'application/json, text/javascript, */*; q=0.01'
+                }
+            }).then(res => res.json());
         }
         </script>
         Copyright Aron Heinecke 2017-2019 <a href="https://github.com/0xpr03/clantool">Sourcecode</a>
@@ -842,10 +899,45 @@ function getAjax(){
                     'tsIDs' => $clanDB->getTSIDCount(),
                     'causes' => $clanDB->getMemberCauseEntries(),
                     'tsdata' => $clanDB->getTSDataCount(),
+                    'tsdataold' => $clanDB->getTSOldDataCount(),
                     'missing' => $clanDB->getMissingEntriesCount(),
                     'log' => $clanDB->getLogEntryCount(),
                 );
                 echo json_encode($res);
+                break;
+            case 'ts-channel-group-create':
+                $name = $_POST['name'];
+                $id = $clanDB->addTs3ChannelGroup($name);
+                echo json_encode(array('id' => $id,'gname' => $name, 'channels' => array()));
+                break;
+            case 'ts-channel-group-delete':
+                $clanDB->deleteTs3ChannelGroup($_POST['gid']);
+                echo json_encode(true);
+                break;
+            case 'ts-channel-group-add-channel':
+                $clanDB->addTs3CGChannel($_POST['gid'],$_POST['cid']);
+                echo json_encode(true);
+                break;
+            case 'ts-channel-group-remove-channel':
+                $clanDB->removeTs3CGChannel($_POST['group'],$_POST['channel']);
+                echo json_encode(true);
+                break;
+            case 'ts-channel-search-select2':
+                if(isset($_REQUEST['key']) && $_REQUEST['key'] != null) {
+                    $result = array(
+                        'results' => $clanDB->searchTs3Channel($_REQUEST['key']),
+                        'pagination' => array('more' => false),
+                    );
+                } else {
+                    $result = array(
+                        'results' => array(),
+                        'pagination' => array('more' => false),
+                    );
+                }
+                echo json_encode($result);
+                break;
+            case 'ts-channel-groups':
+                echo json_encode($clanDB->getTsChannelGroups());
                 break;
             case 'ts3-search-select2':
                 if(isset($_REQUEST['key']) && $_REQUEST['key'] != null) {
@@ -1191,7 +1283,7 @@ function getTsIdentityView() { ?>
     <script type="text/javascript">
     $(document).ready(function() {
         $.ajax({
-            url: URL,
+            url: SITE_URL,
             type: 'get',
             dataType: "json",
             data: {
@@ -1258,7 +1350,7 @@ function getTsIdentityView() { ?>
     
     function handleIgnore(cid) {
         $.ajax({
-            url: URL,
+            url: SITE_URL,
             type: 'post',
             dataType: "json",
             data: {
@@ -1279,7 +1371,7 @@ function getTsIdentityView() { ?>
     function handleAccountAdd(cid) {
         var acc = $('#accountSelect'+cid).select2('data')[0];
         $.ajax({
-            url: URL,
+            url: SITE_URL,
             type: 'post',
             dataType: "json",
             data: {
@@ -1884,7 +1976,7 @@ function getMemberDetailView() { ?>
         $('#loading').show();
         disable(true);
         $.ajax({
-            url: URL,
+            url: SITE_URL,
             type: 'post',
             dataType: "json",
             data: {
@@ -1934,7 +2026,7 @@ function getMemberDetailView() { ?>
         $('#loading').show();
         disable(true);
         $.ajax({
-            url: URL,
+            url: SITE_URL,
             type: 'post',
             dataType: "json",
             data: {
@@ -2322,7 +2414,7 @@ function getMemberDetailView() { ?>
             var to = msNewChk.is(':checked') ? undefined : msNewTo.val();
             
             $.ajax({
-                url: URL,
+                url: SITE_URL,
                 type: 'post',
                 dataType: "json",
                 data: {
@@ -2399,7 +2491,7 @@ function getMemberDetailView() { ?>
             var action = $(this).attr('data-action');
             if(action == actionDelete){
                 $.ajax({
-                    url: URL,
+                    url: SITE_URL,
                     type: 'post',
                     dataType: "json",
                     data: {
@@ -2443,7 +2535,7 @@ function getMemberDetailView() { ?>
         trialsListForm.submit(function(e) {
             loadingDiv.show();
             $.ajax({
-                url: URL,
+                url: SITE_URL,
                 type: 'post',
                 dataType: "json",
                 data: {
@@ -2474,7 +2566,7 @@ function getMemberDetailView() { ?>
         $("#additionalForm").submit(function(e) {
             loadingDiv.show();
             $.ajax({
-                url: URL,
+                url: SITE_URL,
                 type: 'post',
                 dataType: "json",
                 data: $(this).serialize()
@@ -2500,7 +2592,7 @@ function getMemberDetailView() { ?>
                 loadingDiv.hide();
             } else {
                 $.ajax({
-                    url: URL,
+                    url: SITE_URL,
                     type: 'post',
                     dataType: "json",
                     data: {
@@ -2527,7 +2619,7 @@ function getMemberDetailView() { ?>
         $("#trialForm").submit(function(e) {
             loadingDiv.show();
             $.ajax({
-                url: URL,
+                url: SITE_URL,
                 type: 'post',
                 dataType: "json",
                 data: {
@@ -2553,7 +2645,7 @@ function getMemberDetailView() { ?>
         cautionForm.submit(function(e) {
             loadingDiv.show();
             $.ajax({
-                url: URL,
+                url: SITE_URL,
                 type: 'post',
                 dataType: "json",
                 data: {
@@ -2586,7 +2678,7 @@ function getMemberDetailView() { ?>
             var from = $(this).attr('data-from');
             var to = $(this).attr('data-to');
             $.ajax({
-                url: URL,
+                url: SITE_URL,
                 type: 'post',
                 dataType: "json",
                 data: {
@@ -2617,7 +2709,7 @@ function getMemberDetailView() { ?>
                 var to_orig = afkForm.attr('data-to');
                 console.log('from_orig',from_orig);
                 $.ajax({
-                    url: URL,
+                    url: SITE_URL,
                     type: 'post',
                     dataType: "json",
                     data: {
@@ -2647,7 +2739,7 @@ function getMemberDetailView() { ?>
                 });
             } else {
                 $.ajax({
-                    url: URL,
+                    url: SITE_URL,
                     type: 'post',
                     dataType: "json",
                     data: {
@@ -2683,7 +2775,7 @@ function getMemberDetailView() { ?>
             if(action == actionDelete){
                 loadingDiv.show();
                 $.ajax({
-                    url: URL,
+                    url: SITE_URL,
                     type: 'post',
                     dataType: "json",
                     data: {
@@ -2724,7 +2816,7 @@ function getMemberDetailView() { ?>
             loadingDiv.show();
             var from = $(this).attr('data-from');
             $.ajax({
-                url: URL,
+                url: SITE_URL,
                 type: 'post',
                 dataType: "json",
                 data: {
@@ -2750,7 +2842,7 @@ function getMemberDetailView() { ?>
             loadingDiv.show();
             var id = $(this).attr('data-id');
             $.ajax({
-                url: URL,
+                url: SITE_URL,
                 type: 'post',
                 dataType: "json",
                 data: {
@@ -2775,7 +2867,7 @@ function getMemberDetailView() { ?>
         $("#accsForm").submit(function(e) {
             loadingDiv.show();
             $.ajax({
-                url: URL,
+                url: SITE_URL,
                 type: 'post',
                 dataType: "json",
                 data: {
@@ -2802,7 +2894,7 @@ function getMemberDetailView() { ?>
             var id = $(this).attr('data-id');
             if(id != undefined){ // allow link to second accounts
                 $.ajax({
-                    url: URL,
+                    url: SITE_URL,
                     type: 'post',
                     dataType: "json",
                     data: {
@@ -2925,7 +3017,7 @@ function getMemberLeaveView() { ?>
         leaveForm.submit(function(e) {
             leaveForm.hide();
             $.ajax({
-                url: URL,
+                url: SITE_URL,
                 type: 'post',
                 dataType: "json",
                 data: $(this).serialize()
@@ -3032,7 +3124,7 @@ function getAccountChangeView() { ?>
         form.submit(function(e) {
             form.hide();
             $.ajax({
-                url: URL,
+                url: SITE_URL,
                 type: 'post',
                 dataType: "json",
                 data: {
@@ -3156,7 +3248,7 @@ function getMemberJoinView() { ?>
             var data = e.params.data;
             inputID.val(data.id);
             $.ajax({
-                url: URL,
+                url: SITE_URL,
                 type: 'post',
                 dataType: "json",
                 data: {
@@ -3186,7 +3278,7 @@ function getMemberJoinView() { ?>
         $("#joinForm").submit(function(e) {
             $('#joinForm').hide();
             $.ajax({
-                url: URL,
+                url: SITE_URL,
                 type: 'post',
                 dataType: "json",
                 data: $(this).serialize()
@@ -3255,7 +3347,7 @@ function getDatabaseView() {
     $( document ).ready(function() {
         initTableTool();
         $.ajax({
-            url: URL,
+            url: SITE_URL,
             type: 'post',
             dataType: "json",
             data: {
@@ -3274,6 +3366,7 @@ function getDatabaseView() {
                 createCol(sw,'Unlinked ts IDs',data.unlinkedTS);
                 createCol(sw,'TS Names',data.tsIDs);
                 createCol(sw,'TS Data',data.tsdata);
+                createCol(sw,'TS Data Old Schema',data.tsdataold);
                 createCol(sw,'Joins',data.joins);
                 createCol(sw,'Leaves',data.leaves);
                 createCol(sw,'Leaves with set cause',data.causes);
@@ -3384,7 +3477,7 @@ function getGeneralView() {
         }
         function showTs3Stats(vFrom,vTo) {
             $.ajax({
-                url: URL,
+                url: SITE_URL,
                 type: 'get',
                 dataType: "json",
                 data: {
@@ -3410,7 +3503,7 @@ function getGeneralView() {
             var vTo = end.format(DATE_FORMAT);
             setURLParameter({'dateFromOverview' : vFrom, 'dateToOverview': vTo});
             $.ajax({
-                url: URL,
+                url: SITE_URL,
                 type: 'get',
                 dataType: "json",
                 data: {
@@ -3679,7 +3772,7 @@ function getDifferenceWeeklyView() {
             showLoading();
             $('#difference-table tbody').empty();
             $.ajax({
-                url: URL,
+                url: SITE_URL,
                 type: 'get',
                 dataType: "json",
                 data: {
@@ -3827,7 +3920,7 @@ function getDifferenceWeeklyView() {
         function updateDiffComment(element,comment){
             showLoading();
             $.ajax({
-                url: URL,
+                url: SITE_URL,
                 type: 'post',
                 dataType: "json",
                 data: {
@@ -4052,7 +4145,7 @@ function getDifferenceView() {
             $('#loading').show();
             $('#difference-table tbody').empty();
             $.ajax({
-                url: URL,
+                url: SITE_URL,
                 type: 'get',
                 dataType: "json",
                 data: {
@@ -4200,7 +4293,7 @@ function getTSView() {
         function preselect(id,inputAcc) {
             $('#loading').show();
             $.ajax({
-                url: URL,
+                url: SITE_URL,
                 type: 'post',
                 dataType: "json",
                 data: {
@@ -4615,7 +4708,7 @@ function getMemberDifferenceView() {
         function preselect(id,inputAcc) {
             $('#loading').show();
             $.ajax({
-                url: URL,
+                url: SITE_URL,
                 type: 'post',
                 dataType: "json",
                 data: {
@@ -4896,6 +4989,7 @@ function getMemberDifferenceView() {
 
 function getSettingsView() {
     ?>
+    <script src="js/vue_2_6_11_dev.js" type="text/javascript"></script>
     <div class="col-sm-12 col-xs-11">
         <div id="error" style="display: none;" class="alert alert-danger fade in"></div>
         <div id="loading" style="position: fixed; display: none;z-index: 10; background: rgba(255,255,255,0.5); width: 100%; height: 100%;">
@@ -4977,8 +5071,101 @@ function getSettingsView() {
                 </div>
             </div>
         </form>
+        <?php if(hasPermission(PERM_CLANTOOL_TEST)) { ?>
+        <h3>Channel Groups</h3>
+        <div id="vue-channel-groups">
+            <div class="panel panel-default" v-for="group in groups" :key="group.id">
+                <div class="panel-heading">
+                    {{group.gname}} <button @click="deleteGroup(group.id)">delete</button>
+                </div>
+                <div class="panel-body">
+                    <div class="form-group">
+                        <span v-for="channel in group.channels" :key="channel.cid">
+                            {{channel.cname}} ({{channel.cid}})
+                        </span>
+                    </div>
+                    <div class="form-group">
+                        <div class="col-xs-10">
+                            <tsselect v-model="group.addChannel">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <div class="col-xs-10">
+                            <button @click="addChannel(group.id)">Add Channel</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="form-horizontal">
+                <div class="form-group">
+                    <label for="group_name" class="control-label col-xs-2">Group Name</label>
+                    <div class="col-xs-10">
+                        <input v-model="group_name" type="text" required="" autocomplete="on" class="form-control" id="group_name" placeholder="Channel Group Name">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <div class="col-xs-offset-2 col-xs-10">
+                        <button v-on:click="createGroup" class="btn btn-warning"><i class="fas fa-save"></i> Create Group</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <script type="text/x-template" id="tsselect-template">
+            <select ref="select" class="form-control">
+            </select>
+        </script>
+        <?php } ?>
     </div>
     <script type="text/javascript">
+    Vue.component("tsselect", {
+        props: ["value"],
+        template: "#tsselect-template",
+        mounted: function() {
+          var vm = this;
+          $(this.$el)
+            // init select2
+            .select2({
+                ajax: {
+                    url: SITE_URL,
+                    type: 'get',
+                    dataType: 'json',
+                    delay: 500, // ms
+                    data: function(params) {
+                        var query = {
+                            'site' : VAR_SITE,
+                            'ajaxCont' : 'data',
+                            'type' : 'ts-channel-search-select2',
+                            'key' : params.term
+                        }
+                        
+                        return query;
+                    }
+                },
+                placeholder: "TS3 Channel Suche",
+                allowClear: true
+            })
+            //.val(this.value)
+            //.trigger("change")
+            // emit event on change.
+            .on("change", function() {
+                console.log(this);
+              vm.$emit("input", {'cid': this.value, 'cname': this.textContent});
+            });
+        },
+        watch: {
+          value: function(value) {
+            // update value
+            //$(this.$el)
+            //  .val(value)
+            //  .trigger("change");
+          }
+        },
+        destroyed: function() {
+          $(this.$el)
+            .off()
+            .select2("destroy");
+        }
+    });
     $( document ).ready(function() {
         const loadingDiv = $('#loading');
         const errorDiv = $('#error');
@@ -4986,7 +5173,7 @@ function getSettingsView() {
             loadingDiv.show();
             $.ajax({
                 url: 'index.php',
-                type: 'post',
+                type: 'get',
                 dataType: "json",
                 data: {
                     'site' : VAR_SITE,
@@ -5015,7 +5202,7 @@ function getSettingsView() {
         $("#settingsForm").submit(function(e) {
             loadingDiv.show();
             $.ajax({
-                url: URL,
+                url: SITE_URL,
                 type: 'post',
                 dataType: "json",
                 data: $(this).serialize()
@@ -5035,6 +5222,61 @@ function getSettingsView() {
             e.preventDefault();
         });
         loadSettings();
+        <?php if(hasPermission(PERM_CLANTOOL_TEST)) { ?>
+        
+        var CGApp = new Vue({
+            el: '#vue-channel-groups',
+            data: {
+                groups: null,
+                group_name: ""
+            },
+            methods: {
+                loadGroups: function() {
+                    getJson('ts-channel-groups')
+                    .then(res => {
+                        console.log('res',res);
+                        this.groups = res;
+                    }).catch(error => {
+                        console.error(error);
+                    }).then(() => loadingDiv.hide());
+                },
+                createGroup: function() {
+                    console.log("creating group",this.group_name);
+                    let t_name = this.group_name;
+                    loadingDiv.show();
+                    postJson('ts-channel-group-create',{'name': t_name})
+                    .then(res => {
+                        Vue.set(this.groups,res.id,res);
+                        loadingDiv.hide();
+                    });
+                },
+                deleteGroup: function(gid) {
+                    loadingDiv.show();
+                    postJson('ts-channel-group-delete', {'gid':gid})
+                    .then(res => Vue.delete(this.groups, gid))
+                    .finally(() => loadingDiv.hide());
+                },
+                addChannel: function(gid) {
+                    let elem = this.groups[gid].addChannel;
+                    loadingDiv.show();
+                    postJson('ts-channel-group-add-channel', {'gid':gid,'cid': elem.cid})
+                    .then(res => this.groups[gid].channels.push(elem))
+                    .finally(() => loadingDiv.hide());
+                },
+                removeChannel: function(gid,cid) {
+                    
+                },
+                test: function(text) {
+                    console.log('Info',text);
+                    group_name = "asdasd";
+                }
+            },
+            beforeMount(){
+                this.loadGroups()
+            }
+        });        
+        //CGApp.test("asd");
+        <?php } ?>
     });
     </script>
     <?php

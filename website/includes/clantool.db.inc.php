@@ -1869,8 +1869,17 @@ class clanDB extends dbException {
      * @throws dbException
      * @return integer/null
      */
-    public function getTSDataCount() {
+    public function getTSOldDataCount() {
         return $this->getCountByKey('date',DB_TS3_DATA);
+    }
+    
+    /**
+     * Get amount of ts data in DB_TS3_DATA
+     * @throws dbException
+     * @return integer/null
+     */
+    public function getTSDataCount() {
+        return $this->getCountByKey('date','ts_activity');
     }
     
     /**
@@ -2202,6 +2211,168 @@ class clanDB extends dbException {
                     'total' => $total,
                     'console' => $console
                 );
+            }
+            
+            $result->close ();
+            
+            return $resultset;
+        } else {
+            throw new dbException ( '500' );
+        }
+    }
+    
+    /**
+     * Creates a new ts3 channel group
+     * @param name Name for new group
+     * @return group id
+     * @throw dbException
+     */
+    public function addTs3ChannelGroup($name) {
+        if($query = $this->db->prepare (
+            'INSERT INTO `ts_channel_group_names` (`name`) VALUES (?)')) {
+            $query->bind_param('s',$name);
+            if(!$query->execute()){
+                throw new dbException($this->db->error);
+            }else{
+                $id = $this->db->insert_id;
+                if ($id == 0) {
+                    throw new dbException("Expected insertion ID, got none.");
+                }
+                return $id;
+            }
+        } else {
+            throw new dbException ( $this->db->error );
+        }
+    }
+    
+    /**
+     * Delete channel group
+     * @param gid Group id
+     * @throw dbException
+     */
+    public function deleteTs3ChannelGroup($gid) {
+        if($query = $this->db->prepare (
+            'DELETE FROM `ts_channel_group_names` WHERE group_id = ?')) {
+            $query->bind_param('i',$gid);
+            if(!$query->execute()){
+                throw new dbException($this->db->error);
+            }
+        } else {
+            throw new dbException ( $this->db->error );
+        }
+    }
+    
+    /**
+     * Remove channel from channel group
+     * @param gid Group id
+     * @param cid Channel id
+     * @throw dbException
+     */
+    public function removeTs3CGChannel($gid,$cid) {
+        if($query = $this->db->prepare (
+            'DELETE FROM `ts_channel_groups` WHERE group_id = ? and channel_id = ?')) {
+            $query->bind_param('ii',$gid,$cid);
+            if(!$query->execute()){
+                throw new dbException($this->db->error);
+            }
+        } else {
+            throw new dbException ( $this->db->error );
+        }
+    }
+    
+    /**
+     * Add channel to channel group
+     * @param gid Group id
+     * @param cid Channel id
+     * @throw dbException
+     */
+    public function addTs3CGChannel($gid,$cid) {
+        if($query = $this->db->prepare (
+            'INSERT INTO `ts_channel_groups` (`group_id`,`channel_id`) VALUES (?,?)')) {
+            $query->bind_param('ii',$gid,$cid);
+            if(!$query->execute()){
+                throw new dbException($this->db->error);
+            }
+        } else {
+            throw new dbException ( $this->db->error );
+        }
+    }
+    
+    /**
+     * Search for TS channel by name, limited to 20
+     * @param key Key to search for
+     * @return select2 formated resultset {limit 20}
+     * @throw dbException
+     */
+    public function searchTs3Channel($key) {
+        $keyName = '%'.$key.'%';
+        if ($query = $this->db->prepare ( 'SELECT `name`,`channel_id` 
+        FROM ts_channels 
+        WHERE `name` LIKE ? OR `channel_id` = ?
+        LIMIT 20')) {
+            $query->bind_param ( 'si', $keyName, $key );
+            $query->execute();
+            $result = $query->get_result ();
+            
+            if (! $result) {
+                throw new dbException ( $this->db->error, 500 );
+            }
+            
+            if ($result->num_rows == 0) {
+                $resultset = array();
+            } else {
+                $resultset = array ();
+                while ( $row = $result->fetch_assoc () ) {
+                    $resultset[] = array(
+                        'text' => $row['name'] . ' ('.$row['channel_id'].')',
+                        'id' => $row['channel_id']
+                    );
+                }
+            }
+            $result->close();
+            
+            return $resultset;
+        } else {
+            throw new dbException ( $this->db->error );
+        }
+    }
+    
+    /**
+     * Get all channelg roups. Returns array of [group id: {g_name,channels: [{cname,cid}]}]
+     * @throws dbException
+     */
+    public function getTsChannelGroups() {
+        if ($query = $this->db->prepare ( 'select gn.group_id,gn.name as gname,
+            g.channel_id,c.name as cname FROM ts_channel_group_names gn
+        LEFT JOIN ts_channel_groups g ON gn.group_id = g.group_id
+        LEFT JOIN ts_channels c ON g.channel_id = c.channel_id' )) {
+            $query->execute ();
+            $result = $query->get_result ();
+            
+            if (! $result) {
+                throw new dbException ( $this->db->error, 500 );
+            }
+            
+            $resultset = array();
+            if ($result->num_rows != 0) {
+                $resultset = array();
+                while ( $row = $result->fetch_assoc () ) {
+                    $group_id = $row['group_id'];
+                    if (!isset($resultset[$group_id])) {
+                        $resultset[$group_id] = array(
+                            'gname' => $row['gname'],
+                            'channels' => array(),
+                            'id' => $group_id,
+                        );
+                    }
+                    $channelID = $row['channel_id'];
+                    if ($channelID != null) {
+                        $resultset[$group_id]['channels'][] = array(
+                            'cname' => $row['cname'],
+                            'cid' => $channelID
+                        );
+                    }
+                }
             }
             
             $result->close ();

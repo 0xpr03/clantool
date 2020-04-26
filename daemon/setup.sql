@@ -157,11 +157,33 @@ CREATE TABLE `ts_names` (
   `client_id` int(11) NOT NULL,
   PRIMARY KEY (`client_id`),
   KEY `name` (`name`)
-) ENGINE=InnoDB CHARACTER SET 'utf8mb4' ROW_FORMAT=COMPRESSED;
+) ENGINE=InnoDB CHARACTER SET 'utf8mb4';
 
 CREATE TABLE `ts_channels` (
   `name` VARCHAR(100) NOT NULL,
   `channel_id` int(11) NOT NULL,
   PRIMARY KEY (`channel_id`),
   KEY `name` (`name`)
-) ENGINE=InnoDB CHARACTER SET 'utf8mb4' ROW_FORMAT=COMPRESSED;
+) ENGINE=InnoDB CHARACTER SET 'utf8mb4';
+
+CREATE TABLE `ts_channel_group_names` (
+  `group_id` INT NOT NULL AUTO_INCREMENT,
+  `name` VARCHAR(100) NOT NULL,
+  PRIMARY KEY (`group_id`),
+  KEY `name` (`name`)
+) ENGINE=InnoDB CHARACTER SET 'utf8mb4';
+
+CREATE TABLE `ts_channel_groups` (
+  `group_id` INT NOT NULL,
+  `channel_id` int(11) NOT NULL UNIQUE,
+  PRIMARY KEY `primary` (`channel_id`,`group_id`),
+  KEY `group_id` (`group_id`),
+  CONSTRAINT `fk_group_id`
+    FOREIGN KEY (group_id) REFERENCES ts_channel_group_names (group_id)
+    ON DELETE CASCADE
+    ON UPDATE RESTRICT,
+  CONSTRAINT `fk_channel_id`
+    FOREIGN KEY (channel_id) REFERENCES ts_channels (channel_id)
+    ON DELETE CASCADE
+    ON UPDATE RESTRICT
+) ENGINE=InnoDB;
