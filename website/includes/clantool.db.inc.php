@@ -2074,6 +2074,64 @@ class clanDB extends dbException {
             return null;
         }
         if ($query = $this->db->prepare (
+            'SELECT g.group_id,gn.name,SEC_TO_TIME(SUM(timeAvg)) as TGAvg from (
+            SELECT cid,cname,ROUND(SUM(tsum) / '.$days.' ) as timeAvg FROM (
+                        SELECT a.date,a.channel_id as cid,c.name as cname,SUM(time) as tsum
+                            FROM ts_relation r
+                            JOIN ts_activity a ON r.client_id = a.client_id
+                            JOIN ts_channels c ON a.channel_id = c.channel_id
+                            WHERE r.id = ? AND a.date BETWEEN ? AND ?
+                            GROUP BY a.channel_id,a.date
+                        ) d
+                        GROUP BY cid
+            ) d
+            LEFT JOIN ts_channel_groups g ON d.cid = g.channel_id
+            LEFT JOIN ts_channel_group_names gn ON gn.group_id = g.group_id
+            GROUP BY g.group_id;')) {
+            $query->bind_param ( 'iss',$id, $date1, $date2 );
+            $query->execute();
+            $result = $query->get_result ();
+            
+            if (! $result) {
+                throw new dbException ( $this->db->error, 500 );
+            }
+            
+            if ($result->num_rows == 0) {
+                $resultset = null;
+            } else {
+                $resultset = array();
+                $resultset['days'] = $days;
+                $data = array();
+                while ( $row = $result->fetch_assoc () ) {
+                    $data[$row['group_id']] = array(
+                        //'timeAvg' => $row['timeAvg']*1000,
+                        'timeAvg' => PLOTLY_START_DATE.$row['TGAvg'],
+                        'group' => $row['name'] != null ? $row['name'] : "Other",
+                    );
+                }
+                $resultset['data'] = $data;
+            }
+            $result->close();
+            
+            return $resultset;
+        } else {
+            throw new dbException ( $this->db->error );
+        }
+    }
+    
+    /**
+     * Get ts3 summary for id
+     * @param $date1 first date
+     * @param $date2 second date
+     * @param $id account ID
+     * @return sum,avg,days
+     */
+    public function getMemberTSSummaryDetailed($date1,$date2,$id) {
+        $days = $this->getMemberTSActiveDays($date1,$date2,$id);
+        if ($days == null) {
+            return null;
+        }
+        if ($query = $this->db->prepare (
         'SELECT cid,cname,SEC_TO_TIME(ROUND(SUM(tsum) / '.$days.' )) as timeAvg FROM (
             SELECT a.date,a.channel_id as cid,c.name as cname,SUM(time) as tsum
                 FROM ts_relation r
@@ -2306,9 +2364,10 @@ class clanDB extends dbException {
      */
     public function searchTs3Channel($key) {
         $keyName = '%'.$key.'%';
-        if ($query = $this->db->prepare ( 'SELECT `name`,`channel_id` 
-        FROM ts_channels 
-        WHERE `name` LIKE ? OR `channel_id` = ?
+        if ($query = $this->db->prepare ( 'SELECT c.`name`,c.`channel_id` 
+        FROM ts_channels c
+        LEFT JOIN ts_channel_groups cg ON cg.channel_id = c.channel_id
+        WHERE cg.channel_id IS NULL AND c.`name` LIKE ? OR c.`channel_id` = ?
         LIMIT 20')) {
             $query->bind_param ( 'si', $keyName, $key );
             $query->execute();
@@ -2326,6 +2385,43 @@ class clanDB extends dbException {
                     $resultset[] = array(
                         'text' => $row['name'] . ' ('.$row['channel_id'].')',
                         'id' => $row['channel_id']
+                    );
+                }
+            }
+            $result->close();
+            
+            return $resultset;
+        } else {
+            throw new dbException ( $this->db->error );
+        }
+    }
+    
+    /**
+     * Return all non-grouped ts3 channels
+     * @return array of all channels
+     * @throw dbException
+     */
+    public function ts3UngroupedChannels() {
+        if ($query = $this->db->prepare ( 'SELECT tc.`name`,tc.`channel_id` 
+        FROM ts_channels tc
+        LEFT JOIN ts_channel_groups cg ON cg.channel_id = tc.channel_id
+        WHERE cg.channel_id IS NULL')) {
+            $query->execute();
+            $result = $query->get_result ();
+            
+            if (! $result) {
+                throw new dbException ( $this->db->error, 500 );
+            }
+            
+            if ($result->num_rows == 0) {
+                $resultset = array();
+            } else {
+                $resultset = array ();
+                while ( $row = $result->fetch_assoc () ) {
+                    $cid = $row['channel_id'];
+                    $resultset[$cid] = array(
+                        'cname' => $row['name'],
+                        'cid' => $row['channel_id']
                     );
                 }
             }
@@ -2367,7 +2463,7 @@ class clanDB extends dbException {
                     }
                     $channelID = $row['channel_id'];
                     if ($channelID != null) {
-                        $resultset[$group_id]['channels'][] = array(
+                        $resultset[$group_id]['channels'][$channelID] = array(
                             'cname' => $row['cname'],
                             'cid' => $channelID
                         );

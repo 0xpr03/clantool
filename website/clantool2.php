@@ -50,6 +50,7 @@ define('SITE', 'clantool2'); // site value
 define('VIEW','view'); // view key for requests
 define('DEFAULT_VIEW','changes');
 define('SITE_MEMBER','memberDetail');
+define('DATE_SWITCH_TS_DATA','2020-04-19');
 define('DATE_MIN','2016-11-31'); // minimum date for EXP/CP
 define('HOUR_MIN',10); // hour of crawl per day, selecting previous day if time < HOUR_MIN
 define('URL', 'index.php'); // base file
@@ -64,6 +65,7 @@ define('MAX_DIFF_COMMENT_CHAR',70); // max characters for weekly comment field
 define('Z8PROFILE','http://crossfire.z8games.com/profile/');
 
 define('PERM_CLANTOOL_TEST','clantoolTest');
+define('PERM_CLANTOOL_ADMIN','clantoolAdmin');
 
 // db keys, read by backend
 define('KEY_AUTO_LEAVE', 'auto_leave_enable');

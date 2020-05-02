@@ -80,32 +80,12 @@
             </div>
         </div>
     </form>
-    <?php if(hasPermission(PERM_CLANTOOL_TEST)) { ?>
-    <h3>Channel Groups</h3>
+</div>
+<div class="container">
+    <h3>TS3 Channel Groups</h3>
     <div id="vue-channel-groups">
-        <div class="panel panel-default" v-for="group in groups" :key="group.id">
-            <div class="panel-heading">
-                {{group.gname}} <button @click="deleteGroup(group.id)">delete</button>
-            </div>
-            <div class="panel-body">
-                <div class="form-group">
-                    <span v-for="channel in group.channels" :key="channel.cid">
-                        {{channel.cname}} ({{channel.cid}})
-                    </span>
-                </div>
-                <div class="form-group">
-                    <div class="col-xs-10">
-                        <tsselect v-model="group.addChannel">
-                    </div>
-                </div>
-                <div class="form-group">
-                    <div class="col-xs-10">
-                        <button @click="addChannel(group.id)">Add Channel</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="form-horizontal">
+        <div class="container">
+        <form class="form-horizontal" v-on:submit.prevent="createGroup">
             <div class="form-group">
                 <label for="group_name" class="control-label col-xs-2">Group Name</label>
                 <div class="col-xs-10">
@@ -114,16 +94,60 @@
             </div>
             <div class="form-group">
                 <div class="col-xs-offset-2 col-xs-10">
-                    <button v-on:click="createGroup" class="btn btn-warning"><i class="fas fa-save"></i> Create Group</button>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Create Group</button>
+                </div>
+            </div>
+        </form></div>
+        <div class="row">
+            <div class="col-sm-6 col-xs-11" v-for="group in groups" :key="group.id">
+                <div class="panel panel-default">
+                    <div class="panel-heading" style="overflow: hidden;">
+                        {{group.gname}}<button style="float: right;" class="btn btn-danger" @click="deleteGroup(group.id)"><i class="fas fa-trash"></i> Delete Group</button>
+                    </div>
+                    <div class="panel-body">
+                        <ul class="list-group">
+                            <li class="list-group-item" style="overflow: hidden;" v-for="channel in group.channels" :key="channel.cid">
+                                {{channel.cname}} ({{channel.cid}}) <a @click="removeChannel(group.id,channel.cid)" class="warning" style="float: right;"><i class="fas fa-trash"></i> Remove </a>
+                            </li>
+                        </ul>
+                        <form class="form-horizontal" v-on:submit.prevent="addChannel(group.id)">
+                            <div class="form-group">
+                                <div class="col-xs-10">
+                                    <tsselect v-model="group.addChannel">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <div class="col-xs-10">
+                                    <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Add Channel</button>
+                                </div>
+                            </div>
+                        </form>
+                        
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="panel panel-default">
+                <div class="panel-heading">
+                    Other (auto group) 
+                    <a v-show="!show_ungrouped" @click="toggleUngrouped"><i class="fas fa-plus"></i> Expand </a>
+                    <a v-show="show_ungrouped" @click="toggleUngrouped"><i class="fas fa-minus"></i> Collapse</a>
+                </div>
+                <div class="panel-footer" v-show="show_ungrouped">
+                    <ul class="list-group">
+                        <li class="list-group-item" v-for="channel in ungrouped" :key="channel.cid">
+                            {{channel.cname}} ({{channel.cid}})
+                        </li>
+                    </ul>                
                 </div>
             </div>
         </div>
     </div>
     <script type="text/x-template" id="tsselect-template">
-        <select ref="select" class="form-control">
+        <select ref="select" required="true" class="form-control">
         </select>
     </script>
-    <?php } ?>
 </div>
 <script type="text/javascript">
 Vue.component("tsselect", {
@@ -156,9 +180,9 @@ Vue.component("tsselect", {
         //.val(this.value)
         //.trigger("change")
         // emit event on change.
-        .on("change", function() {
-            // misusing value/input event chain to return object
-            vm.$emit("input", {'cid': this.value, 'cname': this.textContent});
+        .on("select2:select", function(e) {
+            let params = e.params.data;
+            vm.$emit("input", {'cid': params.id, 'cname': params.text});
         });
     },
     watch: {
@@ -232,20 +256,31 @@ $( document ).ready(function() {
         e.preventDefault();
     });
     loadSettings();
-    <?php if(hasPermission(PERM_CLANTOOL_TEST)) { ?>
     
     var CGApp = new Vue({
         el: '#vue-channel-groups',
         data: {
             groups: null,
-            group_name: ""
+            group_name: "",
+            ungrouped: {},
+            show_ungrouped: false,
         },
         methods: {
+            toggleUngrouped: function() {
+                this.show_ungrouped = !this.show_ungrouped;
+            },
             loadGroups: function() {
                 getJson('ts-channel-groups')
                 .then(res => {
-                    console.log('res',res);
-                    this.groups = res;
+                    this.groups = res.data;
+                }).catch(error => {
+                    console.error(error);
+                }).then(() => loadingDiv.hide());
+            },
+            loadUngrouped: function() {
+                getJson('ts-channels-ungrouped')
+                .then(res => {
+                    this.ungrouped = res;
                 }).catch(error => {
                     console.error(error);
                 }).then(() => loadingDiv.hide());
@@ -263,18 +298,38 @@ $( document ).ready(function() {
             deleteGroup: function(gid) {
                 loadingDiv.show();
                 postJson('ts-channel-group-delete', {'gid':gid})
-                .then(res => Vue.delete(this.groups, gid))
+                .then(res => {
+                    Vue.delete(this.groups, gid);
+                    this.loadUngrouped();
+                })
                 .finally(() => loadingDiv.hide());
             },
             addChannel: function(gid) {
                 let elem = this.groups[gid].addChannel;
+                console.log(elem);
                 loadingDiv.show();
                 postJson('ts-channel-group-add-channel', {'gid':gid,'cid': elem.cid})
-                .then(res => this.groups[gid].channels.push(elem))
-                .finally(() => loadingDiv.hide());
+                .then(res => {
+                    console.log(this.groups[gid].channels instanceof Array);
+                    if (this.groups[gid].channels instanceof Array) {
+                        Vue.set(this.groups[gid],'channels',{});
+                    }
+                    Vue.set(this.groups[gid].channels,elem.cid,elem);
+                    Vue.delete(this.ungrouped,elem.cid);
+                })
+                .finally(() => {
+                    loadingDiv.hide();
+                    this.groups[gid].addChannel = null;
+                });
             },
             removeChannel: function(gid,cid) {
-                
+                let channel = this.groups[gid].channels[cid];
+                loadingDiv.show();
+                postJson('ts-channel-group-remove-channel', {'gid':gid,'cid': cid})
+                .then(res => {
+                    Vue.delete(this.groups[gid].channels,cid);
+                    Vue.set(this.ungrouped,cid,channel);
+                }).finally(() => loadingDiv.hide());
             },
             test: function(text) {
                 console.log('Info',text);
@@ -282,10 +337,9 @@ $( document ).ready(function() {
             }
         },
         beforeMount(){
-            this.loadGroups()
+            this.loadGroups();
+            this.loadUngrouped();
         }
     });
-    //CGApp.test("asd");
-    <?php } ?>
 });
 </script>

@@ -324,6 +324,9 @@ switch($_REQUEST['ajaxCont']){
             );
             echo json_encode($res);
             break;
+        case 'ts-channels-ungrouped':
+            echo json_encode($clanDB->ts3UngroupedChannels());
+            break;
         case 'ts-channel-group-create':
             $name = $_POST['name'];
             $id = $clanDB->addTs3ChannelGroup($name);
@@ -338,7 +341,7 @@ switch($_REQUEST['ajaxCont']){
             echo json_encode(true);
             break;
         case 'ts-channel-group-remove-channel':
-            $clanDB->removeTs3CGChannel($_POST['group'],$_POST['channel']);
+            $clanDB->removeTs3CGChannel($_POST['gid'],$_POST['cid']);
             echo json_encode(true);
             break;
         case 'ts-channel-search-select2':
@@ -356,7 +359,10 @@ switch($_REQUEST['ajaxCont']){
             echo json_encode($result);
             break;
         case 'ts-channel-groups':
-            echo json_encode($clanDB->getTsChannelGroups());
+            $start_time = microtime(true);
+            $data = array('data' => $clanDB->getTsChannelGroups());
+            $data['elapsed'] = (microtime(true) - $start_time) / 1000;
+            echo json_encode($data);
             break;
         case 'ts3-search-select2':
             if(isset($_REQUEST['key']) && $_REQUEST['key'] != null) {
@@ -418,6 +424,91 @@ switch($_REQUEST['ajaxCont']){
             $data['elapsed'] = (microtime(true) - $start_time) / 1000;
             echo json_encode($data);
             break;
+        case 'member-ts-detailed':
+            if(!hasPerm(PERM_CLANTOOL_ADMIN)) {
+                http_response_code(403);
+                echo 'Missing permissions!';
+                return;
+            }
+            handleDateTS();
+            $start = $_REQUEST['dateFromTS'];
+            $end = $_REQUEST['dateToTS'];
+            $id = $_REQUEST['id'];
+            
+            $start_d = new DateTime($start);
+            $end_d = new DateTime($end);
+            
+            $diff = $start_d->diff($end_d);
+            $diff = $diff->days;
+            $diff += 1; // +1 because current day inclusive
+            
+            $diff_ok = $diff >= TS_DIFF_MIN;
+            $date = null;
+            
+            // trick plotly into thinking this is a date
+            $zero = "1970-01-01 00:00:00";
+            $start_time = microtime(true);
+            $db_time = 0;
+            if ($diff_ok) {
+                $interval = new DateInterval('P1W');
+                $start_d->modify('sunday'); // start of week
+                $daterange = new DatePeriod($start_d, $interval ,$end_d);
+                
+                $FORMAT = 'Y-m-d';
+                $data = array(
+                    'days' => array(),
+                    'average' => array(),
+                    'date' => array(),
+                );
+                $i = 0;
+                $average = &$data['average'];
+                foreach($daterange as $date) {
+                    $chunkstart = $date->format($FORMAT);
+                    $chunkend = $date->modify('+'.(TS_DIFF_MIN-1).' day')->format($FORMAT); // go till (inclusive) sunday
+                    
+                    $db_start = microtime(true);
+                    $chunk = $clanDB->getMemberTSSummaryDetailed($chunkstart,
+                    $chunkend,$id);
+                    $db_time += microtime(true) - $db_start;
+                    
+                    $data['date'][] = array(
+                        'start' => $chunkstart,
+                        'end' => $chunkend,
+                    );
+                    if ($chunk == null) {
+                        // fill up with 0 for every channel if no data
+                        foreach($average as &$channel) {
+                            $channel['data'][$i] = $zero;
+                        }
+                        $data['days'][] = 0;
+                    } else {
+                        $data['days'][] = $chunk['days'];
+                        foreach($chunk['data'] as $cid => $channel) {
+                            if (!isset($average[$cid])) {
+                                $average[$cid] = array('data' => array(),
+                                    'channel' => $channel['channel']);
+                            }
+                            $average[$cid]['data'][$i] = $channel['timeAvg'];
+                        }
+                    }
+                    $i++;
+                }
+                
+                // now 0 out missing values, not all channels always have values
+                foreach($average as $channel => $_unused) {
+                    for ($j = 0; $j < $i; $j++) {
+                        if (!isset($average[$channel]['data'][$j])) {
+                            $average[$channel]['data'][$j] = $zero;
+                        }
+                    }
+                }
+            }
+            $time_elapsed_secs = microtime(true) - $start_time;
+            $data['elapsed'] = $time_elapsed_secs / 1000;
+            $data['db'] = $db_time / 1000;
+            $data['cleaned'] = ($time_elapsed_secs - $db_time) / 1000;
+            echo json_encode($data);
+            break;
         case 'member-ts':
             handleDateTS();
             $start = $_REQUEST['dateFromTS'];
@@ -466,28 +557,28 @@ switch($_REQUEST['ajaxCont']){
                     );
                     if ($chunk == null) {
                         // fill up with 0 for every channel if no data
-                        foreach($average as &$channel) {
-                            $channel['data'][$i] = $zero;
+                        foreach($average as &$group) {
+                            $group['data'][$i] = $zero;
                         }
                         $data['days'][] = 0;
                     } else {
                         $data['days'][] = $chunk['days'];
-                        foreach($chunk['data'] as $cid => $channel) {
+                        foreach($chunk['data'] as $cid => $group) {
                             if (!isset($average[$cid])) {
                                 $average[$cid] = array('data' => array(),
-                                    'channel' => $channel['channel']);
+                                    'group' => $group['group']);
                             }
-                            $average[$cid]['data'][$i] = $channel['timeAvg'];
+                            $average[$cid]['data'][$i] = $group['timeAvg'];
                         }
                     }
                     $i++;
                 }
                 
                 // now 0 out missing values, not all channels always have values
-                foreach($average as $channel => $_unused) {
+                foreach($average as $group => $_unused) {
                     for ($j = 0; $j < $i; $j++) {
-                        if (!isset($average[$channel]['data'][$j])) {
-                            $average[$channel]['data'][$j] = $zero;
+                        if (!isset($average[$group]['data'][$j])) {
+                            $average[$group]['data'][$j] = $zero;
                         }
                     }
                 }

@@ -53,6 +53,9 @@
         inputAcc.on('select2:select', function (e) {
             renderTSChart();
             renderTSChartOld();
+            <?php if(hasPerm(PERM_CLANTOOL_ADMIN)) {
+                echo 'renderTSChartDetailed();';
+            } ?>
         });
         
         inputDate.daterangepicker({
@@ -82,6 +85,9 @@
         }, function(start, end, label) {
             renderTSChartOld();
             renderTSChart();
+            <?php if(hasPerm(PERM_CLANTOOL_ADMIN)) {
+                echo 'renderTSChartDetailed();';
+            } ?>
         });
         
         var start = moment('<?=$_SESSION[DATE_FROM_TS]?>',DATE_FORMAT);
@@ -120,8 +126,7 @@
             updateTableTool();
         });
     }
-    
-    function renderTSChart() {
+    function renderTSChartDetailed() {
         var picker = $('#dateDiff');
         var acc = $('#inputAccount').select2('data');
         if(acc.length == 0){
@@ -133,6 +138,60 @@
         var id = acc[0].id;
         var vFrom = picker.data('daterangepicker').startDate.format(DATE_FORMAT);
         var vTo = picker.data('daterangepicker').endDate.format(DATE_FORMAT);
+        setURLParameter({'dateFromTS' : vFrom, 'dateToTS': vTo, 'id' : id});
+        $.ajax({
+            url: 'index.php',
+            type: 'post',
+            dataType: "json",
+            data: {
+                'site' : VAR_SITE,
+                'ajaxCont' : 'data',
+                'type' : 'member-ts-detailed',
+                'dateFromTS' : vFrom,
+                'dateToTS' : vTo,
+                'id' : id,
+            }
+        }).done(function(data){
+            if(data != null) {
+                drawTSChartDetailed(data);
+                $('#dateInfo').hide();
+            } else {
+                $('#member-table tbody').empty();
+                $('#dateInfo').show();
+            }
+            $('#memberLink').attr('href','<?=MEMBER_DETAIL_URL?>' + id);
+            $('#loading').hide();
+            $('#error').hide();
+        }).fail(function(data){
+            $('#error').html(formatErrorData(data));
+            $('#error').show();
+            $('#loading').hide();
+            updateTableTool();
+        });
+    }
+    function renderTSChart() {
+        var picker = $('#dateDiff');
+        var acc = $('#inputAccount').select2('data');
+        if(acc.length == 0){
+            cleanupCharts();
+            $('#member-table tbody').html("");
+            return;
+        }
+        
+        var id = acc[0].id;
+        var vFrom = picker.data('daterangepicker').startDate.format(DATE_FORMAT);
+        var vTo = picker.data('daterangepicker').endDate.format(DATE_FORMAT);
+        
+        let switch_date = moment(DATE_SWITCH_TS_DATA, "YYYY-MM-DD");
+        let old_data = switch_date.isAfter(vTo);
+        if (old_data) {
+            console.log("too old data, hiding new chart");
+            $('#chart-ts').hide();
+            return;
+        }
+        
+        $('#loading').show();
+        
         setURLParameter({'dateFromTS' : vFrom, 'dateToTS': vTo, 'id' : id});
         $.ajax({
             url: 'index.php',
@@ -173,7 +232,7 @@
         }
         return arr;
     };
-    function drawTSChart(data) {
+    function drawTSChartDetailed(data) {
         
         const labelDateFormat = "DD.MM";
         
@@ -185,10 +244,6 @@
             labels.push('Week '+fStart + ' - '+ fEnd);
         }
         
-        /*let labels = [];
-        for(var i = 0; i < data.date.length; i++) {
-            labels.push(data.date[i].start);
-        }*/
         
         let datasets = [];
         for(var key in data.average) {
@@ -214,6 +269,47 @@
             barmode: 'stack',
         };
         //cleanupCharts();
+        $('#chart-ts-detailed').show();
+        Plotly.newPlot('chart-ts-detailed',datasets,layout,{responsive: true, modeBarButtonsToRemove: ['sendDataToCloud', 'autoScale2d', 'resetScale2d'] ,displaylogo: false, showTips:false})
+    }
+    function drawTSChart(data) {
+        
+        const labelDateFormat = "DD.MM";
+        
+        let labels = [];
+        for(var i = 0; i < data.date.length; i++) {
+            var elem = data.date[i];
+            var fStart = moment(elem.start, DATE_FORMAT).format(labelDateFormat);
+            var fEnd = moment(elem.end, DATE_FORMAT).format(labelDateFormat);
+            labels.push('Week '+fStart + ' - '+ fEnd);
+        }
+        
+        
+        let datasets = [];
+        for(var key in data.average) {
+            datasets.push({
+                x: labels,
+                y: objectToArray(data.average[key].data),
+                name: data.average[key].group,
+                type: 'bar',
+                yaxis: 'y',
+                xaxis: 'x',
+            });
+        }
+        console.log(datasets);
+        
+        let layout = {
+            /*xaxis: {                  // all "layout.xaxis" attributes: #layout-xaxis
+                title: 'date'         // more about "layout.xaxis.title": #layout-xaxis-title
+            },*/
+            yaxis: {
+                type: 'date',
+                tickformat: '%H:%M:%S'
+            },
+            barmode: 'stack',
+        };
+        //cleanupCharts();
+        $('#chart-ts').show();
         Plotly.newPlot('chart-ts',datasets,layout,{responsive: true, modeBarButtonsToRemove: ['sendDataToCloud', 'autoScale2d', 'resetScale2d'] ,displaylogo: false, showTips:false})
     }
     
@@ -229,6 +325,15 @@
         var id = acc[0].id;
         var vFrom = picker.data('daterangepicker').startDate.format(DATE_FORMAT);
         var vTo = picker.data('daterangepicker').endDate.format(DATE_FORMAT);
+        
+        let switch_date = moment(DATE_SWITCH_TS_DATA, "YYYY-MM-DD");
+        let new_data = switch_date.isBefore(vFrom);
+        if (new_data) {
+            console.log("too new data, hiding old");
+            $('#chart-ts-old').hide();
+            return;
+        }
+        
         setURLParameter({'dateFromTS' : vFrom, 'dateToTS': vTo, 'id' : id});
         $.ajax({
             url: 'index.php',
@@ -278,6 +383,7 @@
         }
         
         cleanupCharts();
+        $('#chart-ts-old').show();
         var ctx = document.getElementById("chart-ts-old");
         charts.push(new Chart(ctx, {
             type: 'bar',
@@ -406,6 +512,7 @@
             </div>
         </div>
     </div>
-    <canvas id="chart-ts-old" width="auto" height="auto"></canvas>
-    <div id="chart-ts" width="auto" height="auto"></div>
+    <canvas id="chart-ts-old" style="display: none;" width="auto" height="auto"></canvas>
+    <div id="chart-ts" style="display: none;" width="auto" height="auto"></div>
+    <div id="chart-ts-detailed" style="display: none;" width="auto" height="auto"></div>
 </div>

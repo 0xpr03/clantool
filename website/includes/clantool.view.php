@@ -127,6 +127,7 @@ function getCTTemplate() {
         const DATE_FORMAT = "YYYY-MM-DD";
         const P_ACC_ID = 'id';
         const TS_DIFF_MIN = <?=TS_DIFF_MIN?>;
+        const DATE_SWITCH_TS_DATA = "<?=DATE_SWITCH_TS_DATA?>";
         </script>
         Copyright Aron Heinecke 2017-2020 <a href="https://github.com/0xpr03/clantool">Sourcecode</a>
     </div>
