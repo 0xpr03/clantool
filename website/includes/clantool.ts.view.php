@@ -268,7 +268,6 @@
             },
             barmode: 'stack',
         };
-        //cleanupCharts();
         $('#chart-ts-detailed').show();
         Plotly.newPlot('chart-ts-detailed',datasets,layout,{responsive: true, modeBarButtonsToRemove: ['sendDataToCloud', 'autoScale2d', 'resetScale2d'] ,displaylogo: false, showTips:false})
     }
@@ -296,6 +295,17 @@
                 xaxis: 'x',
             });
         }
+        // now add days active
+        datasets.push({
+            x: labels,
+            y: data.days,
+            name: "Days active",
+            type: 'scatter',
+            yaxis: 'y2',
+            xaxis: 'x',
+            color: 'rgb(213, 92, 0)'
+        });
+        
         console.log(datasets);
         
         let layout = {
@@ -304,11 +314,24 @@
             },*/
             yaxis: {
                 type: 'date',
-                tickformat: '%H:%M:%S'
+                tickformat: '%H:%M:%S',
+                side: 'right'
+            },
+            yaxis2: {
+                title: 'Days Active',
+                titlefont: {color: 'rgb(213, 92, 0)'},
+                tickfont: {color: 'rgb(213, 92, 0)'},
+                overlaying: 'y',
+                side: 'left',
+                autotick: false,
+                dtick: 1,
+                color: 'rgb(213, 92, 0)',
+               /* tickmode: "linear",*/
+                showticklabels: true,
+                range: [0,7]
             },
             barmode: 'stack',
         };
-        //cleanupCharts();
         $('#chart-ts').show();
         Plotly.newPlot('chart-ts',datasets,layout,{responsive: true, modeBarButtonsToRemove: ['sendDataToCloud', 'autoScale2d', 'resetScale2d'] ,displaylogo: false, showTips:false})
     }
