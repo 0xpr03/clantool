@@ -56,7 +56,6 @@
     </table>
 </div>
 <script type="text/javascript">
-var MEMBER_DETAIL_URL = '<?=MEMBER_DETAIL_URL?>';
 $(document).ready(function() {
     var selCurrAcc = $('#inputAccount');
     var selNewAcc = $('#selInputNewAcc');

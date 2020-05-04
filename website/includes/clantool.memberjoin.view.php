@@ -70,7 +70,6 @@
     Bitte den Eintrag in den TS-Channel <b>Memberliste</b> &amp; <b>Download/Upload Ordner</b> nicht vergessen!
 </div>
 <script type="text/javascript">
-var MEMBER_DETAIL_URL = '<?=MEMBER_DETAIL_URL?>';
 $(document).ready(function() {
     var selTS = $('#selTSid');
     var tsID = $('#inputTSID');
