@@ -102,7 +102,8 @@
             <div class="col-sm-6 col-xs-11" v-for="group in groups" :key="group.id">
                 <div class="panel panel-default">
                     <div class="panel-heading" style="overflow: hidden;">
-                        {{group.gname}}<button style="float: right;" class="btn btn-danger" @click="deleteGroup(group.id)"><i class="fas fa-trash"></i> Delete Group</button>
+                        <editable v-model="group.gname" @edited="renameGroup(group.id,group.gname)"></editable>
+                        <button style="float: right;" class="btn btn-danger" @click="deleteGroup(group.id)"><i class="fas fa-trash"></i> Delete Group</button>
                     </div>
                     <div class="panel-body">
                         <ul class="list-group">
@@ -148,8 +149,56 @@
         <select ref="select" required="true" class="form-control">
         </select>
     </script>
+    <script type="text/x-template" id="editable-template">
+        <div style="float: left;">
+            <div @click="startEditing" v-show="!editing"
+                data-toggle="tooltip" data-placement="bottom"
+                    title="Click to rename.">
+                {{value}}
+            </div>
+            <input :value="value" v-show="editing"
+                    @input="$emit('input', $event.target.value)"
+                    @keydown.enter="endEditing"
+                    @keydown.escape="cancelEditing"
+                    type="text"
+                    ref="inputControl"
+                    class="form-control"
+                    data-toggle="tooltip" data-placement="bottom"
+                    title="Press enter to finish, escape to cancel renaming.">
+        </div>
+    </script>
 </div>
 <script type="text/javascript">
+Vue.component("editable",{
+  props:["value"],
+  template: "#editable-template",
+  data(){
+    return {
+      editing: false,
+      lastValue: null,
+    }
+  },
+  methods: {
+    startEditing: function() {
+        this.lastValue = this.$refs.inputControl.value
+        console.log(this.lastValue);
+        this.editing = true;
+    },
+    endEditing: function() {
+        if(this.$refs.inputControl.value.length > 0) {
+            this.editing = false;
+            this.$emit('edited');
+        } else {
+            this.cancelEditing();
+        }
+    },
+    cancelEditing: function() {
+        console.log(this.lastValue);
+        this.$emit('input', this.lastValue)
+        this.editing = false;
+    }
+  }
+});
 Vue.component("tsselect", {
     props: ["value"],
     template: "#tsselect-template",
@@ -266,6 +315,9 @@ $( document ).ready(function() {
             show_ungrouped: false,
         },
         methods: {
+            renameGroup: function(gid,name) {
+                postJson('ts-channels-group-rename',{'gid': gid,'name': name});
+            },
             toggleUngrouped: function() {
                 this.show_ungrouped = !this.show_ungrouped;
             },

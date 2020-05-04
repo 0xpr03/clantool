@@ -324,6 +324,12 @@ switch($_REQUEST['ajaxCont']){
             );
             echo json_encode($res);
             break;
+        case 'ts-channels-group-rename':
+            $group = $_POST['gid'];
+            $name = $_POST['name'];
+            $clanDB->ts3RenameChannelGroup($group,$name);
+            echo json_encode(true);
+            break;
         case 'ts-channels-ungrouped':
             echo json_encode($clanDB->ts3UngroupedChannels());
             break;

@@ -2339,6 +2339,24 @@ class clanDB extends dbException {
     }
     
     /**
+     * Rename channel group
+     * @param gid Group id
+     * @param name New Group Name
+     * @throw dbException
+     */
+    public function ts3RenameChannelGroup($gid,$name) {
+        if($query = $this->db->prepare (
+            'UPDATE `ts_channel_group_names` SET `name` = ? WHERE group_id = ?')) {
+            $query->bind_param('si',$name,$gid);
+            if(!$query->execute()){
+                throw new dbException($this->db->error);
+            }
+        } else {
+            throw new dbException ( $this->db->error );
+        }
+    }
+    
+    /**
      * Add channel to channel group
      * @param gid Group id
      * @param cid Channel id
