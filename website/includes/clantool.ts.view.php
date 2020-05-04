@@ -535,7 +535,7 @@
             </div>
         </div>
     </div>
-    <canvas id="chart-ts-old" style="display: none;" width="auto" height="auto"></canvas>
     <div id="chart-ts" style="display: none;" width="auto" height="auto"></div>
     <div id="chart-ts-detailed" style="display: none;" width="auto" height="auto"></div>
+    <canvas id="chart-ts-old" style="display: none;" width="auto" height="auto"></canvas>
 </div>
