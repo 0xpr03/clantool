@@ -1963,60 +1963,6 @@ class clanDB extends dbException {
     }
     
     /**
-     * Get most active accounts for selected date
-     * @param date1
-     * @param date2
-     * @return list of most active accounts
-     * @throws dbException
-     */
-    public function getTSTop($date1,$date2,$amount) {
-        if ($query = $this->db->prepare ( 'select mt.id,                            SEC_TO_TIME(AVG(`time`)) as `avg`,
-            COUNT(DISTINCT stats.`date`) as `days`,
-            IFNULL(names.name,?) as `vname`,
-            SEC_TO_TIME( SUM(  `time` )) `sum`
-        FROM `ts_relation` mt 
-        JOIN `'.DB_TS3_DATA.'` stats ON mt.client_id = stats.client_id 
-        LEFT JOIN `member_names` names ON mt.id = names.id AND
-            `names`.updated = (SELECT MAX(n2.updated) 
-                FROM `member_names` n2 
-                WHERE n2.id = mt.id
-            )
-        WHERE stats.date BETWEEN ? AND ? 
-        GROUP BY mt.id 
-        ORDER BY days DESC,avg DESC 
-        LIMIT ?;')) { // Y-m-d G:i:s Y-m-d h:i:s
-            $query->bind_param ( 'sssi',$this->name_default, $date1, $date2,$amount );
-            $query->execute();
-            $result = $query->get_result ();
-            
-            if (! $result) {
-                throw new dbException ( $this->db->error, 500 );
-            }
-            
-            if ($result->num_rows == 0) {
-                $resultset = null;
-            } else {
-                $resultset = array ();
-                while ( $row = $result->fetch_assoc () ) {
-                    $resultset[] = array(
-                        'avg' => $row['avg'],
-                        'days' => $row['days'],
-                        'id' => $row['id'],
-                        'vname' => $row['vname'],
-                        'sum' => $row['sum']
-                        );
-                }
-            }
-            $result->close();
-            
-            return $resultset;
-        } else {
-            throw new dbException ( $this->db->error );
-        }
-        
-    }
-    
-    /**
      * Get ts3 summary for id, old non-channel data
      * @param $date1 first date
      * @param $date2 second date

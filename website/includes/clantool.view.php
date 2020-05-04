@@ -42,7 +42,6 @@ function getCTTemplate() {
             <?=generateViewLink(SITE_MEMBER,'fas fa-address-book fa-lg','Member')?>
             <?=generateViewLink('changes','fas fa-users fa-lg','Joins &amp; Leaves')?>
             <?=generateViewLink('ts3','fas fa-chart-bar fa-lg','TS Activity')?>
-            <?=generateViewLink('tsTop','fas fa-list-ol fa-lg','TS3 Toplist')?>
             <?=generateViewLink('database','fas fa-server fa-lg','Status')?>
             <?=generateViewLink('log','far fa-list-alt fa-lg','System Log')?>
             <?=generateViewLink('settings','fas fa-sliders-h fa-lg','System Settings')?>
@@ -84,9 +83,6 @@ function getCTTemplate() {
                 break;
             case 'away':
                 require 'includes/clantool.away.view.php';
-                break;
-            case 'tsTop':
-                require 'includes/clantool.tstop.view.php';
                 break;
             case 'general':
                 require 'includes/clantool.general.view.php';
