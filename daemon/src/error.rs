@@ -129,5 +129,7 @@ quick_error! {
             description("Missing value in ts3-server response")
             display("Missing value for {} in ts3-server response",value)
         }
+        /// Expected at least ourself, found 0 clients online
+        NoTsClients {}
     }
 }

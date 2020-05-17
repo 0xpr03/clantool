@@ -129,13 +129,23 @@ impl TsStatCtrl {
     fn tick(&mut self) -> Result<()> {
         // store timestamp now to prevent delta loss by blocking operations
         let new_timestamp = Instant::now();
-        let data = get_online_clients(&mut self.conn)?;
+
+        // retry connection if clients are 0, we expect at least ourself
+        let data = match get_online_clients(&mut self.conn) {
+            Ok(v) => v,
+            Err(Error::NoTsClients) => {
+                warn!("Got no ts clients! Trying force reconnect..");
+                self.conn.force_reconnect()?;
+                get_online_clients(&mut self.conn)?
+            }
+            Err(e) => return Err(e),
+        };
         // take elapsed after data, expecting server reponse to be fast and connection start possibly slow
         let elapsed: i32 = match self.last_update.elapsed().as_secs().try_into() {
             Ok(v) => v,
             Err(e) => panic!("TS activity elapsed time > i32::max! {}", e),
         };
-        trace!("Elapsed: {} seconds", elapsed);
+        trace!("Elapsed: {} seconds {} entries", elapsed, data.len());
         self.last_update = new_timestamp;
 
         let mut new_channel = HashMap::with_capacity(data.len());
@@ -483,6 +493,9 @@ fn get_online_clients(conn: &mut Connection) -> Result<HashSet<TsClient>> {
             })
         })
         .collect::<Result<HashSet<TsClient>>>()?;
+    if clients.len() == 0 {
+        return Err(Error::NoTsClients);
+    }
     Ok(clients)
 }
 

@@ -128,6 +128,13 @@ impl Connection {
         })
     }
 
+    /// Force reconnect
+    pub fn force_reconnect(&mut self) -> Result<()> {
+        self.conn = Self::connect(&self.cfg.ts, self.name)?;
+        self.conn_id = None;
+        Ok(())
+    }
+
     /// Returns the active connection or tries to create a new one
     pub fn get(&mut self) -> Result<&mut QueryClient> {
         if self.last_ping.elapsed() < Duration::from_secs(0) {
@@ -137,8 +144,7 @@ impl Connection {
             Ok(_) => &mut self.conn,
             Err(e) => {
                 debug!("Previous connection died: {}", e);
-                self.conn = Self::connect(&self.cfg.ts, self.name)?;
-                self.conn_id = None;
+                self.force_reconnect()?;
                 &mut self.conn
             }
         };
