@@ -113,10 +113,12 @@ impl Connection {
         Self::new(self.cfg.clone(), name)
     }
 
+    /// Get config
     pub fn config(&self) -> &Config {
         &self.cfg
     }
 
+    /// Create new TS-Connection with an optional name
     pub fn new(cfg: Config, name: Option<&'static str>) -> Result<Connection> {
         let conn = Self::connect(&cfg.ts, name)?;
         Ok(Self {

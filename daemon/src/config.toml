@@ -17,11 +17,11 @@ ip = "127.0.0.1"
 enabled = true
 ip = "127.0.0.1"
 # query port
-port = 1111
+port = 10011
 user = "user"
 password = "something"
 # port of the ts server instance to use
-server_port = 1101
+server_port = 9987
 # enables check for non-attributed ts identities
 # that have a member group
 unknown_id_check_enabled = true
