@@ -1,18 +1,17 @@
-/*
-Copyright 2017-2019 Aron Heinecke
+// Copyright 2017-2020 Aron Heinecke
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//   http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-  http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
 use serde::Deserialize;
 use toml::de::from_str;
 
@@ -24,8 +23,6 @@ use std::path::Path;
 use std::process::exit;
 
 use crate::CONFIG_PATH;
-
-use crate::get_executable_folder;
 
 use crate::error::Error;
 
@@ -54,8 +51,10 @@ pub enum ConfigError {
 }
 
 /// Config struct
+pub type Config = ::std::sync::Arc<InnerConfig>;
+
 #[derive(Debug, Deserialize)]
-pub struct Config {
+pub struct InnerConfig {
     pub db: DBConfig,
     pub main: MainConfig,
     pub ts: TSConfig,
@@ -70,6 +69,8 @@ pub struct TSConfig {
     pub password: String,
     pub server_port: u16,
     pub unknown_id_check_enabled: bool,
+    pub enabled: bool,
+    pub cmd_limit_secs: u16,
 }
 
 /// Main config struct
@@ -105,7 +106,7 @@ pub struct DBConfig {
 
 /// Init config, reading from file or creating such
 pub fn init_config() -> Config {
-    let mut path = l_expect(get_executable_folder(), "config folder"); // PathBuf
+    let mut path = l_expect(::std::env::current_dir(), "config folder"); // PathBuf
     path.push(CONFIG_PATH); // set_file_name doesn't return smth -> needs to be run on mut path
     trace!("config path {:?}", path);
     let data: String;
@@ -129,6 +130,11 @@ fn parse_config(input: String) -> Result<Config, Error> {
     Ok(a)
 }
 
+#[cfg(test)]
+pub fn default_cfg_testing() -> Config {
+    parse_config(default_config()).unwrap()
+}
+
 /// Read config from file.
 pub fn read_config(file: &Path) -> Result<String, ConfigError> {
     let mut f = OpenOptions::new()
@@ -150,52 +156,18 @@ fn write_config_file(path: &Path, data: &str) -> Result<(), ConfigError> {
 }
 
 /// Create a new config.
-pub fn default_config() -> String {
+fn default_config() -> String {
     trace!("Creating config..");
-    let toml = r#"[db]
-user = "user"
-#comment out to login without password
-password = "password"
-db = "clantool"
-port = 3306
-ip = "127.0.0.1"
-
-[ts]
-ip = "127.0.0.1"
-# query port
-port = 1111
-user = "user"
-password = "something"
-# port of the ts server instance to use
-server_port = 1101
-unknown_id_check_enabled = true
-
-[main]
-clan_ajax_url = "http://crossfire.z8games.com/rest/clanmembers.json?clanID=68910&page=%Page&perPage=10&rankType=user&startrow=%StartRow&endrow=%EndRow"
-clan_ajax_site_key = "%Page"
-clan_ajax_exptected_per_site = 10
-clan_ajax_start_row_key = "%StartRow"
-clan_ajax_end_row_key = "%EndRow"
-# maximum amount of sites, after which to abort
-clan_ajax_max_sites = 10
-# required for referer
-clan_url = "http://crossfire.z8games.com/clan/68910"
-# enable automatic leave handling
-auto_leave_enabled = true
-# max days distance of date to compare to for leave detection
-auto_leave_max_age = 4
-auto_leave_message_default = "auto leave detection"
-# time of the day the crawler should run
-time = "12:00"
-retries = 5
-# retry number * retry_interval = maximum time waited
-retry_interval = "00:05"
-# send mail on failure
-send_error_mail = true
-# list of email address to send errors
-mail = ["root@localhost"]
-mail_from = "noreply@localhost"
-"#;
+    let toml = include_str!("config.toml");
 
     toml.to_owned()
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    fn test_default_parse() {
+        parse_config(default_config()).unwrap();
+    }
 }

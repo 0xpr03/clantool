@@ -1,20 +1,19 @@
-/*
-Copyright 2017-2019 Aron Heinecke
+// Copyright 2017-2020 Aron Heinecke
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//   http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-  http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-use reqwest::header::*;
 use reqwest::blocking::{Client, ClientBuilder};
+use reqwest::header::*;
 use std::io::Read;
 
 use crate::REFERER as REF;
@@ -110,12 +109,14 @@ mod test {
 
     /// Run z8 test
     #[test]
+    #[ignore]
     fn get_ajax_z8() {
         let b_ajax = get("http://crossfire.z8games.com/clan/1", HeaderType::Ajax).unwrap();
         assert!(b_ajax.contains("Clan1"));
     }
 
     #[test]
+    #[ignore]
     fn get_ajax_z8_member() {
         let b_ajax = get("http://crossfire.z8games.com/rest/clanmembers.json?clanID=68910&page=1&perPage=10&rankType=user", HeaderType::Ajax).unwrap();
         assert!(b_ajax.contains("Dr.Alptraum"));

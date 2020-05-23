@@ -1,6 +1,6 @@
 [package]
 name = "clantool"
-version = "0.4.1"
+version = "0.5.0"
 authors = ["Aron Heinecke"]
 edition = "2018"
 
@@ -13,20 +13,24 @@ name = "clantool"
 [dependencies]
 lazy_static = "1"
 toml = "0.5"
-serde = { version = "1", features = ["derive"] }
+serde = { version = "1", features = ["derive","rc"] }
 log = "0.4"
-log4rs = "0.10"
+log4rs = "0.11"
 chrono = "0.4"
 json = "0.12"
 quick-error = "1"
 clap = "2"
 sendmail = { git = "https://github.com/0xpr03/rust-sendmail", rev = "f0463869b55b3309d9c82e1b0c86ddad58eb98ef" }
 regex = "1"
-mysql = "17"
+mysql = "18"
 timer = "0.2"
 csv = "1"
-ts3-query = "0.1"
+signal-hook = "0.1"
 
 [dependencies.reqwest]
 version = "0.10"
 features = ["blocking","gzip"]
+
+[dependencies.ts3-query]
+features = ["backtrace"]
+version ="0.2"

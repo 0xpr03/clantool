@@ -1,4 +1,4 @@
-/* Copyright (c) 2016, 2018 Aron Heinecke
+/* Copyright (c) 2016-2020 Aron Heinecke
  * All rights reserved.
  * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
  * 1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
@@ -142,3 +142,48 @@ CREATE OR REPLACE VIEW `unknown_ts_unignored` AS
 SELECT `t`.`client_id` from `unknown_ts_ids` t where `t`.`client_id` NOT IN (
     select `ignore_ts_ids`.`client_id` from `ignore_ts_ids`
 );
+
+CREATE TABLE `ts_activity` (
+  `channel_id` int(11) NOT NULL,
+  `date` date NOT NULL,
+  `time` INT NOT NULL,
+  `client_id` int(11) NOT NULL,
+  PRIMARY KEY (`date`,`client_id`,`channel_id`),
+  KEY `client_date` (`date`,`client_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+CREATE TABLE `ts_names` (
+  `name` VARCHAR(100) NOT NULL,
+  `client_id` int(11) NOT NULL,
+  PRIMARY KEY (`client_id`),
+  KEY `name` (`name`)
+) ENGINE=InnoDB CHARACTER SET 'utf8mb4';
+
+CREATE TABLE `ts_channels` (
+  `name` VARCHAR(100) NOT NULL,
+  `channel_id` int(11) NOT NULL,
+  PRIMARY KEY (`channel_id`),
+  KEY `name` (`name`)
+) ENGINE=InnoDB CHARACTER SET 'utf8mb4';
+
+CREATE TABLE `ts_channel_group_names` (
+  `group_id` INT NOT NULL AUTO_INCREMENT,
+  `name` VARCHAR(100) NOT NULL,
+  PRIMARY KEY (`group_id`),
+  KEY `name` (`name`)
+) ENGINE=InnoDB CHARACTER SET 'utf8mb4';
+
+CREATE TABLE `ts_channel_groups` (
+  `group_id` INT NOT NULL,
+  `channel_id` int(11) NOT NULL UNIQUE,
+  PRIMARY KEY `primary` (`channel_id`,`group_id`),
+  KEY `group_id` (`group_id`),
+  CONSTRAINT `fk_group_id`
+    FOREIGN KEY (group_id) REFERENCES ts_channel_group_names (group_id)
+    ON DELETE CASCADE
+    ON UPDATE RESTRICT,
+  CONSTRAINT `fk_channel_id`
+    FOREIGN KEY (channel_id) REFERENCES ts_channels (channel_id)
+    ON DELETE CASCADE
+    ON UPDATE RESTRICT
+) ENGINE=InnoDB;

@@ -1,18 +1,16 @@
-/*
-Copyright 2017-2019 Aron Heinecke
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-  http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
+// Copyright 2017-2020 Aron Heinecke
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//   http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 #[macro_use]
 extern crate lazy_static;
@@ -29,14 +27,18 @@ mod db;
 mod error;
 mod import;
 mod ts;
+mod types;
+
+pub use types::*;
 
 use crate::crawler::http::HeaderType;
 
-use std::env::current_exe;
+use std::env::current_dir;
 use std::fs::DirBuilder;
 use std::fs::{metadata, File};
 use std::io::Write;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::sleep;
 use std::time::{Duration as Dur, Instant};
@@ -50,13 +52,13 @@ use chrono::Timelike;
 
 use mysql::{Pool, PooledConn};
 
-use error::Error;
+pub use error::Error;
 
 use config::Config;
 
 use clap::{App, Arg, SubCommand};
 
-const VERSION: &str = "0.3.0";
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 const USER_AGENT: &str = "Mozilla/5.0 (Windows NT 6.1; WOW64; rv:54.0) Gecko/20100101 Firefox/70.0";
 const REFERER: &str = "https://crossfire.z8games.com/";
 const CONFIG_PATH: &str = "config/config.toml";
@@ -70,18 +72,24 @@ const LEAVE_ENABLE_KEY: &str = "auto_leave_enable";
 /// Check for unknown identities in member group
 const TS3_UNKNOWN_CHECK_KEY: &str = "ts3_check_identities_enable";
 const TS3_MEMBER_GROUP: &str = "ts3_check_member_groups";
+/// Whether to poke on guests
+const TS3_GUEST_NOTIFY_ENABLE_KEY: &str = "ts3_guest_notify_enable";
+const TS3_GUEST_WATCHER_GROUP_KEY: &str = "ts3_guest_watcher_group";
+const TS3_GUEST_GROUP_KEY: &str = "ts3_guest_group";
+const TS3_GUEST_CHANNEL_KEY: &str = "ts3_guest_channel";
+const TS3_GUEST_POKE_MSG: &str = "ts3_guest_poke_msg";
 
 pub type Result<T> = ::std::result::Result<T, Error>;
 
 #[allow(clippy::cognitive_complexity)]
 fn main() {
     match init_log() {
-        Err(e) => println!("Error on config initialization: {}", e),
+        Err(e) => eprintln!("Error on config initialization: {}", e),
         Ok(_) => println!("Initialized log"),
     }
     info!("Clan tools crawler v{}", VERSION);
 
-    let config = Arc::new(config::init_config());
+    let config = config::init_config();
     let pool = init_db(&config, Dur::from_secs(60 * 10));
     let timer = timer::Timer::new();
 
@@ -98,7 +106,7 @@ fn main() {
         ("fcrawl", _) => {
             info!("Performing force crawl");
             let local_pool = &pool;
-            let local_config = &*config;
+            let local_config = &config;
             let rt_time = NaiveTime::from_num_seconds_from_midnight(20, 0);
             debug!(
                 "Result: {:?}",
@@ -108,7 +116,7 @@ fn main() {
         }
         ("printconfig", _) => {
             let local_pool = &pool;
-            let local_config = &*config;
+            let local_config = &config;
             let mut conn = match local_pool.get_conn() {
                 Err(e) => {
                     error!("Unable to get db conn {}", e);
@@ -129,6 +137,10 @@ fn main() {
                 ts::get_ts3_member_groups(&mut conn).unwrap()
             );
             info!(
+                "{}",
+                ts::print_poke_config(&mut conn, &local_config).unwrap()
+            );
+            info!(
                 "TS3 unknown IDs check: {}",
                 get_ts3_check_enabled(&mut conn, &local_config)
             );
@@ -136,7 +148,7 @@ fn main() {
         ("mail-test", _) => {
             info!("Sending test mail");
             send_mail(
-                &*config,
+                &config,
                 "Clantool test mail",
                 "This is a manually triggered test mail.",
             );
@@ -153,7 +165,7 @@ fn main() {
             let simulate = sub_m.is_present("simulate");
             let date_s = sub_m.value_of("date").unwrap();
             let date = NaiveDate::parse_from_str(date_s, DATE_FORMAT_DAY).unwrap();
-            let datetime = match db::check_date_for_data(&mut conn, date) {
+            let datetime = match db::crawler::check_date_for_data(&mut conn, date) {
                 Ok(Some(v)) => {
                     info!("Using exact dataset {}", v);
                     v
@@ -169,9 +181,9 @@ fn main() {
             };
             let message: String = match sub_m.value_of("message") {
                 Some(v) => v.to_owned(),
-                None => format!("{} manual check", get_leave_message(&mut conn, &*config)),
+                None => format!("{} manual check", get_leave_message(&mut conn, &config)),
             };
-            run_leave_detection(&pool, &*config, &datetime, &message, simulate);
+            run_leave_detection(&pool, &config, &datetime, &message, simulate);
             info!("Finished");
         }
         ("init", _) => {
@@ -198,12 +210,14 @@ fn main() {
         }
         _ => {
             info!("Entering daemon mode");
-            run_timer(pool.clone(), config.clone(), &timer);
-            loop {
-                std::thread::sleep(std::time::Duration::from_millis(1000));
+            if let Err(e) = run_daemon(pool, config, &timer) {
+                let fmt = format!("Error starting daemon {}", e);
+                error!("{}", &fmt);
+                panic!(fmt);
             }
         }
     }
+    info!("Exit");
 }
 
 fn cli<'a, 'b>() -> clap::App<'a, 'b> {
@@ -220,6 +234,8 @@ fn cli<'a, 'b>() -> clap::App<'a, 'b> {
                 .takes_value(true)
                 .required(true))
             */    )
+        .subcommand(SubCommand::with_name("run-daemon-ts")
+            .about("Run only ts-daemon, has to be enabled in config also"))
         .subcommand(SubCommand::with_name("check-ts")
             .about("Manually check ts identities for unknown member IDs"))
         .subcommand(SubCommand::with_name("printconfig")
@@ -341,12 +357,12 @@ fn validator_date(input: String) -> ::std::result::Result<(), String> {
 /// Check DB for missing entries
 fn run_checkdb(pool: Pool, simulate: bool) -> Result<()> {
     let mut conn = pool.get_conn()?;
-    let missing_dates = db::get_missing_dates(&mut conn)?;
+    let missing_dates = db::crawler::get_missing_dates(&mut conn)?;
 
     if simulate {
         info!("Simulation mode, discarding result");
     } else {
-        db::insert_missing_dates(&mut conn)?;
+        db::crawler::insert_missing_dates(&mut conn)?;
     }
 
     for date in missing_dates {
@@ -357,7 +373,7 @@ fn run_checkdb(pool: Pool, simulate: bool) -> Result<()> {
 }
 
 /// Initialize timed task
-fn run_timer(pool: Pool, config: Arc<Config>, timer: &timer::Timer) {
+fn run_daemon(pool: Pool, config: Config, timer: &timer::Timer) -> Result<()> {
     let date_time = Local::now(); // get current datetime
     let today = Local::today();
     let target_naive_time = match NaiveTime::parse_from_str(&config.main.time, "%H:%M") {
@@ -391,16 +407,28 @@ fn run_timer(pool: Pool, config: Arc<Config>, timer: &timer::Timer) {
     }
     info!("First execution will be on {}", schedule_time);
 
-    let a = timer.schedule(
+    let pool_c = pool.clone();
+    let config_c = config.clone();
+    let _guard = timer.schedule(
         schedule_time,
         Some(chrono::Duration::hours(INTERVALL_H)),
         move || {
-            if let Err(e) = schedule_crawl_thread(&pool, &*config, retry_time) {
+            if let Err(e) = schedule_crawl_thread(&pool_c, &config_c, retry_time) {
                 error!("Error in crawler thread {}", e);
             }
         },
     );
-    a.ignore();
+    let _guard_ts = ts::start_daemon(pool, config)?;
+
+    let term = Arc::new(AtomicBool::new(false));
+    signal_hook::flag::register(signal_hook::SIGTERM, Arc::clone(&term))?;
+    signal_hook::flag::register(signal_hook::SIGINT, Arc::clone(&term))?;
+    signal_hook::flag::register(signal_hook::SIGQUIT, Arc::clone(&term))?;
+    while !term.load(Ordering::Relaxed) {
+        std::thread::sleep(std::time::Duration::from_millis(1000));
+    }
+    info!("SIGTERM/SIGINT/SIGQUIT, Exiting");
+    Ok(())
 }
 
 fn schedule_crawl_thread(pool: &Pool, config: &Config, retry_time: NaiveTime) -> Result<()> {
@@ -508,7 +536,7 @@ fn run_leave_detection(
         }
     };
 
-    match db::get_next_older_date(&mut conn, date, max_age) {
+    match db::crawler::get_next_older_date(&mut conn, date, max_age) {
         Err(e) => {
             db::log_message(
                 &mut conn,
@@ -519,7 +547,7 @@ fn run_leave_detection(
         }
         Ok(Some(previous_date)) => {
             debug!("Date1 {} Date2 {}", previous_date, date);
-            match db::get_member_left(&mut conn, &previous_date, date) {
+            match db::crawler::get_member_left(&mut conn, &previous_date, date) {
                 Err(e) => {
                     db::log_message(
                         &mut conn,
@@ -535,7 +563,7 @@ fn run_leave_detection(
                                 if simulate {
                                     info!("Found leave for {} {}", m.id, m.get_name());
                                 } else {
-                                    match db::insert_member_leave(
+                                    match db::crawler::insert_member_leave(
                                         &mut conn,
                                         m.id,
                                         nr,
@@ -637,7 +665,7 @@ fn run_update(pool: &Pool, config: &Config, retry_time: NaiveTime) -> Option<Nai
                     ,x,retry_time.num_seconds_from_midnight()*x,!member_success,!clan_success);
 
             if config.main.send_error_mail {
-                send_mail(config, "Clantool error", &message);
+                send_mail(&config, "Clantool error", &message);
             }
         } else {
             let wait_time = retry_time.num_seconds_from_midnight() * x;
@@ -669,7 +697,7 @@ fn send_mail(config: &Config, subject: &str, message: &str) {
 /// wrapper to write missing date
 /// allowing for error return
 fn write_missing(timestamp: &NaiveDateTime, pool: &Pool, missing_member: bool) -> Result<()> {
-    db::insert_missing_entry(timestamp, &mut pool.get_conn()?, missing_member)?;
+    db::crawler::insert_missing_entry(timestamp, &mut pool.get_conn()?, missing_member)?;
     Ok(())
 }
 
@@ -709,7 +737,7 @@ fn run_update_member(pool: &Pool, config: &Config, time: &NaiveDateTime) -> Resu
         trace!("fetched site {}", site);
     }
     debug!("Fetched {} member entries", members.len());
-    db::insert_members(&mut pool.get_conn()?, &members, time)?;
+    db::crawler::insert_members(&mut pool.get_conn()?, &members, time)?;
     Ok(())
 }
 
@@ -718,14 +746,14 @@ fn run_update_clan(pool: &Pool, config: &Config, time: &NaiveDateTime) -> Result
     trace!("run_update_clan");
     let raw_http_clan = crawler::http::get(&config.main.clan_url, HeaderType::Html)?;
     let clan = crawler::parser::parse_clan(&raw_http_clan)?;
-    db::insert_clan_update(&mut pool.get_conn()?, &clan, &time)?;
+    db::crawler::insert_clan_update(&mut pool.get_conn()?, &clan, &time)?;
     Ok(())
 }
 
 /// Init log system
 /// Creating a default log file if not existing
 fn init_log() -> Result<()> {
-    let mut log_path = get_executable_folder()?;
+    let mut log_path = current_dir()?;
     log_path.push(LOG_PATH);
     let mut log_dir = log_path.clone();
     println!("LogPath: {:?}", &log_path);
@@ -739,57 +767,6 @@ fn init_log() -> Result<()> {
     }
     log4rs::init_file(log_path, Default::default())?;
     Ok(())
-}
-
-/// Returns the current executable folder
-pub fn get_executable_folder() -> Result<std::path::PathBuf> {
-    let mut folder = current_exe()?;
-    folder.pop();
-    Ok(folder)
-}
-
-/// Clan data structure
-#[derive(Debug, PartialEq, PartialOrd)]
-pub struct Clan {
-    members: u8,
-    wins: u16,
-    losses: u16,
-    draws: u16,
-}
-
-/// Member data structure
-#[derive(Debug, PartialEq, PartialOrd, Clone)]
-pub struct Member {
-    name: String,
-    id: i32,
-    exp: i32,
-    contribution: i32,
-}
-
-/// TS client
-pub struct TsClient {
-    name: String,
-    db_id: i32
-}
-
-/// Left member data structure
-#[derive(Debug, PartialEq, PartialOrd)]
-pub struct LeftMember {
-    id: i32,
-    // account name, can be None if same day join&leave
-    name: Option<String>,
-    // membership nr which can be closed
-    membership_nr: Option<i32>,
-}
-
-impl LeftMember {
-    /// Return account-name of member or spacer if no name found
-    pub fn get_name(&self) -> &str {
-        match self.name {
-            Some(ref v) => v,
-            None => "<unnamed>",
-        }
-    }
 }
 
 #[cfg(test)]

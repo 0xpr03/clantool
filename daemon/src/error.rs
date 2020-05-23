@@ -1,18 +1,17 @@
-/*
-Copyright 2017-2019 Aron Heinecke
+// Copyright 2017-2020 Aron Heinecke
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//   http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-  http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
 use chrono;
 use csv;
 use json;
@@ -126,5 +125,11 @@ quick_error! {
             description("Required settings key not found in db")
             display("Key {} not found in db!",key)
         }
+        TsMissingValue(value: &'static str) {
+            description("Missing value in ts3-server response")
+            display("Missing value for {} in ts3-server response",value)
+        }
+        /// Expected at least ourself, found 0 clients online
+        NoTsClients {}
     }
 }
