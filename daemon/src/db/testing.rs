@@ -60,7 +60,7 @@ impl Drop for CleanupGuard {
                 .unwrap();
             println!("dropped view {}", view);
         }
-        for table in &self.tables {
+        while let Some(table) = self.tables.pop() {
             conn.query_drop(format!("DROP TABLE IF EXISTS `{}`;", table))
                 .unwrap();
             println!("dropped table {}", table);
