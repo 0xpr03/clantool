@@ -486,6 +486,7 @@ switch($_REQUEST['ajaxCont']){
                         foreach($average as &$channel) {
                             $channel['data'][$i] = $zero;
                         }
+                        unset($channel);
                         $data['days'][] = 0;
                     } else {
                         $data['days'][] = $chunk['days'];
@@ -555,6 +556,7 @@ switch($_REQUEST['ajaxCont']){
                     $db_start = microtime(true);
                     $chunk = $clanDB->getMemberTSSummary($chunkstart,
                     $chunkend,$id);
+                    
                     $db_time += microtime(true) - $db_start;
                     
                     $data['date'][] = array(
@@ -566,20 +568,20 @@ switch($_REQUEST['ajaxCont']){
                         foreach($average as &$group) {
                             $group['data'][$i] = $zero;
                         }
+                        unset($group);
                         $data['days'][] = 0;
                     } else {
                         $data['days'][] = $chunk['days'];
-                        foreach($chunk['data'] as $cid => $group) {
-                            if (!isset($average[$cid])) {
-                                $average[$cid] = array('data' => array(),
+                        foreach($chunk['data'] as $gid => $group) {
+                            if (!isset($average[$gid])) {
+                                $average[$gid] = array('data' => array(),
                                     'group' => $group['group']);
                             }
-                            $average[$cid]['data'][$i] = $group['timeAvg'];
+                            $average[$gid]['data'][$i] = $group['timeAvg'];
                         }
                     }
                     $i++;
                 }
-                
                 // now 0 out missing values, not all channels always have values
                 foreach($average as $group => $_unused) {
                     for ($j = 0; $j < $i; $j++) {

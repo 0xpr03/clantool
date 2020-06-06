@@ -2049,7 +2049,11 @@ class clanDB extends dbException {
                 $resultset['days'] = $days;
                 $data = array();
                 while ( $row = $result->fetch_assoc () ) {
-                    $data[$row['group_id']] = array(
+                    $gid = $row['group_id'];
+                    if ($gid == null) {
+                        $gid = -1;
+                    }
+                    $data[$gid] = array(
                         //'timeAvg' => $row['timeAvg']*1000,
                         'timeAvg' => PLOTLY_START_DATE.$row['TGAvg'],
                         'group' => $row['name'] != null ? $row['name'] : "Other",
@@ -2058,7 +2062,6 @@ class clanDB extends dbException {
                 $resultset['data'] = $data;
             }
             $result->close();
-            
             return $resultset;
         } else {
             throw new dbException ( $this->db->error );
