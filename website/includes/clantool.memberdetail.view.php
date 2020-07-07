@@ -33,7 +33,7 @@
         <div class="form-group">
             <label for="inputComment" autocomplete="off" class="control-label col-xs-2">Kommentar</label>
             <div class="col-xs-10">
-                <textarea rows="rows" name="comment" class="form-control" id="inputComment" placeholder="Kommentar"></textarea>
+                <textarea rows="3" name="comment" class="form-control" id="inputComment" placeholder="Kommentar"></textarea>
             </div>
         </div>
         <div class="form-group">
@@ -344,6 +344,16 @@ function setLoadingMsg(msg){
     $('#loading-content').text(msg);
 }
 
+/* taken from http://bdadam.com/blog/automatically-adapting-the-height-textarea.html */
+function adjustHeight(comp, minHeight) {
+    var outerHeight = parseInt(window.getComputedStyle(comp).height, 10);
+    var diff = outerHeight - comp.clientHeight;
+    
+    comp.style.height = 0;
+    
+    comp.style.height = Math.max(minHeight, comp.scrollHeight + diff) + 10 + 'px';
+}
+
 function loadData(id) {
     if(getUrlParameter('id') != id) {
         setURLParameterHistory({'id' : id},'id',id);
@@ -390,7 +400,9 @@ function loadData(id) {
             resetAfk();
             resetTrials();
             $('#loading').hide();
+            // reset for next time
             setLoadingMsg('Loading...');
+            adjustHeight(document.getElementById("inputComment"), 40);
         },0);
     }).fail(function(data){
         $('#error').html(formatErrorData(data));
