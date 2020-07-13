@@ -98,6 +98,14 @@ pub fn setup_tables(pool: Pool) -> Result<CleanupGuard> {
     Ok(guard)
 }
 
+/// Verifies DB has not tables, panics otherwise
+pub fn verify_empty_db(conn: &mut PooledConn) {
+    let v: Vec<String> = conn.query_map("SHOW TABLES;",|r|r).unwrap();
+    if !v.is_empty() {
+        panic!("Found tables in test DB: {:?}",v);
+    }
+}
+
 /// Helper method to connect to the db
 pub fn connect_db() -> Pool {
     let password;
@@ -129,6 +137,7 @@ pub fn connect_db() -> Pool {
 /// new connection retrieved from the pool can't interact with these
 pub fn setup_db() -> (PooledConn, CleanupGuard) {
     let pool = connect_db();
+    verify_empty_db(&mut pool.get_conn().unwrap());
     let guard = setup_tables(pool.clone()).unwrap();
     let conn = pool.get_conn().unwrap();
     (conn, guard)
