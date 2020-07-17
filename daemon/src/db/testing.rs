@@ -36,6 +36,7 @@ pub struct CleanupGuard {
     pub pool: Pool,
     pub tables: Vec<String>,
     pub views: Vec<String>,
+    pub disabled: bool,
 }
 
 impl CleanupGuard {
@@ -44,6 +45,7 @@ impl CleanupGuard {
             pool,
             tables: Vec::new(),
             views: Vec::new(),
+            disabled: false,
         }
     }
 
@@ -55,6 +57,10 @@ impl CleanupGuard {
 
 impl Drop for CleanupGuard {
     fn drop(&mut self) {
+        if self.disabled {
+            println!("CleanupGuard disabled!");
+            return;
+        }
         let mut conn = self.pool.get_conn().unwrap();
         for view in &self.views {
             conn.query_drop(format!("DROP VIEW IF EXISTS `{}`;", view))
@@ -172,11 +178,18 @@ pub fn insert_full_membership(
 pub fn insert_random_membership(conn: &mut PooledConn, id: i32, amount: usize) {
     // generate random entries and assure no from-duplicates exist
     let mut set = std::collections::HashSet::new();
-    for i in 0..amount {
+    for _i in 0..amount {
+        let mut retries = 0;
+        const LIMIT: i64 = 100;
         let (from,to) = loop {
-            let (from,to) = generate_random_datepair();
+            let (from,to) = generate_random_datepair(retries);
+            println!("{:?} {:?}",from,to);
             if set.insert(from.clone()) {
                 break (from,to);
+            }
+            retries += 1;
+            if retries > LIMIT {
+                panic!("Reached limit generating random datepair {:?} {:?}! {}/{}",from,to,retries,LIMIT);
             }
         };
         conn.exec_drop(
@@ -188,8 +201,9 @@ pub fn insert_random_membership(conn: &mut PooledConn, id: i32, amount: usize) {
 }
 
 /// Generate pair of from-to membership random values
-fn generate_random_datepair() -> (NaiveDate,Option<NaiveDate>) {
-    let from: u16 = u16::MAX;//rand::random();
+fn generate_random_datepair(offset: i64) -> (NaiveDate,Option<NaiveDate>) {
+    let from: u16 = rand::random();
+    let from = from as i64 + offset;
     let dist: u8 = rand::random();
     let to = if rand::random() {
         let to = from as i64 + (dist as i64);
@@ -197,8 +211,9 @@ fn generate_random_datepair() -> (NaiveDate,Option<NaiveDate>) {
     } else {
         None
     };
-    let from = Utc.timestamp(from as i64,0).date().naive_local();
-    let to = to.map(|v|Utc.timestamp(v,0).date().naive_local());
+    let date = Utc.timestamp(0,0).date().naive_local();
+    let to = to.map(|v|date.clone().checked_add_signed(Duration::days(v)).unwrap());
+    let from = date.checked_add_signed(Duration::days(from)).unwrap();
     (from,to)
 }
 

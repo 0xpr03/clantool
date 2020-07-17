@@ -74,7 +74,7 @@ pub fn insert_missing_entry(
 
 /// Get account IDs which are system relevant but have no account name entry at all
 pub fn get_missing_name_ids(conn: &mut PooledConn) -> Result<Vec<AccountID>> {
-    let accounts = conn.query_map("SELECT UNIQUE(id) FROM `membership` WHERE id NOT IN (SELECT id FROM `ts_names`)",
+    let accounts = conn.query_map("SELECT DISTINCT(id) FROM `membership` WHERE id NOT IN (SELECT id FROM `member_names`)",
         |date| date,
     )?;
     Ok(accounts)
@@ -753,7 +753,7 @@ mod test {
     #[test]
     fn get_missing_name_ids_test() {
         let time: NaiveDateTime = Local::now().naive_local();
-        let (mut conn, _guard) = setup_db();
+        let (mut conn, mut _guard) = setup_db();
         insert_random_membership(&mut conn, 1,2);
         insert_random_membership(&mut conn, 2,1);
         insert_random_membership(&mut conn, 3,1);
