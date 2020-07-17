@@ -18,5 +18,5 @@ cat config/config.toml
 
 # init db & run crawl
 RUST_BACKTRACE=1 cargo run --bin clantool -- init
-RUST_BACKTRACE=1 cargo run --bin clantool -- fcrawl
+RUST_BACKTRACE=1 cargo run --bin clantool -- fcrawl || true
 mysql -e 'DROP DATABASE test;'
