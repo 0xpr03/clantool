@@ -22,7 +22,7 @@ use crate::USER_AGENT as UA;
 use crate::error::Error;
 
 lazy_static! {
-    static ref CLIENT: Client = { ClientBuilder::new().gzip(true).build().unwrap() };
+    static ref CLIENT: Client = ClientBuilder::new().gzip(true).danger_accept_invalid_certs(true).build().unwrap() ;
 }
 
 /// Header type for get requests
@@ -118,7 +118,7 @@ mod test {
     #[test]
     #[ignore]
     fn get_ajax_z8_member() {
-        let b_ajax = get("http://crossfire.z8games.com/rest/clanmembers.json?clanID=68910&page=1&perPage=10&rankType=user", HeaderType::Ajax).unwrap();
+        let b_ajax = get("https://crossfire.z8games.com/rest/clanmembers.json?clanID=68910&endrow=10&page=1&perPage=10&rankType=user&startrow=1", HeaderType::Ajax).unwrap();
         assert!(b_ajax.contains("Dr.Alptraum"));
         println!("{}", b_ajax);
     }
