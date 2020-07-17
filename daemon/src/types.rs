@@ -23,6 +23,8 @@ pub type TsClDBID = i32;
 pub type TsGroupID = i32;
 /// Ts client connection ID
 pub type TsConID = i32;
+/// z8 account ID
+pub type AccountID = i32;
 
 /// Clan data structure
 #[derive(Debug, PartialEq, PartialOrd)]
@@ -37,7 +39,7 @@ pub struct Clan {
 #[derive(Debug, PartialEq, PartialOrd, Clone)]
 pub struct Member {
     pub name: String,
-    pub id: i32,
+    pub id: AccountID,
     pub exp: i32,
     pub contribution: i32,
 }
@@ -87,7 +89,7 @@ pub struct Channel {
 /// Left member data structure
 #[derive(Debug, PartialEq, PartialOrd)]
 pub struct LeftMember {
-    pub id: i32,
+    pub id: AccountID,
     // account name, can be None if same day join&leave
     pub name: Option<String>,
     // membership nr which can be closed

@@ -72,6 +72,14 @@ pub fn insert_missing_entry(
     Ok(())
 }
 
+/// Get account IDs which are system relevant but have no account name entry at all
+pub fn get_missing_name_ids(conn: &mut PooledConn) -> Result<Vec<AccountID>> {
+    let accounts = conn.query_map("SELECT UNIQUE(id) FROM `membership` WHERE id NOT IN (SELECT id FROM `ts_names`)",
+        |date| date,
+    )?;
+    Ok(accounts)
+}
+
 /// Retrieves missing dates in the db
 /// for which no entri(es exist
 pub fn get_missing_dates(conn: &mut PooledConn) -> Result<Vec<NaiveDate>> {
@@ -740,5 +748,20 @@ mod test {
             .map(|x| create_member(&format!("tester {}", x), x, 500, 1))
             .collect();
         insert_members(&mut conn, &members_2, &time).unwrap();
+    }
+
+    #[test]
+    fn get_missing_name_ids_test() {
+        let time: NaiveDateTime = Local::now().naive_local();
+        let (mut conn, _guard) = setup_db();
+        insert_random_membership(&mut conn, 1,2);
+        insert_random_membership(&mut conn, 2,1);
+        insert_random_membership(&mut conn, 3,1);
+        insert_random_membership(&mut conn, 4,1);
+        let mem = vec![create_member(&format!("tester {}", 2), 2, 500, 1),create_member(&format!("tester {}", 4), 4, 500, 1)];
+        insert_members(&mut conn, &mem, &time).unwrap();
+        
+        let v = get_missing_name_ids(&mut conn).unwrap();
+        assert_eq!(v, vec![1,3]);
     }
 }

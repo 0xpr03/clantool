@@ -16,6 +16,7 @@
 use super::*;
 pub use crate::*;
 use chrono::naive::NaiveDate;
+use chrono::{Utc, TimeZone};
 // pub use mysql::{from_row, from_row_opt, Opts, OptsBuilder, Pool, PooledConn, Row, Transaction};
 pub use super::prelude::*;
 pub use mysql::from_row;
@@ -165,6 +166,40 @@ pub fn insert_full_membership(
     let nr = insert_membership(conn, &id, join, Some(leave));
     insert_membership_cause(conn, &nr, cause, kicked);
     nr
+}
+
+/// Insert random membership for person, when from/to doesn't matter
+pub fn insert_random_membership(conn: &mut PooledConn, id: i32, amount: usize) {
+    // generate random entries and assure no from-duplicates exist
+    let mut set = std::collections::HashSet::new();
+    for i in 0..amount {
+        let (from,to) = loop {
+            let (from,to) = generate_random_datepair();
+            if set.insert(from.clone()) {
+                break (from,to);
+            }
+        };
+        conn.exec_drop(
+            "INSERT INTO `membership` (`id`,`from`,`to`) VALUES (?,?,?)",
+            (id,&from,&to),
+        )
+        .unwrap();
+    }
+}
+
+/// Generate pair of from-to membership random values
+fn generate_random_datepair() -> (NaiveDate,Option<NaiveDate>) {
+    let from: u16 = u16::MAX;//rand::random();
+    let dist: u8 = rand::random();
+    let to = if rand::random() {
+        let to = from as i64 + (dist as i64);
+        Some(to)
+    } else {
+        None
+    };
+    let from = Utc.timestamp(from as i64,0).date().naive_local();
+    let to = to.map(|v|Utc.timestamp(v,0).date().naive_local());
+    (from,to)
 }
 
 /// Insert membership, return nr on success
