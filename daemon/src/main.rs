@@ -59,7 +59,7 @@ use config::Config;
 use clap::{App, Arg, SubCommand};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
-const USER_AGENT: &str = "Mozilla/5.0 (Windows NT 6.1; WOW64; rv:54.0) Gecko/20100101 Firefox/70.0";
+const USER_AGENT: &str = "Mozilla/5.0 (Windows NT 6.1; WOW64; rv:54.0) Gecko/20100101 Firefox/79.0";
 const REFERER: &str = "https://crossfire.z8games.com/";
 const CONFIG_PATH: &str = "config/config.toml";
 const LOG_PATH: &str = "config/log.yml";
@@ -67,6 +67,9 @@ const INTERVALL_H: i64 = 24; // execute intervall
 
 const DATE_FORMAT_DAY: &str = "%Y-%m-%d";
 
+/// Auto missing account names fetching
+const NAME_FETCHING_KE: &str = "auto_fetch_names";
+/// Auto leave detection
 const LEAVE_MSG_KEY: &str = "auto_leave_message";
 const LEAVE_ENABLE_KEY: &str = "auto_leave_enable";
 /// Check for unknown identities in member group
@@ -124,13 +127,10 @@ fn main() {
                 }
                 Ok(v) => v,
             };
-            info!(
-                "Leave message: {}",
-                get_leave_message(&mut conn, &local_config)
-            );
+            info!("Leave message: {}", leave_message(&mut conn, &local_config));
             info!(
                 "Auto Leave check: {}",
-                get_leave_detection_enabled(&mut conn, &local_config)
+                leave_detection_enabled(&mut conn, &local_config)
             );
             info!(
                 "TS3 member groups: {:?}",
@@ -142,7 +142,11 @@ fn main() {
             );
             info!(
                 "TS3 unknown IDs check: {}",
-                get_ts3_check_enabled(&mut conn, &local_config)
+                ts3_check_enabled(&mut conn, &local_config)
+            );
+            info!(
+                "Auto missing account names check: {}",
+                auto_names_fetch_enabled(&mut conn, &local_config)
             );
         }
         ("mail-test", _) => {
@@ -181,7 +185,7 @@ fn main() {
             };
             let message: String = match sub_m.value_of("message") {
                 Some(v) => v.to_owned(),
-                None => format!("{} manual check", get_leave_message(&mut conn, &config)),
+                None => format!("{} manual check", leave_message(&mut conn, &config)),
             };
             run_leave_detection(&pool, &config, &datetime, &message, simulate);
             info!("Finished");
@@ -206,6 +210,13 @@ fn main() {
             info!("Performing manual ts group check");
             if let Err(e) = ts::find_unknown_identities(&pool, &config.ts) {
                 error!("Error performing ts group check: {}", e);
+            }
+        }
+        ("check-names", _) => {
+            info!("Performing manual names check");
+            let time: NaiveDateTime = Local::now().naive_local();
+            if let Err(e) = run_missing_name_crawler(&pool, &time) {
+                error!("Error peforming name crawl: {}", e);
             }
         }
         _ => {
@@ -284,6 +295,8 @@ fn cli<'a, 'b>() -> clap::App<'a, 'b> {
             .arg(Arg::with_name("simulate")
                 .short("s")
                 .help("simulation mode, leaves DB unchanged")))
+        .subcommand(SubCommand::with_name("check-names")
+            .about("Check for missing names of account IDs and fetch them"))
 }
 
 fn init_db(config: &Config, retry_timeout: Dur) -> Pool {
@@ -435,48 +448,45 @@ fn schedule_crawl_thread(pool: &Pool, config: &Config, retry_time: NaiveTime) ->
     if let Some(time) = run_update(pool, config, retry_time) {
         debug!("{}", time);
         let mut conn = pool.get_conn()?;
-        if get_leave_detection_enabled(&mut conn, config) {
+        if leave_detection_enabled(&mut conn, config) {
             debug!("Leave detection enabled");
             run_leave_detection(
                 pool,
                 config,
                 &time,
-                &get_leave_message(&mut conn, config),
+                &leave_message(&mut conn, config),
                 false,
             );
         } else {
             info!("Leave detection disabled, skipping");
-            db::log_message(
-                &mut conn,
-                "Leave detection disabled.",
-                "unable to log message",
-            );
+            db::log_message(&mut conn, "Leave detection disabled.");
         }
 
-        if get_ts3_check_enabled(&mut conn, config) {
+        if ts3_check_enabled(&mut conn, config) {
             debug!("Unknown-ts-identity-check enabled");
             if let Err(e) = ts::find_unknown_identities(&pool, &config.ts) {
                 error!("Error performing ts group check: {}", e);
-                db::log_message(
-                    &mut conn,
-                    "Failed to check ts-identities.",
-                    "unable to log message",
-                );
+                db::log_message(&mut conn, "Failed to check ts-identities.");
             }
         } else {
             info!("Unknown-ts-identity-check disabled, skipping");
-            db::log_message(
-                &mut conn,
-                "Unknown-ts-identity-check disabled.",
-                "unable to log message",
-            );
+            db::log_message(&mut conn, "Unknown-ts-identity-check disabled.");
+        }
+
+        if auto_names_fetch_enabled(&mut conn, config) {
+            debug!("unknown names fetching enabled");
+            if let Err(e) = run_missing_name_crawler(pool, &time) {
+                error!("Performing missing names crawler: {}", e);
+            }
+        } else {
+            info!("unknown names fetching disabled, skipping");
         }
     }
     Ok(())
 }
 
 /// Read leave-message from DB or default to config value
-fn get_leave_message(conn: &mut PooledConn, config: &Config) -> String {
+fn leave_message(conn: &mut PooledConn, config: &Config) -> String {
     match db::read_string_setting(conn, LEAVE_MSG_KEY) {
         Ok(Some(v)) => v,
         Ok(None) => {
@@ -490,8 +500,20 @@ fn get_leave_message(conn: &mut PooledConn, config: &Config) -> String {
     }
 }
 
+/// Read auto missing names fetchting setting
+fn auto_names_fetch_enabled(conn: &mut PooledConn, config: &Config) -> bool {
+    match db::read_bool_setting(conn, NAME_FETCHING_KE) {
+        Ok(Some(v)) => v,
+        Ok(None) => config.main.auto_fetch_unknown_names,
+        Err(e) => {
+            error!("Error retrieving leave setting {}", e);
+            config.main.auto_fetch_unknown_names
+        }
+    }
+}
+
 /// Read leave detection setting from DB
-fn get_leave_detection_enabled(conn: &mut PooledConn, config: &Config) -> bool {
+fn leave_detection_enabled(conn: &mut PooledConn, config: &Config) -> bool {
     match db::read_bool_setting(conn, LEAVE_ENABLE_KEY) {
         Ok(Some(v)) => v,
         Ok(None) => config.main.auto_leave_enabled,
@@ -503,7 +525,7 @@ fn get_leave_detection_enabled(conn: &mut PooledConn, config: &Config) -> bool {
 }
 
 /// Read ts3 unknown identity settings from DB
-fn get_ts3_check_enabled(conn: &mut PooledConn, config: &Config) -> bool {
+fn ts3_check_enabled(conn: &mut PooledConn, config: &Config) -> bool {
     match db::read_bool_setting(conn, TS3_UNKNOWN_CHECK_KEY) {
         Ok(Some(v)) => v,
         Ok(None) => config.ts.unknown_id_check_enabled,
@@ -541,7 +563,6 @@ fn run_leave_detection(
             db::log_message(
                 &mut conn,
                 "Unable to get older dates, skipping leave detection",
-                "unable to log get_next_older_date error",
             );
             error!("Unable to get older date! {}", e);
         }
@@ -549,11 +570,7 @@ fn run_leave_detection(
             debug!("Date1 {} Date2 {}", previous_date, date);
             match db::crawler::get_member_left(&mut conn, &previous_date, date) {
                 Err(e) => {
-                    db::log_message(
-                        &mut conn,
-                        &format!("Unable to query left members! {}", e),
-                        "unable to log message",
-                    );
+                    db::log_message(&mut conn, &format!("Unable to query left members! {}", e));
                     error!("Unable to retrieve left members {}", e)
                 }
                 Ok(left) => {
@@ -575,7 +592,6 @@ fn run_leave_detection(
                                             &format!(
                                         "Detected leave for {} {} nr:{} terminated trials: {}",
                                             m.get_name(),m.id,nr,trial),
-                                            "Unable to log member leave detection!",
                                         ),
                                         Err(e) => {
                                             error!("Unable to insert member leave! nr:{} {}", nr, e)
@@ -594,7 +610,6 @@ fn run_leave_detection(
                                             m.get_name(),
                                             m.id
                                         ),
-                                        "Unable to log message",
                                     );
                                 }
                             }
@@ -610,7 +625,6 @@ fn run_leave_detection(
                 db::log_message(
                     &mut conn,
                     "No older entries to compare found, skipping leave detection",
-                    "unable to log get_next_older_date miss",
                 );
             }
         }
@@ -618,6 +632,48 @@ fn run_leave_detection(
     if simulate {
         info!("Finished simulation of leave detection.");
     }
+}
+
+/// Search for missing account names and fetch them from z8. Ignore invalid IDs.
+fn run_missing_name_crawler(pool: &Pool, time: &NaiveDateTime) -> Result<()> {
+    let mut conn = pool.get_conn()?;
+    let ids = db::crawler::get_missing_name_ids(&mut conn)?;
+    debug!("Found {:?} IDs with missing account names", ids);
+
+    let names: Vec<(i32, String)> = ids
+        .into_iter()
+        .map(|id| {
+            let url = format!(
+                "https://crossfire.z8games.com/rest/userprofile.json?command=header&usn={}",
+                id
+            );
+            let profile = crawler::http::get(&url, HeaderType::Ajax)?;
+            trace!("name fetch response: {:?}", profile);
+            Ok(match crawler::parser::parse_profile(&profile)? {
+                Some(name) => Some((id, name)),
+                None => {
+                    db::log_message(
+                        &mut conn,
+                        &format!("Unnamed account {} reported as invalid.", id),
+                    );
+                    None
+                }
+            })
+        })
+        .filter_map(Result::transpose)
+        .collect::<Result<Vec<(i32, String)>>>()?;
+    info!("Account Names for unknown ids: {:?}", names);
+
+    db::crawler::insert_missing_names(&mut conn, &names, &time)?;
+
+    names.into_iter().for_each(|(id, name)| {
+        db::log_message(
+            &mut conn,
+            &format!("Fetched account name {} for {}", name, id),
+        )
+    });
+
+    Ok(())
 }
 
 /// Performs a complete crawl

@@ -30,6 +30,25 @@ const REGEX_MEMBERS: &str = r#"<div>(\d+).?clan.members"#;
 
 const KEY_MEMBERSHIP: &str = "position_title";
 
+/// Parse profile page for name
+/// https://crossfire.z8games.com/rest/userprofile.json?command=header&usn=9926942
+/// Returns None if account is reported as not existing
+pub fn parse_profile(input: &str) -> Result<Option<String>, Error> {
+    let mut parsed = json::parse(input)?;
+    if parsed["p_o_ErrID"] == -702 {
+        return Ok(None);
+    }
+    let mut head = parsed["dsProfileHeaderInfo"].take();
+    if head.len() == 0 {
+        return Err(Error::Parser(
+            "dsProfileHeaderInfo contains 0 elements!".to_owned(),
+        ));
+    }
+    let mut obj = head[0].take();
+    let name = get_string_value(&mut obj, "NICK")?;
+    Ok(Some(name))
+}
+
 /// Parse a raw member json request to a vec of Members
 pub fn parse_all_member(input: &str) -> Result<(Vec<Member>, i32), Error> {
     //Result<Vec<Member>,Error> {
@@ -163,6 +182,18 @@ mod test {
     use json;
     use Clan;
     use Member;
+
+    #[test]
+    fn parse_profile_test() {
+        let test_input = include_str!("../../tests/test_profile.json");
+        assert_eq!(
+            Some("Dr.Alptraum".to_owned()),
+            parse_profile(&test_input).unwrap()
+        );
+
+        let test_input_invalid = include_str!("../../tests/test_profile_invalid.json");
+        assert_eq!(None, parse_profile(&test_input_invalid).unwrap());
+    }
 
     /// Test full parsing of parse_all_member
     #[test]

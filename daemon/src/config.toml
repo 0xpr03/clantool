@@ -39,6 +39,8 @@ clan_ajax_end_row_key = "%EndRow"
 clan_ajax_max_sites = 10
 # required for referer
 clan_url = "http://crossfire.z8games.com/clan/68910"
+# enable automatic fetching of unknown account names
+auto_fetch_unknown_names = true
 # enable automatic leave handling
 auto_leave_enabled = true
 # max days distance of date to compare to for leave detection

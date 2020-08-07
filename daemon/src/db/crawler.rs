@@ -72,10 +72,27 @@ pub fn insert_missing_entry(
     Ok(())
 }
 
+/// Insert missing names of accounts previously unknown
+pub fn insert_missing_names(
+    conn: &mut PooledConn,
+    names: &[(AccountID, String)],
+    time: &NaiveDateTime,
+) -> Result<()> {
+    conn.exec_batch(
+        "INSERT IGNORE INTO `member_names` (`id`,`name`,`date`,`updated`) VALUES (?,?,?,?)",
+        names.iter().map(|(id, name)| (id, name, time, time)),
+    )?;
+    Ok(())
+}
+
 /// Get account IDs which are system relevant but have no account name entry at all
 pub fn get_missing_name_ids(conn: &mut PooledConn) -> Result<Vec<AccountID>> {
-    let accounts = conn.query_map("SELECT DISTINCT(id) FROM `membership` WHERE id NOT IN (SELECT id FROM `member_names`)",
-        |date| date,
+    let accounts = conn.query_map(
+        "SELECT DISTINCT(id) FROM `membership`
+        WHERE id NOT IN (SELECT id FROM `member_names`)
+    UNION
+    SELECT id_sec as id FROM second_acc WHERE id NOT IN (SELECT id FROM `member_names`)",
+        |id| id,
     )?;
     Ok(accounts)
 }
@@ -754,14 +771,38 @@ mod test {
     fn get_missing_name_ids_test() {
         let time: NaiveDateTime = Local::now().naive_local();
         let (mut conn, mut _guard) = setup_db();
-        insert_random_membership(&mut conn, 1,2);
-        insert_random_membership(&mut conn, 2,1);
-        insert_random_membership(&mut conn, 3,1);
-        insert_random_membership(&mut conn, 4,1);
-        let mem = vec![create_member(&format!("tester {}", 2), 2, 500, 1),create_member(&format!("tester {}", 4), 4, 500, 1)];
+        insert_random_membership(&mut conn, 1, 2);
+        insert_random_membership(&mut conn, 2, 1);
+        insert_random_membership(&mut conn, 3, 1);
+        insert_random_membership(&mut conn, 4, 1);
+        let mem = vec![
+            create_member(&format!("tester {}", 2), 2, 500, 1),
+            create_member(&format!("tester {}", 4), 4, 500, 1),
+        ];
         insert_members(&mut conn, &mem, &time).unwrap();
-        
+
         let v = get_missing_name_ids(&mut conn).unwrap();
-        assert_eq!(v, vec![1,3]);
+        assert_eq!(v, vec![1, 3]);
+    }
+
+    #[test]
+    fn insert_missing_names_test() {
+        let time: NaiveDateTime = Local::now().naive_local();
+        let (mut conn, _guard) = setup_db();
+        let mut names = vec![
+            (1, "asd".to_string()),
+            (4, "def".to_string()),
+            (5, "asdasd".to_string()),
+        ];
+        insert_missing_names(&mut conn, &names, &time).unwrap();
+
+        let names_r = conn
+            .query_map(
+                "SELECT `id`,`name` FROM `member_names` ORDER BY id",
+                |(id, name): (i32, String)| (id, name),
+            )
+            .unwrap();
+
+        assert_eq!(names, names_r);
     }
 }

@@ -54,13 +54,15 @@ pub fn new(
 }
 
 /// Insert log message for current timestamp.
-/// Does not omit errors, logging them as error.
-/// error_msg will be logged with the error itself: {error_msg} {error}
-pub fn log_message(conn: &mut PooledConn, message: &str, error_msg: &str) {
+/// Does not omit errors, logging them via error!().
+pub fn log_message(conn: &mut PooledConn, message: &str) {
     info!("db-log: {}", message);
     match log_message_opt(conn, message) {
         Ok(_) => (),
-        Err(e) => error!("{} {}", error_msg, e),
+        Err(e) => error!(
+            "Unable to insert log message to db: \"{}\" Error: {}",
+            message, e
+        ),
     }
 }
 

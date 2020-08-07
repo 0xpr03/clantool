@@ -120,7 +120,7 @@ impl TsStatCtrl {
             } else {
                 "Ts-Poke disabled"
             };
-            db::log_message(&mut conn, msg, "unable to log poke config change");
+            db::log_message(&mut conn, msg);
         }
         Ok(())
     }

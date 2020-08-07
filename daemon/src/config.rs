@@ -83,6 +83,7 @@ pub struct MainConfig {
     pub clan_ajax_end_row_key: String,
     pub clan_ajax_max_sites: u8,
     pub clan_url: String,
+    pub auto_fetch_unknown_names: bool,
     pub auto_leave_enabled: bool,
     pub auto_leave_max_age: u8,
     pub auto_leave_message_default: String,
