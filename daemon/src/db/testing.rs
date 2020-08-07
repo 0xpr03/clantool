@@ -16,7 +16,7 @@
 use super::*;
 pub use crate::*;
 use chrono::naive::NaiveDate;
-use chrono::{Utc, TimeZone};
+use chrono::{TimeZone, Utc};
 // pub use mysql::{from_row, from_row_opt, Opts, OptsBuilder, Pool, PooledConn, Row, Transaction};
 pub use super::prelude::*;
 pub use mysql::from_row;
@@ -107,9 +107,9 @@ pub fn setup_tables(pool: Pool) -> Result<CleanupGuard> {
 
 /// Verifies DB has not tables, panics otherwise
 pub fn verify_empty_db(conn: &mut PooledConn) {
-    let v: Vec<String> = conn.query_map("SHOW TABLES;",|r|r).unwrap();
+    let v: Vec<String> = conn.query_map("SHOW TABLES;", |r| r).unwrap();
     if !v.is_empty() {
-        panic!("Found tables in test DB: {:?}",v);
+        panic!("Found tables in test DB: {:?}", v);
     }
 }
 
@@ -181,27 +181,30 @@ pub fn insert_random_membership(conn: &mut PooledConn, id: i32, amount: usize) {
     for _i in 0..amount {
         let mut retries = 0;
         const LIMIT: i64 = 100;
-        let (from,to) = loop {
-            let (from,to) = generate_random_datepair(retries);
-            println!("{:?} {:?}",from,to);
+        let (from, to) = loop {
+            let (from, to) = generate_random_datepair(retries);
+            println!("{:?} {:?}", from, to);
             if set.insert(from.clone()) {
-                break (from,to);
+                break (from, to);
             }
             retries += 1;
             if retries > LIMIT {
-                panic!("Reached limit generating random datepair {:?} {:?}! {}/{}",from,to,retries,LIMIT);
+                panic!(
+                    "Reached limit generating random datepair {:?} {:?}! {}/{}",
+                    from, to, retries, LIMIT
+                );
             }
         };
         conn.exec_drop(
             "INSERT INTO `membership` (`id`,`from`,`to`) VALUES (?,?,?)",
-            (id,&from,&to),
+            (id, &from, &to),
         )
         .unwrap();
     }
 }
 
 /// Generate pair of from-to membership random values
-fn generate_random_datepair(offset: i64) -> (NaiveDate,Option<NaiveDate>) {
+fn generate_random_datepair(offset: i64) -> (NaiveDate, Option<NaiveDate>) {
     let from: u16 = rand::random();
     let from = from as i64 + offset;
     let dist: u8 = rand::random();
@@ -211,10 +214,10 @@ fn generate_random_datepair(offset: i64) -> (NaiveDate,Option<NaiveDate>) {
     } else {
         None
     };
-    let date = Utc.timestamp(0,0).date().naive_local();
-    let to = to.map(|v|date.clone().checked_add_signed(Duration::days(v)).unwrap());
+    let date = Utc.timestamp(0, 0).date().naive_local();
+    let to = to.map(|v| date.clone().checked_add_signed(Duration::days(v)).unwrap());
     let from = date.checked_add_signed(Duration::days(from)).unwrap();
-    (from,to)
+    (from, to)
 }
 
 /// Insert membership, return nr on success

@@ -22,7 +22,11 @@ use crate::USER_AGENT as UA;
 use crate::error::Error;
 
 lazy_static! {
-    static ref CLIENT: Client = ClientBuilder::new().gzip(true).danger_accept_invalid_certs(true).build().unwrap() ;
+    static ref CLIENT: Client = ClientBuilder::new()
+        .gzip(true)
+        .danger_accept_invalid_certs(true)
+        .build()
+        .unwrap();
 }
 
 /// Header type for get requests
