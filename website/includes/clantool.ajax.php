@@ -26,7 +26,9 @@ switch($_REQUEST['ajaxCont']){
                     'GUEST_WATCHER_GROUP' => $clanDB->getSetting(KEY_TS3_GUEST_WATCHER_GROUP),
                     'GUEST_GROUP' => $clanDB->getSetting(KEY_TS3_GUEST_GROUP),
                     'GUEST_POKE_MSG' => $clanDB->getSetting(KEY_TS3_GUEST_POKE_MSG),
-                    'GUEST_CHANNEL' => $clanDB->getSetting(KEY_TS3_GUEST_CHANNEL)
+                    'GUEST_CHANNEL' => $clanDB->getSetting(KEY_TS3_GUEST_CHANNEL),
+                    
+                    'FETCH_MISSING_NAMES_ENABLE' => $clanDB->getSetting(KEY_FETCH_MISSING_NAMES_ENABLE),
                 )
             );
             break;
@@ -42,6 +44,8 @@ switch($_REQUEST['ajaxCont']){
             $clanDB->setSetting(KEY_TS3_GUEST_GROUP,$_POST['GUEST_GROUP']);
             $clanDB->setSetting(KEY_TS3_GUEST_POKE_MSG,$_POST['GUEST_POKE_MSG']);
             $clanDB->setSetting(KEY_TS3_GUEST_CHANNEL,$_POST['GUEST_CHANNEL']);
+            
+            $clanDB->setSetting(KEY_FETCH_MISSING_NAMES_ENABLE,isset($_POST['FETCH_NAMES_ENABLE']));
             
             echo json_encode(true);
             break;

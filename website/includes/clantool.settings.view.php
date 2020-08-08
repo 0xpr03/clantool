@@ -75,6 +75,14 @@
             </div>
         </div>
         <div class="form-group">
+            <label for="FETCH_NAMES_ENABLE" class="control-label col-xs-2">Fetch missing account names</label>
+            <div class="col-xs-10">
+                <div class="checkbox">
+                    <label><input type="checkbox" name="FETCH_NAMES_ENABLE" id="FETCH_NAMES_ENABLE" checked="checked"> Fetch Missing Names Enabled</label>
+                </div>
+            </div>
+        </div>
+        <div class="form-group">
             <div class="col-xs-offset-2 col-xs-10">
                 <button type="submit" class="btn btn-warning" id="submitSettings"><i class="fas fa-save"></i> Save</button>
             </div>
@@ -275,6 +283,8 @@ $( document ).ready(function() {
                 $('#GUEST_GROUP').val(data['GUEST_GROUP']);
                 $('#GUEST_POKE_MSG').val(data['GUEST_POKE_MSG']);
                 $('#GUEST_CHANNEL').val(data['GUEST_CHANNEL']);
+                
+                $('#FETCH_NAMES_ENABLE').prop('checked',data['FETCH_MISSING_NAMES_ENABLE']);
             }
             loadingDiv.hide();
         }).fail(function(data){

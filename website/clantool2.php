@@ -67,7 +67,7 @@ define('Z8PROFILE','http://crossfire.z8games.com/profile/');
 define('PERM_CLANTOOL_TEST','clantoolTest');
 define('PERM_CLANTOOL_ADMIN','clantoolAdmin');
 
-// db keys, read by backend
+// db settings keys, read by backend
 define('KEY_AUTO_LEAVE', 'auto_leave_enable');
 define('KEY_LEAVE_CAUSE','auto_leave_message');
 define('KEY_TS3_CHECK','ts3_check_identities_enable');
@@ -78,6 +78,8 @@ define('KEY_TS3_GUEST_WATCHER_GROUP','ts3_guest_watcher_group');
 define('KEY_TS3_GUEST_GROUP','ts3_guest_group');
 define('KEY_TS3_GUEST_POKE_MSG','ts3_guest_poke_msg');
 define('KEY_TS3_GUEST_CHANNEL','ts3_guest_channel');
+
+define('KEY_FETCH_MISSING_NAMES_ENABLE','auto_fetch_names');
 
 function getContent() {
     require 'includes/clantool.view.php';
