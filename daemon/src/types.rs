@@ -16,13 +16,13 @@ use std::hash::Hash;
 use std::hash::Hasher;
 
 /// Ts channel ID
-pub type TsChannelID = i32;
+pub type TsChannelID = ts3_query::ChannelId;
 /// Ts client DB-ID
-pub type TsClDBID = i32;
+pub type TsClDBID = ts3_query::ClientDBId;
 /// Ts group ID
-pub type TsGroupID = i32;
+pub type TsGroupID = ts3_query::ServerGroupID;
 /// Ts client connection ID
-pub type TsConID = i32;
+pub type TsConID = ts3_query::ClientId;
 /// z8 account ID
 pub type AccountID = i32;
 
@@ -61,7 +61,26 @@ pub struct TsClient {
     /// Connection ID
     pub conid: TsConID,
     pub channel: TsChannelID,
-    pub groups: Vec<i32>,
+    pub groups: Vec<TsGroupID>,
+    /// read "has output hardware"
+    pub output_hardware: bool,
+    pub input_hardware: bool,
+    pub output_muted: bool,
+    pub input_muted: bool,
+    /// Milliseconds
+    pub idle_time: i64,
+}
+
+impl TsClient {
+    /// Check if client ist idle according to mute + time limit
+    pub fn afk_idle(&self, time_limit_ms: i64) -> bool {
+        if self.input_hardware && self.output_hardware {
+            if !self.output_muted && !self.input_muted {
+                return false;
+            }
+        }
+        self.idle_time > time_limit_ms
+    }
 }
 
 /// Custom hash impl to allow dedup of multiple connections

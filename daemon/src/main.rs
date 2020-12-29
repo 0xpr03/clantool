@@ -81,6 +81,12 @@ const TS3_GUEST_WATCHER_GROUP_KEY: &str = "ts3_guest_watcher_group";
 const TS3_GUEST_GROUP_KEY: &str = "ts3_guest_group";
 const TS3_GUEST_CHANNEL_KEY: &str = "ts3_guest_channel";
 const TS3_GUEST_POKE_MSG: &str = "ts3_guest_poke_msg";
+/// AFK move enabled
+const TS3_AFK_MOVE_ENABLED_KEY: &str = "ts3_afk_move_enable";
+const TS3_AFK_IGNORE_GROUP_KEY: &str = "ts3_afk_ignore_group";
+const TS3_AFK_MOVE_CHANNEL_KEY: &str = "ts3_afk_move_channel";
+/// Time in ms
+const TS3_AFK_TIME_KEY: &str = "ts3_afk_time";
 
 pub type Result<T> = ::std::result::Result<T, Error>;
 

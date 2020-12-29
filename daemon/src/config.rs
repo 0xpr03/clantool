@@ -69,6 +69,7 @@ pub struct TSConfig {
     pub password: String,
     pub server_port: u16,
     pub unknown_id_check_enabled: bool,
+    pub afk_move_enabled: bool,
     pub enabled: bool,
     pub cmd_limit_secs: u16,
 }

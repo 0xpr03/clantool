@@ -26,10 +26,12 @@ use std::thread::{self, sleep};
 use std::time::Duration;
 use std::{sync::RwLock, time::Instant};
 use timer::*;
-use ts3_query::*;
+use ts3_query::QueryClient;
+use ts3_query::raw;
 
 /// Client nick for guest poking
 const POKE_NICK: &str = "Guest-Notifier";
+const AFK_NICK: &str = "AFK-Bot";
 const DEFAULT_NICK: &str = "ct_bot";
 const FLUSH_NICK: &str = "ct_bot-flush";
 
@@ -45,6 +47,11 @@ const CLIENT_CONN_ID: &str = "clid";
 const CLIENT_GROUPS: &str = "client_servergroups";
 const CLIENT_CHANNEL: &str = CHANNEL_ID;
 const CLIENT_NAME: &str = "client_nickname";
+const CLIENT_INPUT_MUTED: &str = "client_input_muted";
+const CLIENT_OUTPUT_MUTED: &str = "client_output_muted";
+const CLIENT_INPUT_HARDWARE: &str = "client_input_hardware";
+const CLIENT_OUTPUT_HARDWARE: &str = "client_output_hardware";
+const CLIENT_IDLE_TIME: &str = "client_idle_time";
 
 /// Safety: connection timeout has to be short enough that no request blocks others!
 const INTERVAL_ACTIVITY_S: i64 = 30;
@@ -67,6 +74,7 @@ struct TsStatCtrl {
     last_guest_poke: Option<Instant>,
     /// none also if no poke enabled
     poke_config: Option<PokeConfig>,
+    afk_config: Option<AfkConfig>,
 }
 
 /// Guest-Poke configuration read by TsStatCtrl
@@ -76,6 +84,14 @@ struct PokeConfig {
     guest_group: TsGroupID,
     guest_channel: TsGroupID,
     poke_msg: String,
+}
+
+/// AFK-Move configuration read by TsStatCtrl
+#[derive(Default, Debug)]
+struct AfkConfig {
+    afk_time_ms: i64,
+    afk_channel: TsChannelID,
+    afk_ignore_group: TsGroupID,
 }
 
 impl TsStatCtrl {
@@ -90,6 +106,7 @@ impl TsStatCtrl {
             last_channel: Default::default(),
             last_guest_poke: Default::default(),
             poke_config: Default::default(),
+            afk_config: Default::default(),
         };
         data.inner_update_settings(true)?;
         Ok(data)
@@ -103,24 +120,47 @@ impl TsStatCtrl {
     /// Update dynamic settings from DB. first_run controls log-output
     fn inner_update_settings(&mut self, first_run: bool) -> Result<()> {
         // shouldn't name Pool & TsConnection conn..
-        let old_enabled = self.poke_config.is_some();
-        let mut conn = self.pool.get_conn()?;
-        self.poke_config = if is_ts3_guest_check_enabled(&mut conn, &self.conn.config()) {
-            let cfg = read_poke_config(&mut conn)?;
-            if cfg.is_none() {
-                warn!("Missing values for poke config!");
-            }
-            cfg
-        } else {
-            None
-        };
-        if self.poke_config.is_some() != old_enabled || first_run {
-            let msg = if self.poke_config.is_some() {
-                "Ts-Poke enabled"
+        {
+            let old_enabled = self.poke_config.is_some();
+            let mut conn = self.pool.get_conn()?;
+            self.poke_config = if is_ts3_guest_check_enabled(&mut conn, &self.conn.config()) {
+                let cfg = read_poke_config(&mut conn)?;
+                if cfg.is_none() {
+                    warn!("Missing values for poke config!");
+                }
+                cfg
             } else {
-                "Ts-Poke disabled"
+                None
             };
-            db::log_message(&mut conn, msg);
+            if self.poke_config.is_some() != old_enabled || first_run {
+                let msg = if self.poke_config.is_some() {
+                    "Ts-Poke enabled"
+                } else {
+                    "Ts-Poke disabled"
+                };
+                db::log_message(&mut conn, msg);
+            }
+        }
+        {
+            let old_enabled = self.afk_config.is_some();
+            let mut conn = self.pool.get_conn()?;
+            self.afk_config = if is_ts3_afk_move_enabled(&mut conn, &self.conn.config()) {
+                let cfg = read_afk_config(&mut conn)?;
+                if cfg.is_none() {
+                    warn!("Missing values for afk-move config!");
+                }
+                cfg
+            } else {
+                None
+            };
+            if self.afk_config.is_some() != old_enabled || first_run {
+                let msg = if self.afk_config.is_some() {
+                    "Ts AFK-Move enabled"
+                } else {
+                    "Ts AFK-Move disabled"
+                };
+                db::log_message(&mut conn, msg);
+            }
         }
         Ok(())
     }
@@ -164,9 +204,11 @@ impl TsStatCtrl {
             None
         };
 
+        let mut afk_client = Vec::new();
+
         for client in data {
             let id = client.cldbid;
-            self.names.insert(id, client.name);
+            
             // add elapsed time to last channel, or current if no previous is known
             let chan = self.last_channel.get(&id).unwrap_or(&client.channel);
 
@@ -191,12 +233,21 @@ impl TsStatCtrl {
                 }
             }
 
+            if let Some(cfg) = &self.afk_config {
+                if cfg.afk_channel != client.channel && client.afk_idle(cfg.afk_time_ms) {
+                    afk_client.push(client.conid);
+                }
+            }
+
             // remember current channel for next time
             new_channel.insert(id, client.channel);
+            self.names.insert(id, client.name);
         }
 
         // excludes disconnected clients
         self.last_channel = new_channel;
+
+        self.move_afks(afk_client)?;
 
         if new_guest && !has_lt {
             self.poke_clients(poke_clients)?;
@@ -207,14 +258,47 @@ impl TsStatCtrl {
         Ok(())
     }
 
-    /// poke clients, inside new thread
-    fn poke_clients(&mut self, clients: Vec<TsConID>) -> Result<()> {
-        self.last_guest_poke = Some(Instant::now());
-        let cooldown = match self.conn.config().ts.cmd_limit_secs {
+    /// Move afk clients, in new thread
+    fn move_afks(&mut self, clients: Vec<TsConID>) -> Result<()> {
+        let mut conn = self.conn.clone(Some(AFK_NICK))?;
+        let cooldown = self.cooldown();
+        let channel = match self.afk_config.as_ref().map(|v| &v.afk_channel) {
+            Some(v) => *v,
+            None => unreachable!("Unreachable! poke_clients invoked without poke_config!"),
+        };
+        thread::Builder::new()
+            .name("ts-afk-move".to_string())
+            .spawn(move || {
+                trace!("Afk Moving..");
+                let res = || -> Result<()> {
+                    for client in clients {
+                        if let Some(cooldown) = cooldown {
+                            sleep(cooldown);
+                        }
+                        conn.get()?.move_client(client,channel,None)?;
+                    }
+                    Ok(())
+                };
+                if let Err(e) = res() {
+                    error!("Failed to afk move! {}",e);
+                }
+            })
+            .expect("Can't spawn afk-move thread!");
+        Ok(())
+    }
+
+    fn cooldown(&self) -> Option<Duration> {
+        match self.conn.config().ts.cmd_limit_secs {
             0 => None,
             // subtract
             v => Some(Duration::from_millis(1000 / (v as u64))),
-        };
+        }
+    }
+
+    /// poke clients, inside new thread
+    fn poke_clients(&mut self, clients: Vec<TsConID>) -> Result<()> {
+        self.last_guest_poke = Some(Instant::now());
+        let cooldown = self.cooldown();
         let msg: &str = match self.poke_config.as_ref().map(|v| &v.poke_msg) {
             Some(v) => v,
             None => unreachable!("Unreachable! poke_clients invoked without poke_config!"),
@@ -296,6 +380,27 @@ fn read_poke_config(conn: &mut PooledConn) -> Result<Option<PokeConfig>> {
                 guest_group,
                 guest_channel,
                 poke_msg,
+            })
+        } else {
+            None
+        },
+    )
+}
+
+/// Read AfkConfig from DB, if existing
+fn read_afk_config(conn: &mut PooledConn) -> Result<Option<AfkConfig>> {
+    let afk_ignore_group = db::read_setting(conn, crate::TS3_AFK_IGNORE_GROUP_KEY)?;
+    let afk_time_ms = db::read_setting(conn, crate::TS3_AFK_TIME_KEY)?;
+    let afk_channel = db::read_setting(conn, crate::TS3_AFK_MOVE_CHANNEL_KEY)?;
+
+    Ok(
+        if let (Some(afk_ignore_group), Some(afk_time_ms), Some(afk_channel)) =
+            (afk_ignore_group, afk_time_ms, afk_channel)
+        {
+            Some(AfkConfig{
+                afk_time_ms,
+                afk_channel,
+                afk_ignore_group,
             })
         } else {
             None
@@ -413,7 +518,7 @@ pub fn print_poke_config(conn: &mut PooledConn, config: &Config) -> Result<Strin
 }
 
 // use try {} when #31436 is stable
-fn find_unknown_inner(group_ids: &[usize], conn: &mut PooledConn, ts_cfg: &TSConfig) -> Result<()> {
+fn find_unknown_inner(group_ids: &[TsGroupID], conn: &mut PooledConn, ts_cfg: &TSConfig) -> Result<()> {
     trace!("Connect ts3");
     let mut connection = QueryClient::new(format!("{}:{}", ts_cfg.ip, ts_cfg.port))?;
     trace!("login");
@@ -424,7 +529,7 @@ fn find_unknown_inner(group_ids: &[usize], conn: &mut PooledConn, ts_cfg: &TSCon
 
     let mut ids = Vec::new();
     for group in group_ids {
-        ids.append(&mut connection.get_servergroup_client_list(*group)?);
+        ids.append(&mut connection.servergroup_client_cldbids(*group)?);
         trace!("Retrieved ts clients for {}", group);
     }
     db::ts::update_unknown_ts_ids(conn, &ids)?;
@@ -435,61 +540,62 @@ fn find_unknown_inner(group_ids: &[usize], conn: &mut PooledConn, ts_cfg: &TSCon
 
 /// Get ts3 member groups settings, return an optional vec of member group-ids
 #[inline]
-pub fn get_ts3_member_groups(conn: &mut PooledConn) -> Result<Option<Vec<usize>>> {
+pub fn get_ts3_member_groups(conn: &mut PooledConn) -> Result<Option<Vec<TsGroupID>>> {
     db::read_list_setting(conn, crate::TS3_MEMBER_GROUP)
 }
 
-/// Read ts3 unknown identity settings from DB
+/// Read ts3 unknown identity setting from DB
 fn is_ts3_guest_check_enabled(conn: &mut PooledConn, config: &Config) -> bool {
-    match db::read_bool_setting(conn, TS3_GUEST_NOTIFY_ENABLE_KEY) {
+    read_db_config_bool(conn, TS3_GUEST_NOTIFY_ENABLE_KEY,config.ts.unknown_id_check_enabled)
+}
+
+/// Read ts3 afk move setting from DB
+fn is_ts3_afk_move_enabled(conn: &mut PooledConn, config: &Config) -> bool {
+    read_db_config_bool(conn, TS3_AFK_MOVE_ENABLED_KEY,config.ts.afk_move_enabled)
+}
+
+/// Read DB bool key with fallback
+fn read_db_config_bool(conn: &mut PooledConn, key: &str, default: bool) -> bool {
+    match db::read_bool_setting(conn, key) {
         Ok(Some(v)) => v,
-        Ok(None) => config.ts.unknown_id_check_enabled,
+        Ok(None) => default,
         Err(e) => {
             error!(
-                "Error retrieving '{}' setting: {}",
-                TS3_GUEST_NOTIFY_ENABLE_KEY, e
+                "Failed retrieving settings key '{}': {}",
+                key, e
             );
-            config.ts.unknown_id_check_enabled
+            default
         }
     }
 }
 
 /// Get clients on ts. Returns last entry for multiple connection of same ID.
 fn get_online_clients(conn: &mut Connection) -> Result<HashSet<TsClient>> {
-    let res = raw::parse_multi_hashmap(conn.get()?.raw_command("clientlist -groups")?, false);
+    let res = raw::parse_multi_hashmap(conn.get()?.raw_command("clientlist -groups -voice -times")?, false);
     //dbg!(res.len());
     // dbg!(&res);
     let clid_str = conn.conn_id()?.to_string();
     let clients = res
         .into_iter()
         .filter(|e| {
-            e.get(CLIENT_TYPE).map(String::as_str) == Some(CLIENT_TYPE_NORMAL)
-                || e.get(CLIENT_CONN_ID) == Some(&clid_str)
+            e.get(CLIENT_TYPE).map_or(false,|v|v.as_ref().map_or(false, |v|v == CLIENT_TYPE_NORMAL)) || 
+            e.get(CLIENT_CONN_ID).map_or(false,|v|v.as_ref().map_or(false,|v|*v == clid_str)) 
         })
-        .map(|e| {
+        .map(|mut e| {
             Ok(TsClient {
-                name: e
-                    .get(CLIENT_NAME)
-                    .map(raw::unescape_val)
-                    .ok_or_else(|| Error::TsMissingValue(CLIENT_NAME))?,
-                cldbid: e
-                    .get(CLIENT_DB_ID)
-                    .ok_or_else(|| Error::TsMissingValue(CLIENT_DB_ID))?
-                    .parse()?,
-                conid: e
-                    .get(CLIENT_CONN_ID)
-                    .ok_or_else(|| Error::TsMissingValue(CLIENT_CONN_ID))?
-                    .parse()?,
-                channel: e
-                    .get(CLIENT_CHANNEL)
-                    .ok_or_else(|| Error::TsMissingValue(CLIENT_CHANNEL))?
-                    .parse()?,
-                groups: e
-                    .get(CLIENT_GROUPS)
-                    .ok_or_else(|| Error::TsMissingValue(CLIENT_GROUPS))?
+                name: raw::string_val_parser(&mut e, CLIENT_NAME)?,
+                cldbid: raw::int_val_parser(&mut e,CLIENT_DB_ID)?,
+                conid: raw::int_val_parser(&mut e,CLIENT_CONN_ID)?,
+                channel: raw::int_val_parser(&mut e,CLIENT_CHANNEL)?,
+                groups: get_ts_val(&mut e,CLIENT_GROUPS)?
                     .split(',')
                     .map(|e| e.parse().map_err(From::from))
                     .collect::<Result<Vec<_>>>()?,
+                output_hardware: raw::bool_val_parser(&mut e,CLIENT_OUTPUT_HARDWARE)?,
+                input_hardware: raw::bool_val_parser(&mut e,CLIENT_INPUT_HARDWARE)?,
+                output_muted: raw::bool_val_parser(&mut e,CLIENT_OUTPUT_MUTED)?,
+                input_muted: raw::bool_val_parser(&mut e,CLIENT_INPUT_MUTED)?,
+                idle_time: raw::int_val_parser(&mut e,CLIENT_IDLE_TIME)?,
             })
         })
         .collect::<Result<HashSet<TsClient>>>()?;
@@ -499,20 +605,19 @@ fn get_online_clients(conn: &mut Connection) -> Result<HashSet<TsClient>> {
     Ok(clients)
 }
 
+fn get_ts_val(val: &mut HashMap<String,Option<String>>, key: &'static str) -> Result<String> {
+    Ok(val.remove(key).flatten()
+        .ok_or_else(|| Error::TsMissingValue(key))?)
+}
+
 /// Get list of TS channels
 fn get_channels(conn: &mut Connection) -> Result<Vec<Channel>> {
     let res = raw::parse_multi_hashmap(conn.get()?.raw_command("channellist")?, false);
     res.into_iter()
-        .map(|e| {
+        .map(|mut e| {
             Ok(Channel {
-                id: e
-                    .get(CHANNEL_ID)
-                    .ok_or_else(|| Error::TsMissingValue(CHANNEL_ID))?
-                    .parse()?,
-                name: e
-                    .get(CHANNEL_NAME)
-                    .map(raw::unescape_val)
-                    .ok_or_else(|| Error::TsMissingValue(CHANNEL_NAME))?,
+                id: raw::int_val_parser(&mut e,CHANNEL_ID)?,
+                name: raw::string_val_parser(&mut e,CHANNEL_NAME)?,
             })
         })
         .collect::<Result<Vec<_>>>()
@@ -536,6 +641,7 @@ mod tests {
                 .parse()
                 .unwrap(),
             unknown_id_check_enabled: true,
+            afk_move_enabled: true,
             enabled: true,
             cmd_limit_secs: 4,
         };

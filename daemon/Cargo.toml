@@ -33,7 +33,7 @@ features = ["blocking","gzip"]
 
 [dependencies.ts3-query]
 features = ["backtrace"]
-version ="0.2"
+version ="0.3"
 
 [dev-dependencies]
 rand = "0.7"

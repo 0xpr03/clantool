@@ -25,6 +25,8 @@ server_port = 9987
 # enables check for non-attributed ts identities
 # that have a member group
 unknown_id_check_enabled = true
+# enables afk move function
+afk_move_enabled = true
 # Amount of commands per second allowed to send
 # 0 to disable cooldown
 cmd_limit_secs = 4

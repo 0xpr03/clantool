@@ -96,9 +96,9 @@ impl Connection {
         Ok(match self.conn_id {
             Some(v) => v,
             None => {
-                let res = self.get()?.whoami(false)?;
+                let mut res = self.get()?.whoami(false)?;
                 let clid = res
-                    .get(KEY_CLIENT_ID_SELF)
+                    .remove(KEY_CLIENT_ID_SELF).flatten()
                     .ok_or_else(|| Error::NoValue("No client id!"))?;
                 let clid = clid.parse()?;
                 self.conn_id = Some(clid);
