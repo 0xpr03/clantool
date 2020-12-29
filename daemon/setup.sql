@@ -10,25 +10,25 @@
  */
 CREATE TABLE `clan` (
  `date` datetime NOT NULL,
- `wins` int(11) NOT NULL,
- `losses` int(11) NOT NULL,
- `draws` int(11) NOT NULL,
- `members` int(11) NOT NULL,
+ `wins` int NOT NULL,
+ `losses` int NOT NULL,
+ `draws` int NOT NULL,
+ `members` int NOT NULL,
  PRIMARY KEY (`date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE `member` (
- `id` int(11) NOT NULL,
+ `id` int NOT NULL,
  `date` datetime NOT NULL,
- `exp` int(10) unsigned NOT NULL,
- `cp` int(11) NOT NULL,
+ `exp` int unsigned NOT NULL,
+ `cp` int NOT NULL,
  PRIMARY KEY (`id`,`date`) USING BTREE,
  KEY `id` (`id`),
  KEY `date` (`date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE `member_names` (
- `id` int(11) NOT NULL,
+ `id` int NOT NULL,
  `name` varchar(12) NOT NULL, /* account name */
  `date` datetime NOT NULL,
  `updated` datetime NOT NULL,
@@ -44,7 +44,7 @@ CREATE TABLE `missing_entries` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE `member_addition` (
- `id` int(11) NOT NULL,
+ `id` int NOT NULL,
  `name` varchar(25) NOT NULL, /* person first name */
  `vip` bit(1) NOT NULL,
  `comment` text,
@@ -62,7 +62,7 @@ CREATE TABLE `membership_cause` (
 
 CREATE TABLE `membership` (
  `nr` INT NOT NULL AUTO_INCREMENT,
- `id` int(11) NOT NULL,
+ `id` int NOT NULL,
  `from` date NOT NULL,
  `to` date,
  PRIMARY KEY (`nr`),
@@ -73,21 +73,21 @@ CREATE TABLE `membership` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE `ts_relation` (
- `id` int(11) NOT NULL,
- `client_id` int(11) NOT NULL,
+ `id` int NOT NULL,
+ `client_id` int NOT NULL,
  PRIMARY KEY (`id`,`client_id`),
  KEY `id` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE `second_acc` (
- `id` int(11) NOT NULL,
- `id_sec` int(11) NOT NULL,
+ `id` int NOT NULL,
+ `id_sec` int NOT NULL,
  PRIMARY KEY (`id`,`id_sec`),
  KEY `id` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE `afk` (
- `id` int(11) NOT NULL,
+ `id` int NOT NULL,
  `from` date NOT NULL,
  `to` date NOT NULL,
  `added` datetime NOT NULL,
@@ -99,7 +99,7 @@ CREATE TABLE `afk` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE `caution` (
-  `id` int(11) NOT NULL,
+  `id` int NOT NULL,
   `from` date NOT NULL,
   `to` date NOT NULL,
   `added` datetime NOT NULL,
@@ -111,7 +111,7 @@ CREATE TABLE `caution` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE `member_trial` (
- `id` int(11) NOT NULL,
+ `id` int NOT NULL,
  `from` date NOT NULL,
  `to` date,
  PRIMARY KEY (`id`,`from`),
@@ -131,11 +131,11 @@ CREATE TABLE `settings` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE `unknown_ts_ids` (
-  `client_id` int(11) NOT NULL PRIMARY KEY
+  `client_id` int NOT NULL PRIMARY KEY
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE `ignore_ts_ids` (
-  `client_id` int(11) NOT NULL PRIMARY KEY
+  `client_id` int NOT NULL PRIMARY KEY
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE OR REPLACE VIEW `unknown_ts_unignored` AS
@@ -144,24 +144,24 @@ SELECT `t`.`client_id` from `unknown_ts_ids` t where `t`.`client_id` NOT IN (
 );
 
 CREATE TABLE `ts_activity` (
-  `channel_id` int(11) NOT NULL,
+  `channel_id` int NOT NULL,
   `date` date NOT NULL,
   `time` INT NOT NULL,
-  `client_id` int(11) NOT NULL,
+  `client_id` int NOT NULL,
   PRIMARY KEY (`date`,`client_id`,`channel_id`),
   KEY `client_date` (`date`,`client_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 CREATE TABLE `ts_names` (
   `name` VARCHAR(100) NOT NULL,
-  `client_id` int(11) NOT NULL,
+  `client_id` int NOT NULL,
   PRIMARY KEY (`client_id`),
   KEY `name` (`name`)
 ) ENGINE=InnoDB CHARACTER SET 'utf8mb4';
 
 CREATE TABLE `ts_channels` (
   `name` VARCHAR(100) NOT NULL,
-  `channel_id` int(11) NOT NULL,
+  `channel_id` int NOT NULL,
   PRIMARY KEY (`channel_id`),
   KEY `name` (`name`)
 ) ENGINE=InnoDB CHARACTER SET 'utf8mb4';
@@ -175,7 +175,7 @@ CREATE TABLE `ts_channel_group_names` (
 
 CREATE TABLE `ts_channel_groups` (
   `group_id` INT NOT NULL,
-  `channel_id` int(11) NOT NULL UNIQUE,
+  `channel_id` int NOT NULL UNIQUE,
   PRIMARY KEY `primary` (`channel_id`,`group_id`),
   KEY `group_id` (`group_id`),
   CONSTRAINT `fk_group_id`
