@@ -98,7 +98,8 @@ impl Connection {
             None => {
                 let mut res = self.get()?.whoami(false)?;
                 let clid = res
-                    .remove(KEY_CLIENT_ID_SELF).flatten()
+                    .remove(KEY_CLIENT_ID_SELF)
+                    .flatten()
                     .ok_or_else(|| Error::NoValue("No client id!"))?;
                 let clid = clid.parse()?;
                 self.conn_id = Some(clid);

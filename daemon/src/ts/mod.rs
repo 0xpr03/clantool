@@ -26,8 +26,8 @@ use std::thread::{self, sleep};
 use std::time::Duration;
 use std::{sync::RwLock, time::Instant};
 use timer::*;
-use ts3_query::QueryClient;
 use ts3_query::raw;
+use ts3_query::QueryClient;
 
 /// Client nick for guest poking
 const POKE_NICK: &str = "Guest-Notifier";
@@ -208,7 +208,7 @@ impl TsStatCtrl {
 
         for client in data {
             let id = client.cldbid;
-            
+
             // add elapsed time to last channel, or current if no previous is known
             let chan = self.last_channel.get(&id).unwrap_or(&client.channel);
 
@@ -275,12 +275,12 @@ impl TsStatCtrl {
                         if let Some(cooldown) = cooldown {
                             sleep(cooldown);
                         }
-                        conn.get()?.move_client(client,channel,None)?;
+                        conn.get()?.move_client(client, channel, None)?;
                     }
                     Ok(())
                 };
                 if let Err(e) = res() {
-                    error!("Failed to afk move! {}",e);
+                    error!("Failed to afk move! {}", e);
                 }
             })
             .expect("Can't spawn afk-move thread!");
@@ -397,7 +397,7 @@ fn read_afk_config(conn: &mut PooledConn) -> Result<Option<AfkConfig>> {
         if let (Some(afk_ignore_group), Some(afk_time_ms), Some(afk_channel)) =
             (afk_ignore_group, afk_time_ms, afk_channel)
         {
-            Some(AfkConfig{
+            Some(AfkConfig {
                 afk_time_ms,
                 afk_channel,
                 afk_ignore_group,
@@ -518,7 +518,11 @@ pub fn print_poke_config(conn: &mut PooledConn, config: &Config) -> Result<Strin
 }
 
 // use try {} when #31436 is stable
-fn find_unknown_inner(group_ids: &[TsGroupID], conn: &mut PooledConn, ts_cfg: &TSConfig) -> Result<()> {
+fn find_unknown_inner(
+    group_ids: &[TsGroupID],
+    conn: &mut PooledConn,
+    ts_cfg: &TSConfig,
+) -> Result<()> {
     trace!("Connect ts3");
     let mut connection = QueryClient::new(format!("{}:{}", ts_cfg.ip, ts_cfg.port))?;
     trace!("login");
@@ -546,12 +550,16 @@ pub fn get_ts3_member_groups(conn: &mut PooledConn) -> Result<Option<Vec<TsGroup
 
 /// Read ts3 unknown identity setting from DB
 fn is_ts3_guest_check_enabled(conn: &mut PooledConn, config: &Config) -> bool {
-    read_db_config_bool(conn, TS3_GUEST_NOTIFY_ENABLE_KEY,config.ts.unknown_id_check_enabled)
+    read_db_config_bool(
+        conn,
+        TS3_GUEST_NOTIFY_ENABLE_KEY,
+        config.ts.unknown_id_check_enabled,
+    )
 }
 
 /// Read ts3 afk move setting from DB
 fn is_ts3_afk_move_enabled(conn: &mut PooledConn, config: &Config) -> bool {
-    read_db_config_bool(conn, TS3_AFK_MOVE_ENABLED_KEY,config.ts.afk_move_enabled)
+    read_db_config_bool(conn, TS3_AFK_MOVE_ENABLED_KEY, config.ts.afk_move_enabled)
 }
 
 /// Read DB bool key with fallback
@@ -560,10 +568,7 @@ fn read_db_config_bool(conn: &mut PooledConn, key: &str, default: bool) -> bool 
         Ok(Some(v)) => v,
         Ok(None) => default,
         Err(e) => {
-            error!(
-                "Failed retrieving settings key '{}': {}",
-                key, e
-            );
+            error!("Failed retrieving settings key '{}': {}", key, e);
             default
         }
     }
@@ -571,31 +576,38 @@ fn read_db_config_bool(conn: &mut PooledConn, key: &str, default: bool) -> bool 
 
 /// Get clients on ts. Returns last entry for multiple connection of same ID.
 fn get_online_clients(conn: &mut Connection) -> Result<HashSet<TsClient>> {
-    let res = raw::parse_multi_hashmap(conn.get()?.raw_command("clientlist -groups -voice -times")?, false);
+    let res = raw::parse_multi_hashmap(
+        conn.get()?
+            .raw_command("clientlist -groups -voice -times")?,
+        false,
+    );
     //dbg!(res.len());
     // dbg!(&res);
     let clid_str = conn.conn_id()?.to_string();
     let clients = res
         .into_iter()
         .filter(|e| {
-            e.get(CLIENT_TYPE).map_or(false,|v|v.as_ref().map_or(false, |v|v == CLIENT_TYPE_NORMAL)) || 
-            e.get(CLIENT_CONN_ID).map_or(false,|v|v.as_ref().map_or(false,|v|*v == clid_str)) 
+            e.get(CLIENT_TYPE).map_or(false, |v| {
+                v.as_ref().map_or(false, |v| v == CLIENT_TYPE_NORMAL)
+            }) || e
+                .get(CLIENT_CONN_ID)
+                .map_or(false, |v| v.as_ref().map_or(false, |v| *v == clid_str))
         })
         .map(|mut e| {
             Ok(TsClient {
                 name: raw::string_val_parser(&mut e, CLIENT_NAME)?,
-                cldbid: raw::int_val_parser(&mut e,CLIENT_DB_ID)?,
-                conid: raw::int_val_parser(&mut e,CLIENT_CONN_ID)?,
-                channel: raw::int_val_parser(&mut e,CLIENT_CHANNEL)?,
-                groups: get_ts_val(&mut e,CLIENT_GROUPS)?
+                cldbid: raw::int_val_parser(&mut e, CLIENT_DB_ID)?,
+                conid: raw::int_val_parser(&mut e, CLIENT_CONN_ID)?,
+                channel: raw::int_val_parser(&mut e, CLIENT_CHANNEL)?,
+                groups: get_ts_val(&mut e, CLIENT_GROUPS)?
                     .split(',')
                     .map(|e| e.parse().map_err(From::from))
                     .collect::<Result<Vec<_>>>()?,
-                output_hardware: raw::bool_val_parser(&mut e,CLIENT_OUTPUT_HARDWARE)?,
-                input_hardware: raw::bool_val_parser(&mut e,CLIENT_INPUT_HARDWARE)?,
-                output_muted: raw::bool_val_parser(&mut e,CLIENT_OUTPUT_MUTED)?,
-                input_muted: raw::bool_val_parser(&mut e,CLIENT_INPUT_MUTED)?,
-                idle_time: raw::int_val_parser(&mut e,CLIENT_IDLE_TIME)?,
+                output_hardware: raw::bool_val_parser(&mut e, CLIENT_OUTPUT_HARDWARE)?,
+                input_hardware: raw::bool_val_parser(&mut e, CLIENT_INPUT_HARDWARE)?,
+                output_muted: raw::bool_val_parser(&mut e, CLIENT_OUTPUT_MUTED)?,
+                input_muted: raw::bool_val_parser(&mut e, CLIENT_INPUT_MUTED)?,
+                idle_time: raw::int_val_parser(&mut e, CLIENT_IDLE_TIME)?,
             })
         })
         .collect::<Result<HashSet<TsClient>>>()?;
@@ -605,8 +617,10 @@ fn get_online_clients(conn: &mut Connection) -> Result<HashSet<TsClient>> {
     Ok(clients)
 }
 
-fn get_ts_val(val: &mut HashMap<String,Option<String>>, key: &'static str) -> Result<String> {
-    Ok(val.remove(key).flatten()
+fn get_ts_val(val: &mut HashMap<String, Option<String>>, key: &'static str) -> Result<String> {
+    Ok(val
+        .remove(key)
+        .flatten()
         .ok_or_else(|| Error::TsMissingValue(key))?)
 }
 
@@ -616,8 +630,8 @@ fn get_channels(conn: &mut Connection) -> Result<Vec<Channel>> {
     res.into_iter()
         .map(|mut e| {
             Ok(Channel {
-                id: raw::int_val_parser(&mut e,CHANNEL_ID)?,
-                name: raw::string_val_parser(&mut e,CHANNEL_NAME)?,
+                id: raw::int_val_parser(&mut e, CHANNEL_ID)?,
+                name: raw::string_val_parser(&mut e, CHANNEL_NAME)?,
             })
         })
         .collect::<Result<Vec<_>>>()
