@@ -587,11 +587,8 @@ fn get_online_clients(conn: &mut Connection) -> Result<HashSet<TsClient>> {
     let clients = res
         .into_iter()
         .filter(|e| {
-            e.get(CLIENT_TYPE).map_or(false, |v| {
-                v.as_ref().map_or(false, |v| v == CLIENT_TYPE_NORMAL)
-            }) || e
-                .get(CLIENT_CONN_ID)
-                .map_or(false, |v| v.as_ref().map_or(false, |v| *v == clid_str))
+            e.get(CLIENT_TYPE).and_then(Option::as_deref) == Some(CLIENT_TYPE_NORMAL) &&
+            e.get(CLIENT_CONN_ID).and_then(Option::as_deref) != Some(&clid_str)
         })
         .map(|mut e| {
             Ok(TsClient {
