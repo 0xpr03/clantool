@@ -22,10 +22,10 @@ quick-error = "1"
 clap = "2"
 sendmail = { git = "https://github.com/0xpr03/rust-sendmail", rev = "f0463869b55b3309d9c82e1b0c86ddad58eb98ef" }
 regex = "1"
-mysql = "18"
+mysql = "20"
 timer = "0.2"
 csv = "1"
-signal-hook = "0.1"
+signal-hook = "0.3"
 
 [dependencies.reqwest]
 version = "0.10"
@@ -36,4 +36,4 @@ features = ["backtrace"]
 version ="0.3"
 
 [dev-dependencies]
-rand = "0.7"
+rand = "0.8"

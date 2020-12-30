@@ -440,9 +440,9 @@ fn run_daemon(pool: Pool, config: Config, timer: &timer::Timer) -> Result<()> {
     let _guard_ts = ts::start_daemon(pool, config)?;
 
     let term = Arc::new(AtomicBool::new(false));
-    signal_hook::flag::register(signal_hook::SIGTERM, Arc::clone(&term))?;
-    signal_hook::flag::register(signal_hook::SIGINT, Arc::clone(&term))?;
-    signal_hook::flag::register(signal_hook::SIGQUIT, Arc::clone(&term))?;
+    signal_hook::flag::register(signal_hook::consts::SIGTERM, Arc::clone(&term))?;
+    signal_hook::flag::register(signal_hook::consts::SIGINT, Arc::clone(&term))?;
+    signal_hook::flag::register(signal_hook::consts::SIGQUIT, Arc::clone(&term))?;
     while !term.load(Ordering::Relaxed) {
         std::thread::sleep(std::time::Duration::from_millis(1000));
     }
