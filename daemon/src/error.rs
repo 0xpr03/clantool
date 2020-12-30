@@ -29,104 +29,85 @@ quick_error! {
     pub enum Error {
         Toml(err: toml::de::Error) {
             from()
-            description("toml error")
             display("toml error: {}",err)
-            cause(err)
+            source(err)
         }
         Io(err: io::Error) {
             from()
-            description("io error")
             display("I/O error: {}", err)
-            cause(err)
+            source(err)
         }
         Http(err: reqwest::Error) {
             from()
-            description("http error")
             display("http error: {}",err)
-            cause(err)
+            source(err)
         }
         Json(err: json::Error) {
             from()
-            description("json error")
             display("json error: {}",err)
-            cause(err)
+            source(err)
         }
         Parser(descr: String) {
-            description(descr)
             display("Error: {}",descr)
         }
         Regex(err: regex::Error) {
             from()
-            description("regex error")
             display("regex error: {}",err)
-            cause(err)
+            source(err)
         }
         IntParseError(err: std::num::ParseIntError) {
             from()
-            description("int parse error")
             display("parse error: {}",err)
-            cause(err)
+            source(err)
         }
         DateParseError(err: chrono::ParseError) {
             from()
-            description(err.description())
             display("parse error: {}",err)
-            cause(err)
+            source(err)
         }
         Mariadb(err: mysql::Error) {
             from()
-            description("mariadb error")
             display("mariadb error: {}",err)
-            cause(err)
+            source(err)
         }
         RowParse(err: mysql::FromRowError) {
             from()
-            description("row parse error")
             display("RowParse: {}",err)
-            cause(err)
+            source(err)
         }
         ValueParse(err: mysql::FromValueError) {
             from()
-            description("row value parse error")
             display("ValueParse: {}",err)
-            cause(err)
+            source(err)
         }
         Log(err: log4rs::Error) {
             from()
-            description("log4rs error")
             display("log4rs error: {}",err)
-            cause(err)
+            source(err)
         }
         NoValue(descr: &'static str) {
-            description(descr)
             display("no value {}",descr)
         }
         CSV(err: csv::Error) {
             from()
-            description("csv error")
             display("csv error: {}",err)
-            cause(err)
+            source(err)
         }
         InvalidDBSetup(descr: String) {
-            description(descr)
             display("Error {}", descr)
         }
         Other(descr: &'static str) {
-            description(descr)
             display("Error {}", descr)
         }
         TSError(err: ts3_query::Ts3Error) {
             from()
             display("ts3 error: {}",err)
-            description(err.description())
-            cause(err)
+            source(err)
         }
         MissingKey(key: &'static str) {
-            description("Required settings key not found in db")
             display("Key {} not found in db!",key)
         }
         TsMissingValue(value: &'static str) {
-            description("Missing value in ts3-server response")
             display("Missing value for {} in ts3-server response",value)
         }
         /// Expected at least ourself, found 0 clients online
