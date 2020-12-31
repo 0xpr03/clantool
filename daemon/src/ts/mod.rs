@@ -92,6 +92,8 @@ struct AfkConfig {
     afk_time_ms: i64,
     afk_channel: TsChannelID,
     afk_ignore_group: TsGroupID,
+    // channels to ignore, automagically includes afk_channel
+    ignore_channel: Vec<TsGroupID>,
 }
 
 impl TsStatCtrl {
@@ -204,7 +206,9 @@ impl TsStatCtrl {
             None
         };
 
-        let mut afk_client = Vec::new();
+        let mut afk_clients = Vec::new();
+
+        let own_id = self.conn.conn_id()?;
 
         for client in data {
             let id = client.cldbid;
@@ -234,8 +238,12 @@ impl TsStatCtrl {
             }
 
             if let Some(cfg) = &self.afk_config {
-                if cfg.afk_channel != client.channel && client.afk_idle(cfg.afk_time_ms) {
-                    afk_client.push(client.conid);
+                if !cfg.ignore_channel.contains(&client.channel)
+                    && client.afk_idle(cfg.afk_time_ms)
+                    && client.conid != own_id
+                    && !client.groups.contains(&cfg.afk_ignore_group)
+                {
+                    afk_clients.push(client.conid);
                 }
             }
 
@@ -247,7 +255,10 @@ impl TsStatCtrl {
         // excludes disconnected clients
         self.last_channel = new_channel;
 
-        self.move_afks(afk_client)?;
+        if !afk_clients.is_empty() {
+            dbg!(&afk_clients);
+            self.move_afks(afk_clients)?;
+        }
 
         if new_guest && !has_lt {
             self.poke_clients(poke_clients)?;
@@ -392,15 +403,25 @@ fn read_afk_config(conn: &mut PooledConn) -> Result<Option<AfkConfig>> {
     let afk_ignore_group = db::read_setting(conn, crate::TS3_AFK_IGNORE_GROUP_KEY)?;
     let afk_time_ms = db::read_setting(conn, crate::TS3_AFK_TIME_KEY)?;
     let afk_channel = db::read_setting(conn, crate::TS3_AFK_MOVE_CHANNEL_KEY)?;
+    let ignore_channel = db::read_list_setting(conn, crate::TS3_AFK_IGNORE_CHANNEL_KEY)?;
 
     Ok(
-        if let (Some(afk_ignore_group), Some(afk_time_ms), Some(afk_channel)) =
-            (afk_ignore_group, afk_time_ms, afk_channel)
+        if let (
+            Some(afk_ignore_group),
+            Some(afk_time_ms),
+            Some(afk_channel),
+            Some(mut ignore_channel),
+        ) = (afk_ignore_group, afk_time_ms, afk_channel, ignore_channel)
         {
+            if !ignore_channel.contains(&afk_channel) {
+                ignore_channel.push(afk_channel);
+            }
+
             Some(AfkConfig {
                 afk_time_ms,
                 afk_channel,
                 afk_ignore_group,
+                ignore_channel,
             })
         } else {
             None
@@ -517,7 +538,20 @@ pub fn print_poke_config(conn: &mut PooledConn, config: &Config) -> Result<Strin
     })
 }
 
-// use try {} when #31436 is stable
+/// Print AfkConfig, used by printconfig subcommand
+pub fn print_afk_move_config(conn: &mut PooledConn, config: &Config) -> Result<String> {
+    Ok(if is_ts3_afk_move_enabled(conn, config) {
+        let cfg = read_afk_config(conn)?;
+        match cfg {
+            Some(v) => format!("AFK-Move enabled: {:?}", v),
+            None => "AFK-Move enabled but missing fields!".to_string(),
+        }
+    } else {
+        String::from("AFK-Move disabled")
+    })
+}
+
+// use try {} instead of "inner" function when #31436 is stable
 fn find_unknown_inner(
     group_ids: &[TsGroupID],
     conn: &mut PooledConn,
@@ -645,11 +679,11 @@ mod tests {
     fn perform_get_online_clients() {
         let ts_cfg = TSConfig {
             ip: option_env!("ts_ip").unwrap_or("localhost").to_string(),
-            port: option_env!("ts_port").unwrap_or("11001").parse().unwrap(),
+            port: option_env!("ts_port").unwrap_or("10011").parse().unwrap(),
             user: option_env!("ts_user").unwrap_or("serveradmin").to_string(),
             password: option_env!("ts_pw").unwrap_or("1234").to_string(),
             server_port: option_env!("ts_port_server")
-                .unwrap_or("6678")
+                .unwrap_or("9987")
                 .parse()
                 .unwrap(),
             unknown_id_check_enabled: true,

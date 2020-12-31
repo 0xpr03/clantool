@@ -85,6 +85,7 @@ const TS3_GUEST_POKE_MSG: &str = "ts3_guest_poke_msg";
 const TS3_AFK_MOVE_ENABLED_KEY: &str = "ts3_afk_move_enable";
 const TS3_AFK_IGNORE_GROUP_KEY: &str = "ts3_afk_ignore_group";
 const TS3_AFK_MOVE_CHANNEL_KEY: &str = "ts3_afk_move_channel";
+const TS3_AFK_IGNORE_CHANNEL_KEY: &str = "ts3_afk_ignore_channel";
 /// Time in ms
 const TS3_AFK_TIME_KEY: &str = "ts3_afk_time";
 
@@ -145,6 +146,10 @@ fn main() {
             info!(
                 "{}",
                 ts::print_poke_config(&mut conn, &local_config).unwrap()
+            );
+            info!(
+                "{}",
+                ts::print_afk_move_config(&mut conn, &local_config).unwrap()
             );
             info!(
                 "TS3 unknown IDs check: {}",
