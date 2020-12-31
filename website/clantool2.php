@@ -81,6 +81,12 @@ define('KEY_TS3_GUEST_CHANNEL','ts3_guest_channel');
 
 define('KEY_FETCH_MISSING_NAMES_ENABLE','auto_fetch_names');
 
+define('KEY_TS3_AFK_MOVE_ENABLED','ts3_afk_move_enable');
+define('KEY_TS3_AFK_IGNORE_GROUP','ts3_afk_ignore_group');
+define('KEY_TS3_AFK_MOVE_CHANNEL','ts3_afk_move_channel');
+define('KEY_TS3_AFK_IGNORE_CHANNELS','ts3_afk_ignore_channel');
+define('KEY_TS3_AFK_TIME','ts3_afk_time');
+
 function getContent() {
     require 'includes/clantool.view.php';
     getCTTemplate();

@@ -83,6 +83,38 @@
             </div>
         </div>
         <div class="form-group">
+            <label for="AFK_MOVE_ENABLE" class="control-label col-xs-2">Move AFK people in TS</label>
+            <div class="col-xs-10">
+                <div class="checkbox">
+                    <label><input type="checkbox" name="AFK_MOVE_ENABLE" id="AFK_MOVE_ENABLE" checked="checked"> AFK Move Enabled</label>
+                </div>
+            </div>
+        </div>
+        <div class="form-group">
+            <label for="AFK_MOVE_IGNORE_CHANNELS" class="control-label col-xs-2">AFK-Move TS3 Channels to ignore</label>
+            <div class="col-xs-10">
+                <input type="text" name="AFK_MOVE_IGNORE_CHANNELS" required="" autocomplete="on" class="form-control" id="AFK_MOVE_IGNORE_CHANNELS" placeholder="Channels to ignore on AFK move">
+            </div>
+        </div>
+        <div class="form-group">
+            <label for="AFK_MOVE_CHANNEL" class="control-label col-xs-2">AFK-Move channel (afk channel)</label>
+            <div class="col-xs-10">
+                <input type="text" name="AFK_MOVE_CHANNEL" required="" autocomplete="on" class="form-control" id="AFK_MOVE_CHANNEL" placeholder="AFK Channel">
+            </div>
+        </div>
+        <div class="form-group">
+            <label for="AFK_MOVE_TIME" class="control-label col-xs-2">AFK-Move Time in ms</label>
+            <div class="col-xs-10">
+                <input type="text" name="AFK_MOVE_TIME" required="" autocomplete="on" class="form-control" id="AFK_MOVE_TIME" placeholder="Time in ms when people are AFK">
+            </div>
+        </div>
+        <div class="form-group">
+            <label for="AFK_IGNORE_GROUP" class="control-label col-xs-2">AFK-Move ignore group</label>
+            <div class="col-xs-10">
+                <input type="text" name="AFK_IGNORE_GROUP" required="" autocomplete="on" class="form-control" id="AFK_IGNORE_GROUP" placeholder="Group to ignore on AFK moves">
+            </div>
+        </div>
+        <div class="form-group">
             <div class="col-xs-offset-2 col-xs-10">
                 <button type="submit" class="btn btn-warning" id="submitSettings"><i class="fas fa-save"></i> Save</button>
             </div>
@@ -285,6 +317,11 @@ $( document ).ready(function() {
                 $('#GUEST_CHANNEL').val(data['GUEST_CHANNEL']);
                 
                 $('#FETCH_NAMES_ENABLE').prop('checked',data['FETCH_MISSING_NAMES_ENABLE']);
+                $('#AFK_MOVE_ENABLE').prop('checked',data['AFK_MOVE_ENABLE']);
+                $('#AFK_MOVE_IGNORE_CHANNELS').val(data['AFK_MOVE_IGNORE_CHANNELS']);
+                $('#AFK_MOVE_CHANNEL').val(data['AFK_MOVE_CHANNEL']);
+                $('#AFK_MOVE_TIME').val(data['AFK_MOVE_TIME']);
+                $('#AFK_IGNORE_GROUP').val(data['AFK_IGNORE_GROUP']);
             }
             loadingDiv.hide();
         }).fail(function(data){

@@ -403,7 +403,7 @@ fn read_afk_config(conn: &mut PooledConn) -> Result<Option<AfkConfig>> {
     let afk_ignore_group = db::read_setting(conn, crate::TS3_AFK_IGNORE_GROUP_KEY)?;
     let afk_time_ms = db::read_setting(conn, crate::TS3_AFK_TIME_KEY)?;
     let afk_channel = db::read_setting(conn, crate::TS3_AFK_MOVE_CHANNEL_KEY)?;
-    let ignore_channel = db::read_list_setting(conn, crate::TS3_AFK_IGNORE_CHANNEL_KEY)?;
+    let ignore_channel = db::read_list_setting(conn, crate::TS3_AFK_IGNORE_CHANNELS_KEY)?;
 
     Ok(
         if let (

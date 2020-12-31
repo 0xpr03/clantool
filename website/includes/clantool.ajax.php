@@ -27,6 +27,12 @@ switch($_REQUEST['ajaxCont']){
                     'GUEST_GROUP' => $clanDB->getSetting(KEY_TS3_GUEST_GROUP),
                     'GUEST_POKE_MSG' => $clanDB->getSetting(KEY_TS3_GUEST_POKE_MSG),
                     'GUEST_CHANNEL' => $clanDB->getSetting(KEY_TS3_GUEST_CHANNEL),
+
+                    'AFK_MOVE_ENABLE' => $clanDB->getSetting(KEY_TS3_AFK_MOVE_ENABLED),
+                    'AFK_IGNORE_GROUP' => $clanDB->getSetting(KEY_TS3_AFK_IGNORE_GROUP),
+                    'AFK_MOVE_CHANNEL' => $clanDB->getSetting(KEY_TS3_AFK_MOVE_CHANNEL),
+                    'AFK_MOVE_IGNORE_CHANNELS' => $clanDB->getSetting(KEY_TS3_AFK_IGNORE_CHANNELS),
+                    'AFK_MOVE_TIME' => $clanDB->getSetting(KEY_TS3_AFK_TIME),
                     
                     'FETCH_MISSING_NAMES_ENABLE' => $clanDB->getSetting(KEY_FETCH_MISSING_NAMES_ENABLE),
                 )
@@ -44,6 +50,12 @@ switch($_REQUEST['ajaxCont']){
             $clanDB->setSetting(KEY_TS3_GUEST_GROUP,$_POST['GUEST_GROUP']);
             $clanDB->setSetting(KEY_TS3_GUEST_POKE_MSG,$_POST['GUEST_POKE_MSG']);
             $clanDB->setSetting(KEY_TS3_GUEST_CHANNEL,$_POST['GUEST_CHANNEL']);
+
+            $clanDB->setSetting(KEY_TS3_AFK_MOVE_ENABLED,isset($_POST['AFK_MOVE_ENABLE']));
+            $clanDB->setSetting(KEY_TS3_AFK_IGNORE_GROUP,$_POST['AFK_IGNORE_GROUP']);
+            $clanDB->setSetting(KEY_TS3_AFK_MOVE_CHANNEL,$_POST['AFK_MOVE_CHANNEL']);
+            $clanDB->setSetting(KEY_TS3_AFK_IGNORE_CHANNELS,$_POST['AFK_MOVE_IGNORE_CHANNELS']);
+            $clanDB->setSetting(KEY_TS3_AFK_TIME,$_POST['AFK_MOVE_TIME']);
             
             $clanDB->setSetting(KEY_FETCH_MISSING_NAMES_ENABLE,isset($_POST['FETCH_NAMES_ENABLE']));
             
@@ -325,6 +337,11 @@ switch($_REQUEST['ajaxCont']){
                 'tsdataold' => $clanDB->getTSOldDataCount(),
                 'missing' => $clanDB->getMissingEntriesCount(),
                 'log' => $clanDB->getLogEntryCount(),
+                'tsdatastats' => $clanDB->getTSStatsDataCount(),
+                'tsidentignored' => $clanDB->getTSIgnoreCount(),
+                'tschannelcount' => $clanDB->getTSChannelCount(),
+                'tsidentities' => $clanDB->getTSIdentityCount(),
+                'tsidentitiesrelated' => $clanDB->getTSRelationsCount()
             );
             echo json_encode($res);
             break;
@@ -589,11 +606,16 @@ switch($_REQUEST['ajaxCont']){
                 // now 0 out missing values, not all channels always have values
                 foreach($average as $group => $_unused) {
                     for ($j = 0; $j < $i; $j++) {
+                        //echo json_encode($group)."</group>\n";
+                        //echo json_encode($j)."</j>\n";
                         if (!isset($average[$group]['data'][$j])) {
+                            //echo "not set\n";
                             $average[$group]['data'][$j] = $zero;
                         }
                     }
                 }
+                //echo json_encode($average);
+                //echo "</av end>\n";
             }
             $time_elapsed_secs = microtime(true) - $start_time;
             $data['elapsed'] = $time_elapsed_secs / 1000;
