@@ -314,7 +314,7 @@
             },*/
             yaxis: {
                 type: 'date',
-                tickformat: '%H:%M:%S',
+                tickformat: '%0H:%0M:%0S',
                 side: 'right'
             },
             yaxis2: {

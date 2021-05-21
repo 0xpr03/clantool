@@ -1874,6 +1874,51 @@ class clanDB extends dbException {
     }
     
     /**
+     * Get amount of ts statistics data in DB_TS3_STATS
+     * @throws dbException
+     * @return integer/null
+     */
+    public function getTSStatsDataCount() {
+        return $this->getCountByKey('timestamp',DB_TS3_STATS);
+    }
+    
+    /**
+     * Get amount of ts identities ignored
+     * @throws dbException
+     * @return integer/null
+     */
+    public function getTSIgnoreCount() {
+        return $this->getCountByKey('client_id','ignore_ts_ids');
+    }
+    
+    /**
+     * Get amount of known ts channels
+     * @throws dbException
+     * @return integer/null
+     */
+    public function getTSChannelCount() {
+        return $this->getCountByKey('channel_id','ts_channels');
+    }
+    
+    /**
+     * Get amount of known ts identities
+     * @throws dbException
+     * @return integer/null
+     */
+    public function getTSIdentityCount() {
+        return $this->getCountByKey('client_id','ts_names');
+    }
+    
+    /**
+     * Get amount of known ts identities
+     * @throws dbException
+     * @return integer/null
+     */
+    public function getTSRelationsCount() {
+        return $this->getCountByKey('client_id','ts_relation');
+    }
+    
+    /**
      * Get amount of ts data in DB_TS3_DATA
      * @throws dbException
      * @return integer/null

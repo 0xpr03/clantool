@@ -44,22 +44,27 @@ $( document ).ready(function() {
         }
         }).done(function(data){
             var sw = {value: ""}; // pointer via object value
-            createCol(sw,'IDs',data.ids);
+            createCol(sw,'Account IDs',data.ids);
             createCol(sw,'Account Names',data.names);
             createCol(sw,'Member (real) Names',data.realnames);
             createCol(sw,'Exp & CP entries',data.rows);
             createCol(sw,'AFKs',data.afks);
-            createCol(sw,'Cautions',data.cautions);
-            createCol(sw,'Unlinked ts IDs',data.unlinkedTS);
-            createCol(sw,'TS Names',data.tsIDs);
-            createCol(sw,'TS Data',data.tsdata);
-            createCol(sw,'TS Data Old Schema',data.tsdataold);
+            createCol(sw,'Caution Entries',data.cautions);
             createCol(sw,'Joins',data.joins);
             createCol(sw,'Leaves',data.leaves);
             createCol(sw,'Leaves with set cause',data.causes);
             createCol(sw,'2nd Accounts',data.secondAccs);
             createCol(sw,'Amount days without data',data.missing);
             createCol(sw,'Log entries',data.log);
+            createCol(sw,'TS Names',data.tsIDs);
+            createCol(sw,'TS Activity Data',data.tsdata);
+            createCol(sw,'TS Activity Data Old Schema',data.tsdataold);
+            createCol(sw,'TS Statistics Data',data.tsdatastats);
+            createCol(sw,'TS Identities',data.tsidentities);
+            createCol(sw,'TS Identities Related',data.tsidentitiesrelated);
+            createCol(sw,'TS Identities Unlinked',data.unlinkedTS);
+            createCol(sw,'TS Identities Ignored',data.tsidentignored);
+            createCol(sw,'TS Channels',data.tschannelcount);
             $('#dbstats tbody').html(sw.value);
             $('#erromsg').hide();
             updateTableTool();
@@ -70,6 +75,6 @@ $( document ).ready(function() {
 });
 
 function createCol(sw,key,val) {
-    sw.value += '<tr><td>'+key+'</td><td>'+val+'</td></tr>';
+    sw.value += '<tr><td>'+escapeHtml(key)+'</td><td>'+escapeHtml(val+'')+'</td></tr>';
 }
 </script> 
