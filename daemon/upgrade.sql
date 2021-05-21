@@ -125,4 +125,4 @@ CREATE TABLE `ts_channel_groups` (
  * adding full ts statistics
  */
 
-ALTER TABLE `member` ALTER COLUMN `exp` BIGINT;
+ALTER TABLE `member` MODIFY COLUMN `exp` bigint NOT NULL;
