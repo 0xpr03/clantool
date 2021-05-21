@@ -171,7 +171,7 @@ class clanDB extends dbException {
         caution.`from` IS NOT NULL as `is_caution`,
         trial.`from` IS NOT NULL as `is_trial`,
         names.name, m1.id, 
-        (CAST(m1.exp as  signed)-CAST(m2.exp as signed)) AS `EXP-Done`, 
+        (m1.exp-m2.exp) AS `EXP-Done`, 
         (`m1`.`cp`-`m2`.`cp`) AS `CP-Done`, DATEDIFF(m1.date,m2.date) AS `days`,
         cpdiff.`cp_by_exp`
         FROM member as m2 
@@ -266,7 +266,7 @@ class clanDB extends dbException {
         trial.`from` IS NOT NULL as `is_trial`,
         names.name, m1.id, m2.date as `Date1`, m1.date as  `Date2`,
         m2.exp as `Exp1`,m1.exp as `Exp2`, m2.cp as `CP1`, m1.cp as `CP2`, 
-        (CAST(m1.exp as  signed)-CAST(m2.exp as signed)) AS `EXP-Done`, 
+        (m1.exp as-m2.exp) AS `EXP-Done`, 
         (`m1`.`cp`-`m2`.`cp`) AS `CP-Done`, DATEDIFF(m1.date,m2.date) AS `days`,
         cpdiff.`cp_by_exp`
         FROM member as m2 
