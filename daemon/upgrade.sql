@@ -119,3 +119,10 @@ CREATE TABLE `ts_channel_groups` (
     ON DELETE CASCADE
     ON UPDATE RESTRICT
 ) ENGINE=InnoDB;
+
+/*
+ * Execute on upgrade from 0.5.1
+ * adding full ts statistics
+ */
+
+ALTER TABLE `member` ALTER COLUMN `exp` BIGINT;

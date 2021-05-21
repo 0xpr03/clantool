@@ -20,7 +20,7 @@ CREATE TABLE `clan` (
 CREATE TABLE `member` (
  `id` int NOT NULL,
  `date` datetime NOT NULL,
- `exp` int unsigned NOT NULL,
+ `exp` BIGINT NOT NULL,
  `cp` int NOT NULL,
  PRIMARY KEY (`id`,`date`) USING BTREE,
  KEY `id` (`id`),

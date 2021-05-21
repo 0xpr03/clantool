@@ -126,4 +126,11 @@ mod test {
         assert!(b_ajax.contains("Dr.Alptraum"));
         println!("{}", b_ajax);
     }
+
+    #[test]
+    #[ignore]
+    fn get_ajax_too_big() {
+        let b_ajax = get("https://crossfire.z8games.com/rest/clanmembers.json?clanID=68910&endrow=40&page=4&perPage=10&rankType=user&startrow=31", HeaderType::Ajax).unwrap();
+        println!("{}", b_ajax);
+    }
 }

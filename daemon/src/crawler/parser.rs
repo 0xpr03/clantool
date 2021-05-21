@@ -76,7 +76,7 @@ fn parse_member(input: &mut JsonValue) -> Result<Option<Member>, Error> {
         Ok(Some(Member {
             name: get_string_value(input, "name")?,
             id: get_i32_value(input, "USN")?,
-            exp: get_i32_value(input, "xp_point")?,
+            exp: get_i64_value(input, "xp_point")?,
             contribution: get_i32_value(input, "contribution")?,
         }))
     } else {
@@ -146,6 +146,14 @@ fn get_i32_value(input: &mut JsonValue, key: &str) -> Result<i32, Error> {
     let val = get_value(input, key)?;
     val.as_i32()
         .ok_or_else(|| Error::Parser(format!("Value for {} is no i32", key)))
+}
+
+/// Helper function to get a i64 from a provided json object
+/// Returns an error if the key is non existent or the value is no i32
+fn get_i64_value(input: &mut JsonValue, key: &str) -> Result<i64, Error> {
+    let val = get_value(input, key)?;
+    val.as_i64()
+        .ok_or_else(|| Error::Parser(format!("Value for {} is no i64", key)))
 }
 
 /// Helper function to get a u32 from a provided json object
@@ -259,5 +267,16 @@ mod test {
         };
         let parsed_clan = parse_clan(input).unwrap();
         assert_eq!(parsed_clan, clan);
+    }
+
+    #[test]
+    fn check_member_i64_exp_test() {
+        let input = include_str!("../../tests/test_json_member_i64.json");
+        dbg!(json::parse(input).unwrap());
+        parse_all_member(input).unwrap();
+        // let mut valid_member = parsed["members"][0].take();
+        // let mut invalid_member = parsed["members"][1].take();
+        // assert_eq!(true, check_is_member(&mut valid_member, KEY_MEMBERSHIP));
+        // assert_eq!(false, check_is_member(&mut invalid_member, KEY_MEMBERSHIP));
     }
 }

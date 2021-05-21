@@ -746,7 +746,7 @@ mod test {
             .collect();
         insert_members(&mut conn, &members, &time).unwrap();
         let members_2: Vec<Member> = (0..5)
-            .map(|x| create_member(&format!("tester {}", x), x, 500 * x, 1 * x))
+            .map(|x| create_member(&format!("tester {}", x), x, (500 * x).into(), 1 * x))
             .collect();
         insert_members(&mut conn, &members_2, &time).unwrap();
     }

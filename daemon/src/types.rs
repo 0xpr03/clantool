@@ -40,7 +40,7 @@ pub struct Clan {
 pub struct Member {
     pub name: String,
     pub id: AccountID,
-    pub exp: i32,
+    pub exp: i64,
     pub contribution: i32,
 }
 

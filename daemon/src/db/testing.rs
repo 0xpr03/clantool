@@ -151,7 +151,7 @@ pub fn setup_db() -> (PooledConn, CleanupGuard) {
 }
 
 /// Create member struct
-pub fn create_member(name: &str, id: i32, exp: i32, contribution: i32) -> Member {
+pub fn create_member(name: &str, id: i32, exp: i64, contribution: i32) -> Member {
     Member {
         name: String::from(name),
         id,
