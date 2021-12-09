@@ -264,13 +264,15 @@
             },*/
             yaxis: {
                 type: 'date',
-                tickformat: '%H:%M:%S'
+                tickformat: '%H:%M:%S',
+                hoverformat: '%0H:%0M:%0S',
             },
             barmode: 'stack',
         };
         $('#chart-ts-detailed').show();
         Plotly.newPlot('chart-ts-detailed',datasets,layout,{responsive: true, modeBarButtonsToRemove: ['sendDataToCloud', 'autoScale2d', 'resetScale2d'] ,displaylogo: false, showTips:false})
     }
+    // currently used chart draw function for all new/current data
     function drawTSChart(data) {
         
         const labelDateFormat = "DD.MM";
@@ -315,6 +317,7 @@
             yaxis: {
                 type: 'date',
                 tickformat: '%0H:%0M:%0S',
+                hoverformat: '%Hh%Mm%Ss',
                 side: 'right'
             },
             yaxis2: {
@@ -447,7 +450,7 @@
                                 return data.datasets[index].label + ' ' +
                                 moment("2015-01-01").startOf('day')
                                 .seconds(tooltipItem.yLabel)
-                                .format('H:mm:ss');
+                                .format('HH:mm:ss');
                             }
                         },
                     },
@@ -476,7 +479,7 @@
                             callback: function(value, index, values) {
                                 return moment("2015-01-01").startOf('day')
                                 .seconds(value)
-                                .format('H:mm:ss');;
+                                .format('HH:mm:ss');;
                             }
                         },
                         fill: true,
@@ -538,4 +541,9 @@
     <div id="chart-ts" style="display: none;" width="auto" height="auto"></div>
     <div id="chart-ts-detailed" style="display: none;" width="auto" height="auto"></div>
     <canvas id="chart-ts-old" style="display: none;" width="auto" height="auto"></canvas>
+    <div>
+        <table>
+            
+        </table>
+    </div>
 </div>
