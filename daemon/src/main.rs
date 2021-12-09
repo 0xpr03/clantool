@@ -235,7 +235,7 @@ fn main() {
             if let Err(e) = run_daemon(pool, config, &timer) {
                 let fmt = format!("Error starting daemon {}", e);
                 error!("{}", &fmt);
-                panic!(fmt);
+                panic!("{}", fmt);
             }
         }
     }
@@ -337,7 +337,7 @@ fn init_db(config: &Config, retry_timeout: Dur) -> Pool {
         start.elapsed().as_secs()
     );
     error!("{}", msg);
-    panic!(msg);
+    panic!("{}", msg);
 }
 
 /// validate path input

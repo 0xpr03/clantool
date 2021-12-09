@@ -26,7 +26,7 @@ use crate::Member;
 const REGEX_WINS: &str = r#"<div class="match_details">(\d+)<br><span>Wins</span>"#;
 const REGEX_LOSSES: &str = r#"<div class="match_details">(\d+)<br><span>Losses</span>"#;
 const REGEX_DRAWS: &str = r#"<div class="match_details">(\d+)<br><span>Draws</span>"#;
-const REGEX_MEMBERS: &str = r#"<div>(\d+).?clan.members"#;
+const REGEX_MEMBERS: &str = r#"<div>(\d+).?Clan members"#;
 
 const KEY_MEMBERSHIP: &str = "position_title";
 
@@ -260,9 +260,9 @@ mod test {
     fn parse_clan_test() {
         let input = include_str!("../../tests/test_http_clan.txt");
         let clan = Clan {
-            members: 41,
-            wins: 11495,
-            losses: 6872,
+            members: 35,
+            wins: 12324,
+            losses: 7195,
             draws: 449,
         };
         let parsed_clan = parse_clan(input).unwrap();
