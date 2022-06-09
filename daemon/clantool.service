@@ -1,0 +1,49 @@
+[Unit]
+Description=Clantool Backend
+After=network-online.target mysqld.service
+Wants=mysqld.service network-online.target
+Documentation=https://github.com/0xpr03/clantool
+
+[Service]
+Type=simple
+ExecStart=/home/clantool/clantool
+WorkingDirectory=/home/clantool
+Nice=0
+Restart=on-failure
+User=clantool
+Group=clantool
+
+# specific stuff to tune
+ReadOnlyPaths=/
+InaccessiblePaths=-/lost+found /root
+ReadWritePaths=/home/clantool/log
+NoExecPaths=/
+ExecPaths=/home/clantool/clantool /usr/lib /usr/lib64
+#workaround, old kernel
+ProtectHome=yes
+
+SystemCallFilter=@system-service
+
+# general stuff
+PrivateTmp=yes
+ProtectSystem=full
+ProtectDevices=yes
+NoNewPrivileges=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+ProtectProc=invisible
+RestrictSUIDSGID=true
+KeyringMode=private
+ProtectClock=true
+RestrictRealtime=true
+PrivateDevices=true
+ProtectHostname=true
+# set false if running VM stuff
+MemoryDenyWriteExecute=true
+# causes everything non root and User to be from nobody
+PrivateUsers=true
+
+[Install]
+WantedBy=multi-user.target
