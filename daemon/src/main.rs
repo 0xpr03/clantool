@@ -29,6 +29,8 @@ mod import;
 mod ts;
 mod types;
 
+use lettre::{SmtpClient, Transport};
+use lettre_email::EmailBuilder;
 pub use types::*;
 
 use crate::crawler::http::HeaderType;
@@ -42,8 +44,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::sleep;
 use std::time::{Duration as Dur, Instant};
-
-use sendmail::email;
 
 use chrono::naive::{NaiveDate, NaiveDateTime, NaiveTime};
 use chrono::offset::Local;
@@ -749,14 +749,22 @@ fn run_update(pool: &Pool, config: &Config, retry_time: NaiveTime) -> Option<Nai
 
 /// Send email, catch & log errors
 fn send_mail(config: &Config, subject: &str, message: &str) {
-    if let Err(e) = email::send_new::<Vec<&str>>(
-        &config.main.mail_from,
-        config.main.mail.iter().map(|v| &v[..]).collect(),
-        // Subject
-        subject,
-        // Body
-        message,
-    ) {
+    let mut email = EmailBuilder::new();
+    for addr in config.main.mail.iter() {
+        email = email.to(addr.as_str());
+    }
+    let email = email
+        .from(config.main.mail_from.as_str())
+        .subject(subject)
+        .text(message)
+        .build()
+        .unwrap();
+
+    // Open a local connection on port 25
+    let mut mailer = SmtpClient::new_unencrypted_localhost()
+        .unwrap().transport();
+    // Send the email
+    if let Err(e) = mailer.send(email.into()) {
         error!("Error at mail sending: {}", e);
     }
 }
@@ -794,11 +802,17 @@ fn run_update_member(pool: &Pool, config: &Config, time: &NaiveDateTime) -> Resu
     while members.len() < to_receive {
         site += 1;
         if site > config.main.clan_ajax_max_sites {
-            error!("Reaching site {}, aborting.", site);
+            error!("Reaching member site {}, config max is {} aborting.", site, config.main.clan_ajax_max_sites);
             return Err(Error::Other("Site over limit."));
         }
         let raw_members_json = crawler::http::get(&get_member_url(site, config), HeaderType::Ajax)?;
-        let (mut members_temp, t_total) = crawler::parser::parse_all_member(&raw_members_json)?;
+        let (mut members_temp, t_total) = match crawler::parser::parse_all_member(&raw_members_json) {
+            Err(e) => {
+                info!("Response: {}",raw_members_json);
+                return Err(e)
+            },
+            Ok(v) => v
+        };
         to_receive = t_total as usize;
         members.append(&mut members_temp);
         trace!("fetched site {}", site);
