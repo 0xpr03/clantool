@@ -69,6 +69,18 @@ class clanDB extends dbException {
         }
     }
     
+    function insertLog($message) {
+        if($query = $this->db->prepare (
+            'INSERT INTO `log` (`msg`,`date`) VALUES(?,CURRENT_TIMESTAMP)')) {
+            $query->bind_param('s',$message);
+            if(!$query->execute()){
+                throw new dbException($this->db->error);
+            }
+        } else {
+            throw new dbException ( $this->db->error );
+        }
+    }
+    
     /**
      * Load log entries in range
      * @param from
@@ -157,6 +169,41 @@ class clanDB extends dbException {
     }
     
     /**
+     * Get global notes for date range
+     * @param string $date1
+     * @param string $date2
+     * @throws dbException
+     */
+    public function getGlobalNoteForRange($date1,$date2) {
+        if ($query = $this->db->prepare ( 'SELECT `from`,`to`,`message` FROM `global_note` g
+        WHERE `from` < ? AND `to` >= ?')) {
+            $query->bind_param('ss',$date2,$date1);
+            if(!$query->execute()){
+                throw new dbException($this->db->error);
+            }
+            $result = $query->get_result ();
+            
+            if (! $result) {
+                throw new dbException ( $this->db->error, 500 );
+            }
+            
+            $resultset = array ();
+            while ( $row = $result->fetch_assoc () ) {
+                $resultset[] = array(
+                    'from' => $row['from'],
+                    'to' => $row['to'],
+                    'message' => $row['message']
+                );
+            }
+            $result->close();
+            
+            return $resultset;
+        } else {
+            throw new dbException ( $this->db->error );
+        }
+    }
+    
+    /**
      * Get weekly difference table
      * @param string $date1
      * @param string $date2
@@ -198,20 +245,14 @@ class clanDB extends dbException {
         ) cpdiff ON cpdiff.id = m2.id
         LEFT JOIN `member_addition` AS ma ON m2.id = ma.id
         LEFT JOIN `afk` AS afk ON m2.id = afk.id AND /* from has date -1 day because of overlapping */
-            ((afk.`from` BETWEEN "'.$date1.'" AND DATE_ADD("'.$date2.'", INTERVAL -1 DAY) ) OR
-            (afk.`to` BETWEEN "'.$date1.'" AND "'.$date2.'" ) OR
-            (afk.`from` <= "'.$date1.'" AND afk.`to` >= "'.$date2.'"))
+            afk.`from` < "'.$date2.'" AND afk.`to` >= "'.$date1.'"
         LEFT JOIN `caution` AS caution ON m2.id = caution.id AND 
-            ((caution.`from` BETWEEN "'.$date1.'" AND DATE_ADD("'.$date2.'", INTERVAL -1 DAY) ) OR
-            (caution.`to` BETWEEN "'.$date1.'" AND "'.$date2.'" ) OR
-            (caution.`from` <= "'.$date1.'" AND caution.`to` >= "'.$date2.'"))
+            caution.`from` < "'.$date2.'" AND caution.`to` >= "'.$date1.'"
         LEFT JOIN `member_trial` trial ON 
             trial.id = m2.id AND (
                 (trial.`to` IS NULL)
                 OR 
-                ((trial.`from` BETWEEN "'.$date1.'" AND DATE_ADD("'.$date2.'", INTERVAL -1 DAY) ) OR
-                (trial.`to` BETWEEN "'.$date1.'" AND "'.$date2.'" ) OR
-                (trial.`from` <= "'.$date1.'" AND trial.`to` >= "'.$date2.'"))
+                (trial.`from` < "'.$date2.'" AND trial.`to` >= "'.$date1.'")
             )
         WHERE m2.date LIKE "'.$date1.'%" OR ( m2.date >  "'.$date1.'%" AND m2.date < "'.$date2.'%" ) 
         GROUP BY `id` ORDER BY `cp_by_exp`,`CP-Done`, `EXP-Done`' )) { // Y-m-d G:i:s Y-m-d h:i:s
@@ -293,16 +334,12 @@ class clanDB extends dbException {
         ) cpdiff ON cpdiff.id = m2.id
         LEFT JOIN `member_addition` AS ma ON m2.id = ma.id
         LEFT JOIN `afk` AS afk ON m2.id = afk.id AND
-            ((afk.`from` BETWEEN "'.$date1.'" AND DATE_ADD("'.$date2.'", INTERVAL -1 DAY) ) OR
-            (afk.`to` BETWEEN "'.$date1.'" AND "'.$date2.'" ) OR
-            (afk.`from` <= "'.$date1.'" AND afk.`to` >= "'.$date2.'"))
+            afk.`from` < "'.$date2.'" AND afk.`to` >= "'.$date1.'"
         LEFT JOIN `member_trial` trial ON 
             trial.id = m2.id AND (
                 (trial.`to` IS NULL)
                 OR 
-                ((trial.`from` BETWEEN "'.$date1.'" AND DATE_ADD("'.$date2.'", INTERVAL -1 DAY) ) OR
-                (trial.`to` BETWEEN "'.$date1.'" AND "'.$date2.'" ) OR
-                (trial.`from` <= "'.$date1.'" AND trial.`to` >= "'.$date2.'"))
+                (trial.`from` < "'.$date2.'" AND trial.`to` >= "'.$date1.'")
             )
         WHERE m2.date LIKE "'.$date1.'%" OR ( m2.date >  "'.$date1.'%" AND m2.date < "'.$date2.'%" ) 
         GROUP BY `id` ORDER BY `cp_by_exp`,`CP-Done`, `EXP-Done`' )) { // Y-m-d G:i:s Y-m-d h:i:s
@@ -411,6 +448,8 @@ class clanDB extends dbException {
             $query->bind_param('isss',$id,$from,$to,$cause);
             if(!$query->execute()){
                 throw new dbException($this->db->error);
+            } else {
+                $this->insertLog('Add Caution acc '.$id.' '.$from.'-'.$to.' '.$cause);
             }
         } else {
             throw new dbException ( $this->db->error );
@@ -430,6 +469,8 @@ class clanDB extends dbException {
             $query->bind_param('is',$id,$from);
             if(!$query->execute()){
                 throw new dbException($this->db->error);
+            } else {
+                $this->insertLog('Delete Caution id '.$id.' from '.$from);
             }
         } else {
             throw new dbException ( $this->db->error );
@@ -543,6 +584,8 @@ class clanDB extends dbException {
             $query->bind_param('sssiss',$fromNew,$toNew,$cause,$id,$from,$to);
             if(!$query->execute()) {
                 throw new dbException($this->db->error);
+            } else {
+                $this->insertLog('Edit AFK account '.$id.' '.$from.'->'.$fromNew.'-'.$to.'->'.$toNew.' '.$cause);
             }
         } else {
             throw new dbException($this->db->error);
@@ -563,6 +606,8 @@ class clanDB extends dbException {
             $query->bind_param('isss',$id,$from,$to,$cause);
             if(!$query->execute()){
                 throw new dbException($this->db->error);
+            } else {
+                $this->insertLog('Insert AFK account '.$id.' '.$from.'-'.$to.' '.$cause);
             }
         } else {
             throw new dbException ( $this->db->error );
@@ -582,6 +627,8 @@ class clanDB extends dbException {
             $query->bind_param('iss',$id,$from,$to);
             if(!$query->execute()){
                 throw new dbException($this->db->error);
+            } else {
+                $this->insertLog('Delete AFK acc '.$id.' '.$from.'-'.$to);
             }
         } else {
             throw new dbException ( $this->db->error );
@@ -620,6 +667,8 @@ class clanDB extends dbException {
             $query->bind_param('i',$ts_client_id);
             if(!$query->execute()){
                 throw new dbException($this->db->error);
+            } else {
+                $this->insertLog('Add ignore_ts_ids client-id '.$ts_client_id);
             }
         } else {
             throw new dbException ( $this->db->error );
@@ -704,6 +753,8 @@ class clanDB extends dbException {
             $query->bind_param('ii',$id,$ts_client_id);
             if(!$query->execute()){
                 throw new dbException($this->db->error);
+            } else {
+                $this->insertLog('Delete TS-Relation acc '.$id.' ts-client '.$ts_client_id);
             }
         } else {
             throw new dbException ( $this->db->error );
@@ -795,6 +846,8 @@ class clanDB extends dbException {
             $query->bind_param('ii',$id,$secID);
             if(!$query->execute()){
                 throw new dbException($this->db->error);
+            } else {
+                $this->insertLog('Add SecondAccount id1 '.$id.' id2'.$secID);
             }
         } else {
             throw new dbException ( $this->db->error );
@@ -813,6 +866,8 @@ class clanDB extends dbException {
             $query->bind_param('ii',$id, $secID);
             if(!$query->execute()){
                 throw new dbException($this->db->error);
+            } else {
+                $this->insertLog('Delete SecondAcc id1 '.$id.' id2 '.$secID);
             }
         } else {
             throw new dbException ( $this->db->error );
@@ -869,6 +924,8 @@ class clanDB extends dbException {
             $query->bind_param('issi',$id,$name,$comment,$vip);
             if(!$query->execute()){
                 throw new dbException($this->db->error);
+            } else {
+                $this->insertLog('Change Member acc '.$id.' name '.$name.' comment '.$comment.' vip '.$vip);
             }
         } else {
             throw new dbException ( $this->db->error );
@@ -982,6 +1039,7 @@ class clanDB extends dbException {
             $query->bind_param('is',$id,$from);
             if(!$query->execute()){
                 if($query->sqlstate == ER_DUP_ENTRY ){
+                    $this->insertLog('Add membership acc '.$id.' '.$from);
                     return $this->getMembershipNr($id,$from);
                 }else{
                     throw new dbException($this->db->error .' '.$query->sqlstate.' '.$this->db->sqlstate);
@@ -1094,6 +1152,7 @@ class clanDB extends dbException {
                         throw new dbException($this->db->error);
                     } else {
                         $this->endTransaction();
+                        $this->insertLog('Delete Leave nr '.$nr);
                     }
                 } else {
                     throw new dbException ( $this->db->error );
@@ -1121,6 +1180,7 @@ class clanDB extends dbException {
                 throw new dbException($this->db->error);
             }else{
                 $this->setMembershipCause($nr,$isKick,$cause);
+                $this->insertLog('Change membership acc '.$id.' leave '.$date.' kick '.$isKick.' cause '.$cause);
             }
         } else {
             throw new dbException ( $this->db->error );
@@ -1148,6 +1208,7 @@ class clanDB extends dbException {
                         throw new dbException($this->db->error);
                     } else {
                         $this->endTransaction();
+                        $this->insertLog('Delete Membership nr '.$nr);
                     }
                 } else {
                     throw new dbException ( $this->db->error );
@@ -1171,6 +1232,8 @@ class clanDB extends dbException {
             $query->bind_param('ssi',$from,$to,$nr);
             if(!$query->execute()){
                 throw new dbException($this->db->error);
+            } else {
+                $this->insertLog('Change Membership nr '.$nr.' '.$from.'-'.$to);
             }
         } else {
             throw new dbException ( $this->db->error );
@@ -1190,6 +1253,8 @@ class clanDB extends dbException {
             $query->bind_param('iis',$nr,$isKick,$cause);
             if(!$query->execute()){
                 throw new dbException($this->db->error);
+            } else {
+                $this->insertLog('Add LeaveCause nr '.$nr.' kick '.$isKick.' '.$cause);
             }
         } else {
             throw new dbException ( $this->db->error );
@@ -1615,6 +1680,8 @@ class clanDB extends dbException {
             $query->bind_param('iss',$id,$start,$end);
             if(!$query->execute()){
                 throw new dbException($this->db->error);
+            } else {
+                $this->insertLog('Add trial acc '.$id.' '.$start.'-'.$end);
             }
         } else {
             throw new dbException ( $this->db->error );
@@ -1652,6 +1719,8 @@ class clanDB extends dbException {
             $query->bind_param('is',$id,$from);
             if(!$query->execute()){
                 throw new dbException($this->db->error);
+            } else {
+                $this->insertLog('Delete trial acc '.$id.' from '.$from);
             }
         } else {
             throw new dbException ( $this->db->error );
@@ -1925,6 +1994,15 @@ class clanDB extends dbException {
      */
     public function getTSDataCount() {
         return $this->getCountByKey('date','ts_activity');
+    }
+    
+    /**
+     * Get amount entries in global_note table
+     * @throws dbException
+     * @return integer/null
+     */
+    public function getGlobalNotesCount() {
+        return $this->getCountByKey('id','global_note');
     }
     
     /**
@@ -2290,6 +2368,7 @@ class clanDB extends dbException {
                 if ($id == 0) {
                     throw new dbException("Expected insertion ID, got none.");
                 }
+                $this->insertLog('Add Ts-Channel-Group gid '.$id.' '.$name);
                 return $id;
             }
         } else {
@@ -2308,6 +2387,8 @@ class clanDB extends dbException {
             $query->bind_param('i',$gid);
             if(!$query->execute()){
                 throw new dbException($this->db->error);
+            } else {
+                $this->insertLog('Delete Ts-Channel-Group gid '.$gid);
             }
         } else {
             throw new dbException ( $this->db->error );
@@ -2326,6 +2407,8 @@ class clanDB extends dbException {
             $query->bind_param('ii',$gid,$cid);
             if(!$query->execute()){
                 throw new dbException($this->db->error);
+            } else {
+                $this->insertLog('Delete Ts-Channel from group gid '.$gid.' cid '.$cid);
             }
         } else {
             throw new dbException ( $this->db->error );
@@ -2344,6 +2427,8 @@ class clanDB extends dbException {
             $query->bind_param('si',$name,$gid);
             if(!$query->execute()){
                 throw new dbException($this->db->error);
+            } else {
+                $this->insertLog('Change TsChannelGroup gid '.$gid.' name '.$name);
             }
         } else {
             throw new dbException ( $this->db->error );
@@ -2362,6 +2447,8 @@ class clanDB extends dbException {
             $query->bind_param('ii',$gid,$cid);
             if(!$query->execute()){
                 throw new dbException($this->db->error);
+            } else {
+                $this->insertLog('Add Ts-Channel to group gid '.$gid.' cid '.$cid);
             }
         } else {
             throw new dbException ( $this->db->error );
