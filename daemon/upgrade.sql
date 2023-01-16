@@ -126,3 +126,19 @@ CREATE TABLE `ts_channel_groups` (
  */
 
 ALTER TABLE `member` MODIFY COLUMN `exp` bigint NOT NULL;
+
+/*
+ * Execute on upgrade from 0.6.0
+ * adding global notes shown for weekly view
+ */
+CREATE TABLE `global_note` (
+ `id` INT NOT NULL AUTO_INCREMENT,
+ `from` date NOT NULL,
+ `to` date NOT NULL,
+ `added` datetime NOT NULL,
+ `message` text,
+ PRIMARY KEY (`id`),
+ UNIQUE `u_from_to` (`from`,`to`),
+ KEY `from` (`from`),
+ KEY `to` (`to`) 
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

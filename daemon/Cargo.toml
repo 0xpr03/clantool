@@ -1,6 +1,6 @@
 [package]
 name = "clantool"
-version = "0.6.0"
+version = "0.6.1"
 authors = ["Aron Heinecke"]
 edition = "2018"
 

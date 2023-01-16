@@ -34,6 +34,7 @@ function getCTTemplate() {
             <?=generateViewLink('general','fas fa-chart-bar fa-lg','General')?>
             <?=generateViewLink('difference','fas fa-table fa-lg','Difference')?>
             <?=generateViewLink('differenceWeekly','fas fa-th-list fa-lg','Difference Weekly')?>
+            <?=generateViewLink('globalnote','fas fa-comment fa-lg','Global Note')?>
             <?=generateViewLink('memberDiff','fas fa-chart-area fa-lg', 'Member Difference')?>
             <?=generateViewLink('memberJoin','fas fa-user-plus fa-lg','Member Join')?>
             <?=generateViewLink('accChange','fas fa-user-friends fa-lg','Account Change')?>
@@ -48,7 +49,7 @@ function getCTTemplate() {
             <?=generateViewLink('tsIdentity','fas fa-question-circle fa-lg','TS3 Ident')?>
             <?php
             if(hasPermission(PERM_CLANTOOL_TEST)) { // alpha/beta views
-                //echo generateViewLink('tsIdentity','fas fa-list-ol fa-lg','TS3 Ident');
+                //echo generateViewLink('globalnote','fas fa-comment fa-lg','Global Note');
             }?>
         </ul>
     </div>
@@ -102,6 +103,9 @@ function getCTTemplate() {
             case 'tsIdentity':
                 require 'includes/clantool.tsidentity.view.php';
                 break;
+            case 'globalnote':
+                require 'includes/clantool.globalnote.view.php';
+                break;
             default:
                 $ok_view = false;
                 echo '<h3>404 Not found !</h3>';
@@ -125,7 +129,7 @@ function getCTTemplate() {
         const TS_DIFF_MIN = <?=TS_DIFF_MIN?>;
         const DATE_SWITCH_TS_DATA = "<?=DATE_SWITCH_TS_DATA?>";
         </script>
-        Copyright Aron Heinecke 2017-2020 <a href="https://github.com/0xpr03/clantool">Sourcecode</a>
+        Copyright Aron Heinecke 2017-2022 <a href="https://github.com/0xpr03/clantool">Sourcecode</a>
     </div>
     <?php
 } 

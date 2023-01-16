@@ -32,7 +32,15 @@
                 var str = '<thead><tr class="tablesorter-ignoreRow"><th colspan=5>Kommentar mit Enter bestätigen!</th>';
                 var secondHeader = '<tr><th class="sorter-text">Vorname</th><th class="sorter-text">Account</th><th class="sorter-digit">ID / USN</th><th class="sorter-text">VIP</th><th class="sorter-text">Kommentar</th>';
                 $.each(data.date, function(i,row) {
-                    str += '<th colspan=3 ><a href="'+escapeHtml('<?=DIFFERENCE_URL?>'
+                    str += '<th colspan="3" ';
+                    var notes = '';
+                    if (row.notes.length > 0) {
+                        $.each(row.notes, function(i,note) {
+                            notes += escapeHtml(note.message)+'<br>';
+                        });
+                        str += 'class="bg-danger"';
+                    }
+                    str += '>'+notes+'<a href="'+escapeHtml('<?=DIFFERENCE_URL?>'
                     + '&dateFrom=' + row.start
                     + '&dateTo=' + row.end)
                     + '">' + row.end + '</a></th>';

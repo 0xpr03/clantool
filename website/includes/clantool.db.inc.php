@@ -2577,6 +2577,81 @@ class clanDB extends dbException {
             throw new dbException ( '500' );
         }
     }
+    
+    /**
+     * Get global note entries
+     * @param id Member ID
+     * @return [{from,to,cause}]
+     * @throws dbException
+     */
+    public function getGlobalNotes() {
+        if ($query = $this->db->prepare ( 'SELECT `id`,`from`,`to`,`message` FROM `global_note` ORDER BY `from`')) {
+            $query->bind_param('i',$id);
+            if(!$query->execute()){
+                throw new dbException($this->db->error);
+            }
+            $result = $query->get_result ();
+            
+            if (! $result) {
+                throw new dbException ( $this->db->error, 500 );
+            }
+            
+            $resultset = array ();
+            while ( $row = $result->fetch_assoc () ) {
+                $resultset[] = array(
+                    'id' => $row['id'],
+                    'from' => $row['from'],
+                    'to' => $row['to'],
+                    'message' => $row['message']
+                );
+            }
+            $result->close();
+            
+            return $resultset;
+        } else {
+            throw new dbException ( $this->db->error );
+        }
+    }
+    
+    /**
+     * Insert global note entry
+     * @param from from date
+     * @param to to date
+     * @param message of global_note entry
+     * @throws dbException
+     */
+    public function insertGlobalNote($from,$to,$message) {
+        if($query = $this->db->prepare (
+            'INSERT INTO `global_note` (`from`,`to`,`message`,`added`) VALUES(?,?,?, CURRENT_TIMESTAMP)')) {
+            $query->bind_param('sss',$from,$to,$message);
+            if(!$query->execute()){
+                throw new dbException($this->db->error);
+            } else {
+                $this->insertLog('Add GlobalNote '.$from.'-'.$to.' '.$message);
+            }
+        } else {
+            throw new dbException ( $this->db->error );
+        }
+    }
+    
+    /**
+     * Delete global note entry
+     * @param id entry ID
+     * @throws dbException
+     */
+    public function deleteGlobalNote($id) {
+        if($query = $this->db->prepare (
+            'DELETE FROM `global_note` WHERE `id` = ?')) {
+            $query->bind_param('i',$id);
+            if(!$query->execute()){
+                throw new dbException($this->db->error);
+            } else {
+                $this->insertLog('Delete GlobalNote '.$id);
+            }
+        } else {
+            throw new dbException ( $this->db->error );
+        }
+    }
 
     public function __destruct() {
         $this->db->close ();

@@ -49,6 +49,7 @@ $( document ).ready(function() {
             createCol(sw,'Member (real) Names',data.realnames);
             createCol(sw,'Exp & CP entries',data.rows);
             createCol(sw,'AFKs',data.afks);
+            createCol(sw,'Global Notes',data.globalnotes);
             createCol(sw,'Caution Entries',data.cautions);
             createCol(sw,'Joins',data.joins);
             createCol(sw,'Leaves',data.leaves);

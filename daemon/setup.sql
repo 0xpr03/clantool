@@ -187,3 +187,14 @@ CREATE TABLE `ts_channel_groups` (
     ON DELETE CASCADE
     ON UPDATE RESTRICT
 ) ENGINE=InnoDB;
+
+CREATE TABLE `global_note` (
+ `id` INT NOT NULL AUTO_INCREMENT,
+ `from` date NOT NULL,
+ `to` date NOT NULL,
+ `added` datetime NOT NULL,
+ `message` text,
+ PRIMARY KEY (`id`),
+ KEY `from` (`from`),
+ KEY `to` (`to`) 
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

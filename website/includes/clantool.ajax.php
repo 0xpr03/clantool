@@ -88,12 +88,14 @@ switch($_REQUEST['ajaxCont']){
                 $chunkend = $date->modify('+7 day')->format($FORMAT); // $chunkend+1
                 $chunk = $clanDB->getDifferenceSum($chunkstart,
                 $chunkend);
+                $notes = $clanDB->getGlobalNoteForRange($chunkstart,$chunkend);
                 
                 //var_dump($chunk);
                 if($chunk != null) {
                     $result['date'][] = array(
                         'start' => $chunkstart,
-                        'end' => $chunkend);
+                        'end' => $chunkend,
+                        'notes' => $notes);
                     foreach($chunk as $row) {
                         $data[$row['id']][$chunkend] = $row;
                     }
@@ -341,7 +343,8 @@ switch($_REQUEST['ajaxCont']){
                 'tsidentignored' => $clanDB->getTSIgnoreCount(),
                 'tschannelcount' => $clanDB->getTSChannelCount(),
                 'tsidentities' => $clanDB->getTSIdentityCount(),
-                'tsidentitiesrelated' => $clanDB->getTSRelationsCount()
+                'tsidentitiesrelated' => $clanDB->getTSRelationsCount(),
+                'globalnotes' => $clanDB->getGlobalNotesCount()
             );
             echo json_encode($res);
             break;
@@ -797,6 +800,18 @@ switch($_REQUEST['ajaxCont']){
                     'vip' => $res['vip']
                 )
             );
+            break;
+        case 'global-note-add':
+            $from = $_POST['from'];
+            $to = $_POST['to'];
+            $message = $_POST['message'];
+            $clanDB->insertGlobalNote($from,$to,$message);
+            echo json_encode(true);
+            break;
+        case 'global-note-delete':
+            $id = $_POST['id'];
+            $clanDB->deleteGlobalNote($id);
+            echo json_encode(true);
             break;
         default:
             http_response_code(404);
