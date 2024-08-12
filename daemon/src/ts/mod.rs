@@ -101,7 +101,7 @@ impl TsStatCtrl {
         let mut data = Self {
             pool,
             conn: Connection::new(config, Some(DEFAULT_NICK))?,
-            last_date: Local::today().naive_local(),
+            last_date: Local::now().naive_local().date(),
             last_update: Instant::now(),
             names: Default::default(),
             times: Default::default(),
@@ -369,7 +369,7 @@ impl TsStatCtrl {
         db::ts::update_ts_activity(&mut conn, self.last_date, values.as_slice())?;
         trace!("Flushed {} time entries", self.times.len());
         self.times.clear();
-        self.last_date = Local::today().naive_local();
+        self.last_date = Local::now().naive_local().date();
         Ok(())
     }
 }

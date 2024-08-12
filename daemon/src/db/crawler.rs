@@ -120,11 +120,11 @@ pub fn get_missing_dates(conn: &mut PooledConn) -> Result<Vec<NaiveDate>> {
     {
         // create date lookup table
         let stmt = conn.prep("INSERT INTO `t_dates` (`date`) VALUES (?)")?;
-        let mut current = min.succ();
+        let mut current = min.succ_opt().unwrap();
         let mut i = 0;
         while current != max {
             conn.exec_drop(&stmt, (current,))?;
-            current = current.succ();
+            current = current.succ_opt().unwrap();
             i += 1;
             if i % step == 0 {
                 info!("{}%", i * 100 / days);
@@ -426,7 +426,7 @@ mod test {
             let mut current = date_noise_start.clone();
             while current <= date_noise_end {
                 insert_members(&mut conn, &member_noise, &current.and_time(time)).unwrap();
-                current = current.succ();
+                current = current.succ_opt().unwrap();
             }
             for ref mem in member_noise {
                 // open memberships
@@ -446,7 +446,7 @@ mod test {
             let mut current = date_noise_start.clone();
             while current < date_test_2 {
                 insert_members(&mut conn, &vec_t, &current.and_time(time)).unwrap();
-                current = current.succ();
+                current = current.succ_opt().unwrap();
             }
 
             // current ms
@@ -463,7 +463,7 @@ mod test {
                 &mut conn,
                 &left.id,
                 &date_noise_start,
-                &date_test_1.pred(),
+                &date_test_1.pred_opt().unwrap(),
                 "asdf",
                 true,
             );
@@ -487,7 +487,7 @@ mod test {
                 &mut conn,
                 &left.id,
                 &date_noise_start,
-                &date_test_1.pred(),
+                &date_test_1.pred_opt().unwrap(),
                 "asdf",
                 true,
             );
@@ -512,7 +512,7 @@ mod test {
         let date_valid: NaiveDate = NaiveDate::parse_from_str("2015-01-01", DATE_FORMAT).unwrap();
         let date_invalid: NaiveDate = NaiveDate::parse_from_str("2015-01-02", DATE_FORMAT).unwrap();
         let (mut conn, _guard) = setup_db();
-        let datetime = date_valid.and_hms(10, 0, 0);
+        let datetime = date_valid.and_hms_opt(10, 0, 0).unwrap();
         {
             // setup valid date data
             let members: Vec<Member> = (0..5)
@@ -578,14 +578,14 @@ mod test {
 
         let mut dates: Vec<NaiveDate> = Vec::new();
 
-        let time = NaiveTime::from_hms_milli(12, 34, 56, 789);
+        let time = NaiveTime::from_hms_milli_opt(12, 34, 56, 789).unwrap();
         let parse_fmt = "%Y-%m-%d";
 
         let start = NaiveDate::parse_from_str("2015-09-05", parse_fmt).unwrap();
 
-        dates.push(start.succ());
+        dates.push(start.succ_opt().unwrap());
         for _ in 0..3 {
-            let date = dates.last().unwrap().succ();
+            let date = dates.last().unwrap().succ_opt().unwrap();
             dates.push(date);
         }
 
@@ -593,7 +593,7 @@ mod test {
         insert_clan_update(
             &mut conn,
             &data[1],
-            &dates.last().unwrap().succ().and_time(time),
+            &dates.last().unwrap().succ_opt().unwrap().and_time(time),
         )
         .unwrap();
 
@@ -624,9 +624,9 @@ mod test {
         let (mut conn, _guard) = setup_db();
         let msg = "my kick message";
         let id = 123;
-        let join = Local::today().naive_local();
+        let join = Local::now().naive_local().date();
         let nr = insert_membership(&mut conn, &id, &join, None);
-        let leave = Local::today().naive_local().succ();
+        let leave = Local::now().naive_local().date().succ_opt().unwrap();
         let trial = insert_member_leave(&mut conn, id, nr, leave, msg).unwrap();
         assert_eq!(trial, 0);
     }
@@ -636,11 +636,11 @@ mod test {
         let (mut conn, _guard) = setup_db();
         let msg = "my kick message";
         let id = 123;
-        let join = Local::today().naive_local();
+        let join = Local::now().naive_local().date();
         insert_trial(&mut conn, &id, &join);
-        insert_trial(&mut conn, &id, &join.succ());
+        insert_trial(&mut conn, &id, &join.succ_opt().unwrap());
         let nr = insert_membership(&mut conn, &id, &join, None);
-        let leave = Local::today().naive_local().succ();
+        let leave = Local::now().naive_local().date().succ_opt().unwrap();
         let trial = insert_member_leave(&mut conn, id, nr, leave, msg).unwrap();
         assert_eq!(trial, 2);
     }
@@ -650,10 +650,10 @@ mod test {
         let (mut conn, _guard) = setup_db();
         let msg = "my kick message";
         let id = 123;
-        let join = Local::today().naive_local();
+        let join = Local::now().naive_local().date();
         let nr = insert_full_membership(&mut conn, &id, &join, &join, "asd", true);
         insert_trial(&mut conn, &id, &join);
-        let leave = Local::today().naive_local().succ();
+        let leave = Local::now().naive_local().date().succ_opt().unwrap();
         let trial = insert_member_leave(&mut conn, id, nr, leave, msg).unwrap();
         assert_eq!(trial, 1);
     }
@@ -669,8 +669,8 @@ mod test {
             .collect();
         let mut date_curr = date_start.clone();
         for i in 0..10 {
-            date_curr = date_curr.succ();
-            let datetime = date_curr.and_hms(10, i, 0);
+            date_curr = date_curr.succ_opt().unwrap();
+            let datetime = date_curr.and_hms_opt(10, i, 0).unwrap();
             insert_members(&mut conn, &members, &datetime).unwrap();
         }
 
@@ -678,8 +678,8 @@ mod test {
 
         // add data with missing flags
         for i in 0..2 {
-            date_curr = date_curr.succ();
-            let datetime = date_curr.and_hms(10, i, 0);
+            date_curr = date_curr.succ_opt().unwrap();
+            let datetime = date_curr.and_hms_opt(10, i, 0).unwrap();
             insert_missing_entry(&datetime, &mut conn, true).unwrap();
             insert_members(&mut conn, &members, &datetime).unwrap();
         } //2015-01-13
@@ -692,9 +692,9 @@ mod test {
         date_curr = date_curr.checked_add_signed(Duration::days(30)).unwrap();
 
         for i in 1..7 {
-            let datetime = date_curr.and_hms(10, i, 0);
+            let datetime = date_curr.and_hms_opt(10, i, 0).unwrap();
             insert_members(&mut conn, &members, &datetime).unwrap();
-            date_curr = date_curr.succ();
+            date_curr = date_curr.succ_opt().unwrap();
         }
 
         assert_eq!(
@@ -707,30 +707,66 @@ mod test {
         );
 
         assert_eq!(
-            Some(correct.and_hms(10, 9, 0)),
-            get_next_older_date(&mut conn, &start_test.and_hms(10, 0, 0), date_start).unwrap()
+            Some(correct.and_hms_opt(10, 9, 0).unwrap()),
+            get_next_older_date(
+                &mut conn,
+                &start_test.and_hms_opt(10, 0, 0).unwrap(),
+                date_start
+            )
+            .unwrap()
         );
         assert_eq!(
-            Some(correct.and_hms(10, 9, 0)),
-            get_next_older_date(&mut conn, &correct.succ().and_hms(10, 0, 0), correct).unwrap()
+            Some(correct.and_hms_opt(10, 9, 0).unwrap()),
+            get_next_older_date(
+                &mut conn,
+                &correct.succ_opt().unwrap().and_hms_opt(10, 0, 0).unwrap(),
+                correct
+            )
+            .unwrap()
         );
         assert_eq!(
-            Some(correct.and_hms(10, 9, 0)),
-            get_next_older_date(&mut conn, &correct.succ().and_hms(10, 0, 0), date_start).unwrap()
+            Some(correct.and_hms_opt(10, 9, 0).unwrap()),
+            get_next_older_date(
+                &mut conn,
+                &correct.succ_opt().unwrap().and_hms_opt(10, 0, 0).unwrap(),
+                date_start
+            )
+            .unwrap()
         );
         assert_eq!(
-            Some(date_curr.pred().pred().and_hms(10, 5, 0)),
-            get_next_older_date(&mut conn, &date_curr.pred().and_hms(10, 0, 0), date_start)
-                .unwrap()
+            Some(
+                date_curr
+                    .pred_opt()
+                    .unwrap()
+                    .pred_opt()
+                    .unwrap()
+                    .and_hms_opt(10, 5, 0)
+                    .unwrap()
+            ),
+            get_next_older_date(
+                &mut conn,
+                &date_curr.pred_opt().unwrap().and_hms_opt(10, 0, 0).unwrap(),
+                date_start
+            )
+            .unwrap()
         );
         assert_eq!(
             None,
-            get_next_older_date(&mut conn, &correct.succ().and_hms(10, 0, 0), correct.succ())
-                .unwrap()
+            get_next_older_date(
+                &mut conn,
+                &correct.succ_opt().unwrap().and_hms_opt(10, 0, 0).unwrap(),
+                correct.succ_opt().unwrap()
+            )
+            .unwrap()
         );
         assert_eq!(
             None,
-            get_next_older_date(&mut conn, &correct.succ().and_hms(10, 0, 0), start_test).unwrap()
+            get_next_older_date(
+                &mut conn,
+                &correct.succ_opt().unwrap().and_hms_opt(10, 0, 0).unwrap(),
+                start_test
+            )
+            .unwrap()
         );
     }
 
@@ -789,7 +825,7 @@ mod test {
     fn insert_missing_names_test() {
         let time: NaiveDateTime = Local::now().naive_local();
         let (mut conn, _guard) = setup_db();
-        let mut names = vec![
+        let names = vec![
             (1, "asd".to_string()),
             (4, "def".to_string()),
             (5, "asdasd".to_string()),

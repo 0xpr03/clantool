@@ -242,7 +242,7 @@ mod test {
                 channel: 1,
             },
         ];
-        let date = NaiveDate::from_ymd(2020, 03, 29);
+        let date = NaiveDate::from_ymd_opt(2020, 03, 29).unwrap();
         update_ts_activity(&mut conn, date, &data).unwrap();
 
         let res = get_ts_activity_ordered(&mut conn).unwrap();

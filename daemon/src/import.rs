@@ -235,7 +235,7 @@ fn parse_record(
     }
 
     let date_name = if !memberships.is_empty() {
-        NaiveDateTime::new(memberships[0].from, NaiveTime::from_hms(0, 0, 1))
+        NaiveDateTime::new(memberships[0].from, NaiveTime::from_hms_opt(0, 0, 1).unwrap())
     } else {
         parser.default_date_name
     };
@@ -311,8 +311,8 @@ mod test {
 
     /// Generate default NaiveDateTime for tests where no specific datetime is required
     fn default_date() -> NaiveDateTime {
-        let d = NaiveDate::from_ymd(2015, 6, 3);
-        let t = NaiveTime::from_hms(12, 34, 56);
+        let d = NaiveDate::from_ymd_opt(2015, 6, 3).unwrap();
+        let t = NaiveTime::from_hms_opt(12, 34, 56).unwrap();
 
         NaiveDateTime::new(d, t)
     }
@@ -341,7 +341,7 @@ mod test {
             vip: true,
             vname: String::from("Thomas"),
             comment: String::from("Ein Kommentar"),
-            date_name: verify_date.and_time(NaiveTime::from_hms(0, 0, 1)).clone(),
+            date_name: verify_date.and_time(NaiveTime::from_hms_opt(0, 0, 1).unwrap()).clone(),
             memberships: vec![
                 Membership {
                     from: verify_date,
@@ -372,7 +372,7 @@ mod test {
             vip: true,
             vname: String::from("Thomas"),
             comment: String::from("Ein Kommentar"),
-            date_name: verify_date.and_time(NaiveTime::from_hms(0, 0, 1)).clone(),
+            date_name: verify_date.and_time(NaiveTime::from_hms_opt(0, 0, 1).unwrap()).clone(),
             memberships: vec![Membership {
                 from: verify_date,
                 to: Some(parse_date("03/15/16", DATE_DEFAULT_FORMAT).unwrap()),

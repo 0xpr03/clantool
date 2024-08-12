@@ -117,7 +117,7 @@ fn main() {
             info!("Performing force crawl");
             let local_pool = &pool;
             let local_config = &config;
-            let rt_time = NaiveTime::from_num_seconds_from_midnight(20, 0);
+            let rt_time = NaiveTime::from_num_seconds_from_midnight_opt(20, 0).unwrap();
             debug!(
                 "Result: {:?}",
                 schedule_crawl_thread(local_pool, local_config, rt_time)
@@ -333,7 +333,7 @@ fn init_db(config: &Config, retry_timeout: Dur) -> Pool {
         sleep(Dur::from_secs(sleep_time));
     }
     let msg = format!(
-        "Unable to connecto to DB after {} seconds. Aborting!",
+        "Unable to connect to DB after {} seconds. Aborting!",
         start.elapsed().as_secs()
     );
     error!("{}", msg);
@@ -399,7 +399,7 @@ fn run_checkdb(pool: Pool, simulate: bool) -> Result<()> {
 /// Initialize timed task
 fn run_daemon(pool: Pool, config: Config, timer: &timer::Timer) -> Result<()> {
     let date_time = Local::now(); // get current datetime
-    let today = Local::today();
+    let today = Local::now().date_naive();
     let target_naive_time = match NaiveTime::parse_from_str(&config.main.time, "%H:%M") {
         Ok(v) => v,
         Err(e) => {
@@ -423,18 +423,17 @@ fn run_daemon(pool: Pool, config: Config, timer: &timer::Timer) -> Result<()> {
     if target_naive_time < date_time.time() {
         debug!("Target time is tinier then current time");
         // create from chrono::Duration, convert to std::time::Duration to add
-        let c_duration = chrono::Duration::hours(INTERVALL_H);
-        let tomorrow = today.checked_add_signed(c_duration).unwrap();
-        schedule_time = tomorrow.and_time(target_naive_time).unwrap();
+        let tomorrow = today.checked_add_signed(chrono::Duration::days(1)).unwrap();
+        schedule_time = tomorrow.and_time(target_naive_time);
     } else {
-        schedule_time = today.and_time(target_naive_time).unwrap();
+        schedule_time = today.and_time(target_naive_time);
     }
     info!("First execution will be on {}", schedule_time);
 
     let pool_c = pool.clone();
     let config_c = config.clone();
     let _guard = timer.schedule(
-        schedule_time,
+        schedule_time.and_utc(),
         Some(chrono::Duration::hours(INTERVALL_H)),
         move || {
             if let Err(e) = schedule_crawl_thread(&pool_c, &config_c, retry_time) {
@@ -700,7 +699,7 @@ fn run_update(pool: &Pool, config: &Config, retry_time: NaiveTime) -> Option<Nai
         if !member_success {
             match run_update_member(pool, config, &time) {
                 Ok(_) => {
-                    debug!("Member crawling successfull.");
+                    debug!("Member crawling successful.");
                     member_success = true;
                 }
                 Err(e) => error!("Error at member update: {}: {}", x, e),
@@ -710,7 +709,7 @@ fn run_update(pool: &Pool, config: &Config, retry_time: NaiveTime) -> Option<Nai
         if !clan_success {
             match run_update_clan(pool, config, &time) {
                 Ok(_) => {
-                    debug!("Clan crawling successfull.");
+                    debug!("Clan crawling successful.");
                     clan_success = true;
                 }
                 Err(e) => error!("Error at clan update: {}: {}", x, e),
@@ -718,7 +717,7 @@ fn run_update(pool: &Pool, config: &Config, retry_time: NaiveTime) -> Option<Nai
         }
 
         if member_success && clan_success {
-            info!("Crawling successfull");
+            info!("Crawling successful");
             return Some(time);
         } else if x == config.main.retries {
             warn!("No dataset for this schedule, all retries failed!");
@@ -858,11 +857,11 @@ mod tests {
 
     #[test]
     fn test_chrono() {
-        let date = Local::today();
+        let date = Local::now().date_naive();
         let parsed_time = NaiveTime::parse_from_str("12:00", "%H:%M").unwrap();
         let parsed_time_2 = NaiveTime::parse_from_str("12:01", "%H:%M").unwrap();
-        let datetime_1 = date.and_time(parsed_time).unwrap();
-        let datetime_2 = date.and_time(parsed_time_2).unwrap();
+        let datetime_1 = date.and_time(parsed_time);
+        let datetime_2 = date.and_time(parsed_time_2);
         //assert_eq!(datetime_1.cmp(datetime_2),Ordering::Less);
         assert_eq!(parsed_time_2 > parsed_time, true);
         assert_eq!(datetime_2 > datetime_1, true);

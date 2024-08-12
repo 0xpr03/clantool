@@ -214,7 +214,7 @@ fn generate_random_datepair(offset: i64) -> (NaiveDate, Option<NaiveDate>) {
     } else {
         None
     };
-    let date = Utc.timestamp(0, 0).date().naive_local();
+    let date = Utc.timestamp_opt(0, 0).unwrap().date_naive();
     let to = to.map(|v| date.clone().checked_add_signed(Duration::days(v)).unwrap());
     let from = date.checked_add_signed(Duration::days(from)).unwrap();
     (from, to)
