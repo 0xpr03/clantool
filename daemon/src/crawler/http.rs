@@ -101,7 +101,7 @@ mod test {
     #[test]
     fn get_html_gzipped() {
         let b_html: String = get("https://httpbin.org/gzip", HeaderType::Html).unwrap();
-        assert!(true, b_html.contains(r#""gzipped": true"#));
+        assert!(b_html.contains(r#""gzipped": true"#));
     }
 
     /// Test a ajax json get request
