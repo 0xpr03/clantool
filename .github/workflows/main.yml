@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       mariadb:
-        image: mariadb:latest
+        image: mariadb:lts
         ports:
           - 3306
         env:
@@ -23,7 +23,8 @@ jobs:
           MYSQL_PASSWORD: password
           MYSQL_DATABASE: test
           MYSQL_ROOT_PASSWORD: password
-        options: --health-cmd="mysqladmin ping" --health-interval=5s --health-timeout=5s --health-retries=3
+          MYSQL_ALLOW_EMPTY_PASSWORD: yes 
+        options: --health-cmd="healthcheck.sh --innodb_initialized" --health-interval=5s --health-timeout=5s --health-retries=5
     env:
         DB_DATABASE: test
         DB_USER: root
@@ -31,9 +32,9 @@ jobs:
     steps:
     - name: setup mariadb
       run: |
-        mysql -e 'SET GLOBAL max_connections = 400;' -u${{ env.DB_USER }} -p${{ env.DB_PASSWORD }}
-        mysql -e 'DROP DATABASE IF EXISTS ${{ env.DB_DATABASE }};' -u${{ env.DB_USER }} -p${{ env.DB_PASSWORD }}
-        mysql -e 'CREATE DATABASE ${{ env.DB_DATABASE }};' -u${{ env.DB_USER }} -p${{ env.DB_PASSWORD }}
+        mysql --protocol tcp -e 'SET GLOBAL max_connections = 400;' -u${{ env.DB_USER }} -p${{ env.DB_PASSWORD }}
+        mysql --protocol tcp -e 'DROP DATABASE IF EXISTS ${{ env.DB_DATABASE }};' -u${{ env.DB_USER }} -p${{ env.DB_PASSWORD }}
+        mysql --protocol tcp -e 'CREATE DATABASE ${{ env.DB_DATABASE }};' -u${{ env.DB_USER }} -p${{ env.DB_PASSWORD }}
     - uses: actions/checkout@v3
     - name: Build
       run: cargo build --verbose
