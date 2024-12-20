@@ -2586,7 +2586,6 @@ class clanDB extends dbException {
      */
     public function getGlobalNotes() {
         if ($query = $this->db->prepare ( 'SELECT `id`,`from`,`to`,`message` FROM `global_note` ORDER BY `from`')) {
-            $query->bind_param('i',$id);
             if(!$query->execute()){
                 throw new dbException($this->db->error);
             }
