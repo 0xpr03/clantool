@@ -19,7 +19,7 @@ use regex;
 mod prelude {
     pub use crate::*;
     pub use mysql::prelude::*;
-    pub use mysql::{from_row_opt, Opts, OptsBuilder, Pool, PooledConn, QueryResult, Row, TxOpts};
+    pub use mysql::{Opts, OptsBuilder, Pool, PooledConn, TxOpts};
     pub const DATE_FORMAT: &str = "%Y-%m-%d";
     pub const DATETIME_FORMAT: &str = "%Y-%m-%d %H:%M:%S";
 }

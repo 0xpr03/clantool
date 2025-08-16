@@ -256,7 +256,6 @@ impl TsStatCtrl {
         self.last_channel = new_channel;
 
         if !afk_clients.is_empty() {
-            dbg!(&afk_clients);
             self.move_afks(afk_clients)?;
         }
 
@@ -271,6 +270,7 @@ impl TsStatCtrl {
 
     /// Move afk clients, in new thread
     fn move_afks(&mut self, clients: Vec<TsConID>) -> Result<()> {
+        info!("AFK moving {:?}",clients);
         let mut conn = self.conn.clone(Some(AFK_NICK))?;
         let cooldown = self.cooldown();
         let channel = match self.afk_config.as_ref().map(|v| &v.afk_channel) {
