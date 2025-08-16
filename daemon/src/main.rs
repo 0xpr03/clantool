@@ -230,6 +230,13 @@ fn main() {
                 error!("Error peforming name crawl: {}", e);
             }
         }
+        ("http-test", _) => {
+            info!("Running http test");
+            match crawler::http::get(&get_member_url(1, &config), HeaderType::Ajax) {
+                Ok(result) => info!("Request response '{}'", result),
+                Err(err) => error!("Failed to request: {:?}", err),
+            }
+        }
         _ => {
             info!("Entering daemon mode");
             if let Err(e) = run_daemon(pool, config, &timer) {
@@ -308,6 +315,8 @@ fn cli<'a, 'b>() -> clap::App<'a, 'b> {
                 .help("simulation mode, leaves DB unchanged")))
         .subcommand(SubCommand::with_name("check-names")
             .about("Check for missing names of account IDs and fetch them"))
+        .subcommand(SubCommand::with_name("http-test"))
+            .about("Check http connectivity")
 }
 
 fn init_db(config: &Config, retry_timeout: Dur) -> Pool {
@@ -760,8 +769,7 @@ fn send_mail(config: &Config, subject: &str, message: &str) {
         .unwrap();
 
     // Open a local connection on port 25
-    let mut mailer = SmtpClient::new_unencrypted_localhost()
-        .unwrap().transport();
+    let mut mailer = SmtpClient::new_unencrypted_localhost().unwrap().transport();
     // Send the email
     if let Err(e) = mailer.send(email.into()) {
         error!("Error at mail sending: {}", e);
@@ -801,16 +809,20 @@ fn run_update_member(pool: &Pool, config: &Config, time: &NaiveDateTime) -> Resu
     while members.len() < to_receive {
         site += 1;
         if site > config.main.clan_ajax_max_sites {
-            error!("Reaching member site {}, config max is {} aborting.", site, config.main.clan_ajax_max_sites);
+            error!(
+                "Reaching member site {}, config max is {} aborting.",
+                site, config.main.clan_ajax_max_sites
+            );
             return Err(Error::Other("Site over limit."));
         }
         let raw_members_json = crawler::http::get(&get_member_url(site, config), HeaderType::Ajax)?;
-        let (mut members_temp, t_total) = match crawler::parser::parse_all_member(&raw_members_json) {
+        let (mut members_temp, t_total) = match crawler::parser::parse_all_member(&raw_members_json)
+        {
             Err(e) => {
-                info!("Response: {}",raw_members_json);
-                return Err(e)
-            },
-            Ok(v) => v
+                info!("Response: {}", raw_members_json);
+                return Err(e);
+            }
+            Ok(v) => v,
         };
         to_receive = t_total as usize;
         members.append(&mut members_temp);

@@ -15,6 +15,7 @@
 use reqwest::blocking::{Client, ClientBuilder};
 use reqwest::header::*;
 use std::io::Read;
+use std::time::Duration;
 
 use crate::REFERER as REF;
 use crate::USER_AGENT as UA;
@@ -25,6 +26,7 @@ lazy_static! {
     static ref CLIENT: Client = ClientBuilder::new()
         .gzip(true)
         .danger_accept_invalid_certs(true)
+        .timeout(Duration::from_secs(60))
         .build()
         .unwrap();
 }
