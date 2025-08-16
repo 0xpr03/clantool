@@ -8,6 +8,12 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  DB_USER: 'user'
+  DB_PASSWORD: 'password'
+  DB_PORT: '3306'
+  DB_URL: 'localhost:3306'
+  ROOT_PASSWORD: 'root'
+  DB_DATABASE: testing
 
 jobs:
   build:
@@ -17,26 +23,32 @@ jobs:
       mariadb:
         image: mariadb:lts
         ports:
-          - 3306
+          - 3306:3306
         env:
-          MYSQL_USER: user
-          MYSQL_PASSWORD: password
+          MYSQL_USER: ${{ env.DB_USER }}
+          MYSQL_PASSWORD: ${{ env.DB_PASSWORD }}
           MYSQL_DATABASE: test
-          MYSQL_ROOT_PASSWORD: password
+          MYSQL_ROOT_HOST: '%'
+          MYSQL_HOST: 127.0.0.1
+          MYSQL_TCP_PORT: 3306
+          MYSQL_ROOT_PASSWORD: ${{ env.ROOT_PASSWORD }}
           MYSQL_ALLOW_EMPTY_PASSWORD: yes 
         options: --health-cmd="healthcheck.sh --innodb_initialized" --health-interval=5s --health-timeout=5s --health-retries=5
-    env:
-        DB_DATABASE: test
-        DB_USER: root
-        DB_PASSWORD: root
     steps:
+    - name: print env
+      run: printenv -0
     - name: setup mariadb
       run: |
-        mysql --protocol tcp -e 'SET GLOBAL max_connections = 400;' -u${{ env.DB_USER }} -p${{ env.DB_PASSWORD }}
-        mysql --protocol tcp -e 'DROP DATABASE IF EXISTS ${{ env.DB_DATABASE }};' -u${{ env.DB_USER }} -p${{ env.DB_PASSWORD }}
-        mysql --protocol tcp -e 'CREATE DATABASE ${{ env.DB_DATABASE }};' -u${{ env.DB_USER }} -p${{ env.DB_PASSWORD }}
-    - uses: actions/checkout@v3
+        mysql -h 127.0.0.1 -u root -p${{ env.ROOT_PASSWORD }} -e 'SET GLOBAL max_connections = 400;'
+        mysql -h 127.0.0.1 -u root -p${{ env.ROOT_PASSWORD }} -e 'DROP DATABASE IF EXISTS ${{ env.DB_DATABASE }};'
+        mysql -h 127.0.0.1 -u root -p${{ env.ROOT_PASSWORD }} -e 'CREATE DATABASE ${{ env.DB_DATABASE }};'
+    - uses: actions/checkout@v4
     - name: Build
       run: cargo build --verbose
     - name: Run tests
       run: bash test.sh
+      env:
+        MYSQL_PWD: ${{ env.ROOT_PASSWORD }}
+        MYSQL_HOST: 127.0.0.1
+        USER: root
+        MYSQL_TCP_PORT: ${{ env.DB_PORT }}
