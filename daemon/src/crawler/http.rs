@@ -11,25 +11,14 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
-use reqwest::blocking::{Client, ClientBuilder};
-use reqwest::header::*;
 use std::io::Read;
+use std::process::Command;
 use std::time::Duration;
 
 use crate::REFERER as REF;
 use crate::USER_AGENT as UA;
 
 use crate::error::Error;
-
-lazy_static! {
-    static ref CLIENT: Client = ClientBuilder::new()
-        .gzip(true)
-        .danger_accept_invalid_certs(true)
-        .timeout(Duration::from_secs(60))
-        .build()
-        .unwrap();
-}
 
 /// Header type for get requests
 pub enum HeaderType {
@@ -44,60 +33,62 @@ pub enum HeaderType {
 pub fn get(url: &str, htype: HeaderType) -> Result<String, Error> {
     trace!("Starting downloading {}", url);
 
-    let mut res = CLIENT.get(url).headers(header(htype)).send()?;
-
-    debug!("Response header: {:?}", res.headers());
-    debug!("Response status: {:?}", res.status());
-    debug!("Final URL: {:?}", res.headers().get(LOCATION));
-    trace!("DEV header: {:?}", res.headers().get(CONTENT_ENCODING));
-    let mut body = String::new();
-    res.read_to_string(&mut body)?;
-    Ok(body)
-}
-
-/// Construct a header
-/// This function does not check for errors and is
-/// verified by the tests
-fn header(htype: HeaderType) -> HeaderMap {
-    let mut headers = HeaderMap::new();
-
-    headers.insert(ACCEPT_ENCODING, "gzip, deflate".parse().unwrap());
-
-    //headers.insert(PRAGMA, "no-cache".parse().unwrap());
-    headers.insert(ACCEPT_LANGUAGE, "en-US,en;q=0.5".parse().unwrap());
-    headers.insert(USER_AGENT, UA.parse().unwrap());
-    headers.insert(REFERER, REF.parse().unwrap());
-    headers.insert(CACHE_CONTROL, "max-age=0".parse().unwrap());
-
+    //let mut res = CLIENT.get(url).headers(header(htype)).send()?;
+    let mut cmd = Command::new("curl");
+    cmd.args([url,"--compressed","-m","60"])
+    .args(["--fail","--silent","--show-error"])
+    .args(["-H","User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0"])
+    .args(["-H","Accept-Language: en-US,en;q=0.5"])
+    .args(["-H","Accept-Encoding: gzip, deflate, br, zstd"])
+    .args(["-H","Connection: keep-alive"]);
     match htype {
         HeaderType::Html => {
-            headers.insert(
-                ACCEPT,
-                "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
-                    .parse()
-                    .unwrap(),
-            );
+            cmd.args([
+                "-H",
+                "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            ])
+            .args(["-H", "Sec-Fetch-Dest: document"])
+            .args(["-H", "Sec-Fetch-Mode: navigate"])
+            .args(["-H", "Sec-Fetch-Site: none"])
+            .args(["-H", "Sec-Fetch-User: ?1"])
+            .args(["-H", "Priority: u=0, i"]);
         }
         HeaderType::Ajax => {
-            headers.insert(ACCEPT, "application/json, text/plain, */*".parse().unwrap());
+            cmd.args(["-H", "Accept: application/json, text/plain, */*"])
+                .args(["-H", "Referer: https://crossfire.z8games.com/clan/68910"])
+                .args(["-H", "Sec-Fetch-Dest: empty"])
+                .args(["-H", "Sec-Fetch-Mode: cors"])
+                .args(["-H", "Sec-Fetch-Site: same-origin"])
+                .args(["-H", "Priority: u=0"]);
         }
     }
 
-    trace!("Generated headers: {:?}", headers);
-    headers
+    let output = cmd.output();
+
+    let output = output?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    debug!("Stdout: {:?}", stdout);
+    debug!("Stderr: {:?}", stderr);
+
+    if !output.stderr.is_empty() || !output.status.success() {
+        return Err(Error::Curl(stderr.into()));
+    }
+
+    Ok(stdout.trim().into())
 }
 
 #[cfg(test)]
 mod test {
-    use super::header;
-    use super::*;
+    use log::LevelFilter;
+    use log4rs::{
+        append::console::{ConsoleAppender, Target},
+        config::{Appender, Root},
+        Config,
+    };
 
-    /// Test header creation
-    #[test]
-    fn header_test() {
-        let _ = header(HeaderType::Html);
-        let _ = header(HeaderType::Ajax);
-    }
+    use super::*;
 
     /// Test a html get request
     #[test]
@@ -124,6 +115,13 @@ mod test {
     #[test]
     #[ignore]
     fn get_ajax_z8_member() {
+        let stderr = ConsoleAppender::builder().target(Target::Stderr).build();
+        let _ = log4rs::init_config(
+            Config::builder()
+                .appender(Appender::builder().build("stderr", Box::new(stderr)))
+                .build(Root::builder().appender("stderr").build(LevelFilter::Trace))
+                .unwrap(),
+        );
         let b_ajax = get("https://crossfire.z8games.com/rest/clanmembers.json?clanID=68910&endrow=10&page=1&perPage=10&rankType=user&startrow=1", HeaderType::Ajax).unwrap();
         assert!(b_ajax.contains("Dr.Alptraum"));
         println!("{}", b_ajax);

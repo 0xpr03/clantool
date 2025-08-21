@@ -59,7 +59,7 @@ use config::Config;
 use clap::{App, Arg, SubCommand};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
-const USER_AGENT: &str = "Mozilla/5.0 (Windows NT 6.1; WOW64; rv:54.0) Gecko/20100101 Firefox/79.0";
+const USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0";
 const REFERER: &str = "https://crossfire.z8games.com/";
 const CONFIG_PATH: &str = "config/config.toml";
 const LOG_PATH: &str = "config/log.yml";
@@ -230,9 +230,10 @@ fn main() {
                 error!("Error peforming name crawl: {}", e);
             }
         }
-        ("http-test", _) => {
+        ("http-test", Some(args)) => {
+            let url = args.value_of("url").unwrap();
             info!("Running http test");
-            match crawler::http::get(&get_member_url(1, &config), HeaderType::Ajax) {
+            match crawler::http::get(&url, HeaderType::Ajax) {
                 Ok(result) => info!("Request response '{}'", result),
                 Err(err) => error!("Failed to request: {:?}", err),
             }
@@ -857,7 +858,7 @@ fn init_log() -> Result<()> {
         let mut file = File::create(&log_path)?;
         file.write_all(config.as_bytes())?;
     }
-    log4rs::init_file(log_path, Default::default())?;
+    log4rs::init_file(log_path, Default::default()).unwrap();
     Ok(())
 }
 

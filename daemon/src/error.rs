@@ -18,7 +18,6 @@ use json;
 use log4rs;
 use mysql;
 use regex;
-use reqwest;
 use std;
 use std::io;
 use toml;
@@ -37,10 +36,8 @@ quick_error! {
             display("I/O error: {}", err)
             source(err)
         }
-        Http(err: reqwest::Error) {
-            from()
-            display("http error: {}",err)
-            source(err)
+        Curl(descr: String) {
+            display("CURL Error: {}",descr)
         }
         Json(err: json::Error) {
             from()
@@ -78,11 +75,6 @@ quick_error! {
         ValueParse(err: mysql::FromValueError) {
             from()
             display("ValueParse: {}",err)
-            source(err)
-        }
-        Log(err: log4rs::Error) {
-            from()
-            display("log4rs error: {}",err)
             source(err)
         }
         NoValue(descr: &'static str) {
