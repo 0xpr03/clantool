@@ -33,7 +33,7 @@ use lettre::{SmtpClient, Transport};
 use lettre_email::EmailBuilder;
 pub use types::*;
 
-use crate::crawler::http::HeaderType;
+use crate::crawler::http::{self, HeaderType};
 
 use std::env::current_dir;
 use std::fs::DirBuilder;
@@ -59,8 +59,6 @@ use config::Config;
 use clap::{App, Arg, SubCommand};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
-const USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0";
-const REFERER: &str = "https://crossfire.z8games.com/";
 const CONFIG_PATH: &str = "config/config.toml";
 const LOG_PATH: &str = "config/log.yml";
 const INTERVALL_H: i64 = 24; // execute intervall
@@ -92,12 +90,21 @@ const TS3_AFK_TIME_KEY: &str = "ts3_afk_time";
 pub type Result<T> = ::std::result::Result<T, Error>;
 
 #[allow(clippy::cognitive_complexity)]
-fn main() {
+fn main() -> Result<()> {
     match init_log() {
-        Err(e) => eprintln!("Error on config initialization: {}", e),
+        Err(err) => eprintln!("Error on config initialization: {err}"),
         Ok(_) => println!("Initialized log"),
     }
     info!("Clan tools crawler v{}", VERSION);
+
+    let curl_result = http::curl_version();
+    match curl_result {
+        Ok(info) => info!("Found curl {info}"),
+        Err(err) => {
+            error!("Curl check failed: {err}");
+            return Err(err);
+        }
+    }
 
     let config = config::init_config();
     let pool = init_db(&config, Dur::from_secs(60 * 10));
@@ -110,7 +117,7 @@ fn main() {
             info!("Performing check db");
             match run_checkdb(pool, sub_m.is_present("simulate")) {
                 Ok(_) => {}
-                Err(e) => error!("Error at checkdb: {}", e),
+                Err(err) => error!("Error at checkdb: {err}"),
             }
         }
         ("fcrawl", _) => {
@@ -128,9 +135,9 @@ fn main() {
             let local_pool = &pool;
             let local_config = &config;
             let mut conn = match local_pool.get_conn() {
-                Err(e) => {
-                    error!("Unable to get db conn {}", e);
-                    return;
+                Err(err) => {
+                    error!("Unable to get db conn {err}");
+                    return Err(err.into());
                 }
                 Ok(v) => v,
             };
@@ -172,9 +179,9 @@ fn main() {
             info!("Manually performing leave check");
             let mut conn = match pool.get_conn() {
                 Ok(v) => v,
-                Err(e) => {
-                    error!("DB Exception {}", e);
-                    return;
+                Err(err) => {
+                    error!("DB Exception {err}");
+                    return Err(err.into());
                 }
             };
             let simulate = sub_m.is_present("simulate");
@@ -187,11 +194,11 @@ fn main() {
                 }
                 Ok(None) => {
                     error!("No data for specified date!");
-                    return;
+                    return Err(Error::Other("No data for specified date!"));
                 }
-                Err(e) => {
-                    error!("Unable to verify specified date {}", e);
-                    return;
+                Err(err) => {
+                    error!("Unable to verify specified date {err}");
+                    return Err(err);
                 }
             };
             let message: String = match sub_m.value_of("message") {
@@ -203,9 +210,9 @@ fn main() {
         }
         ("init", _) => {
             info!("Setting up tables..");
-            if let Err(e) = db::init_tables(&pool) {
-                error!("Unable to initialize tables: {}", e);
-                return;
+            if let Err(err) = db::init_tables(&pool) {
+                error!("Unable to initialize tables: {err}");
+                return Err(err);
             }
             info!("Initialized tables");
         }
@@ -219,15 +226,15 @@ fn main() {
         }
         ("check-ts", _) => {
             info!("Performing manual ts group check");
-            if let Err(e) = ts::find_unknown_identities(&pool, &config.ts) {
-                error!("Error performing ts group check: {}", e);
+            if let Err(err) = ts::find_unknown_identities(&pool, &config.ts) {
+                error!("Error performing ts group check: {err}");
             }
         }
         ("check-names", _) => {
             info!("Performing manual names check");
             let time: NaiveDateTime = Local::now().naive_local();
-            if let Err(e) = run_missing_name_crawler(&pool, &time) {
-                error!("Error peforming name crawl: {}", e);
+            if let Err(err) = run_missing_name_crawler(&pool, &time) {
+                error!("Error peforming name crawl: {err}");
             }
         }
         ("http-test", Some(args)) => {
@@ -240,14 +247,15 @@ fn main() {
         }
         _ => {
             info!("Entering daemon mode");
-            if let Err(e) = run_daemon(pool, config, &timer) {
-                let fmt = format!("Error starting daemon {}", e);
+            if let Err(err) = run_daemon(pool, config, &timer) {
+                let fmt = format!("Error starting daemon {err}");
                 error!("{}", &fmt);
                 panic!("{}", fmt);
             }
         }
     }
     info!("Exit");
+    Ok(())
 }
 
 fn cli<'a, 'b>() -> clap::App<'a, 'b> {

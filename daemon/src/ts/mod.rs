@@ -270,7 +270,7 @@ impl TsStatCtrl {
 
     /// Move afk clients, in new thread
     fn move_afks(&mut self, clients: Vec<TsConID>) -> Result<()> {
-        info!("AFK moving {:?}",clients);
+        info!("AFK moving {:?}", clients);
         let mut conn = self.conn.clone(Some(AFK_NICK))?;
         let cooldown = self.cooldown();
         let channel = match self.afk_config.as_ref().map(|v| &v.afk_channel) {

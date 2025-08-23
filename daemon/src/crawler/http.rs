@@ -11,14 +11,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-use std::io::Read;
 use std::process::Command;
-use std::time::Duration;
-
-use crate::REFERER as REF;
-use crate::USER_AGENT as UA;
 
 use crate::error::Error;
+
+static CURL_CMD: &str = "curl";
+static UA: &str =
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0";
 
 /// Header type for get requests
 pub enum HeaderType {
@@ -34,13 +33,14 @@ pub fn get(url: &str, htype: HeaderType) -> Result<String, Error> {
     trace!("Starting downloading {}", url);
 
     //let mut res = CLIENT.get(url).headers(header(htype)).send()?;
-    let mut cmd = Command::new("curl");
-    cmd.args([url,"--compressed","-m","60"])
-    .args(["--fail","--silent","--show-error"])
-    .args(["-H","User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0"])
-    .args(["-H","Accept-Language: en-US,en;q=0.5"])
-    .args(["-H","Accept-Encoding: gzip, deflate, br, zstd"])
-    .args(["-H","Connection: keep-alive"]);
+    let mut cmd = Command::new(CURL_CMD);
+    let agent: String = format!("User-Agent: {UA}");
+    cmd.args([url, "--compressed", "-m", "60"])
+        .args(["--fail", "--silent", "--show-error"])
+        .args(["-H", &agent])
+        .args(["-H", "Accept-Language: en-US,en;q=0.5"])
+        .args(["-H", "Accept-Encoding: gzip, deflate, br, zstd"])
+        .args(["-H", "Connection: keep-alive"]);
     match htype {
         HeaderType::Html => {
             cmd.args([
@@ -77,6 +77,26 @@ pub fn get(url: &str, htype: HeaderType) -> Result<String, Error> {
     }
 
     Ok(stdout.trim().into())
+}
+
+/// Reports the curl version in use.
+///
+/// Acts as a healt check that curl is available
+pub fn curl_version() -> Result<String, Error> {
+    let mut cmd = Command::new(CURL_CMD);
+    cmd.arg("--version");
+
+    let output = cmd.output()?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let mut data = String::with_capacity(stdout.len() + stderr.len());
+    data.push_str(stdout.trim());
+    if !stderr.is_empty() {
+        data.push_str("Stderr:");
+        data.push_str(stderr.trim());
+    }
+    Ok(data)
 }
 
 #[cfg(test)]

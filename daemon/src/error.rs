@@ -15,7 +15,6 @@
 use chrono;
 use csv;
 use json;
-use log4rs;
 use mysql;
 use regex;
 use std;

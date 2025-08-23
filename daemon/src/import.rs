@@ -235,7 +235,10 @@ fn parse_record(
     }
 
     let date_name = if !memberships.is_empty() {
-        NaiveDateTime::new(memberships[0].from, NaiveTime::from_hms_opt(0, 0, 1).unwrap())
+        NaiveDateTime::new(
+            memberships[0].from,
+            NaiveTime::from_hms_opt(0, 0, 1).unwrap(),
+        )
     } else {
         parser.default_date_name
     };
@@ -341,7 +344,9 @@ mod test {
             vip: true,
             vname: String::from("Thomas"),
             comment: String::from("Ein Kommentar"),
-            date_name: verify_date.and_time(NaiveTime::from_hms_opt(0, 0, 1).unwrap()).clone(),
+            date_name: verify_date
+                .and_time(NaiveTime::from_hms_opt(0, 0, 1).unwrap())
+                .clone(),
             memberships: vec![
                 Membership {
                     from: verify_date,
@@ -372,7 +377,9 @@ mod test {
             vip: true,
             vname: String::from("Thomas"),
             comment: String::from("Ein Kommentar"),
-            date_name: verify_date.and_time(NaiveTime::from_hms_opt(0, 0, 1).unwrap()).clone(),
+            date_name: verify_date
+                .and_time(NaiveTime::from_hms_opt(0, 0, 1).unwrap())
+                .clone(),
             memberships: vec![Membership {
                 from: verify_date,
                 to: Some(parse_date("03/15/16", DATE_DEFAULT_FORMAT).unwrap()),
