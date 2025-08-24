@@ -290,6 +290,7 @@ mod test {
         assert_eq!(expected, res);
     }
 
+    /// Helper function, returns client_id,name ordered by client_id
     fn get_ts_names_ordered(conn: &mut PooledConn) -> Result<Vec<(TsClDBID, String)>> {
         let data = conn.query_map(
             "SELECT client_id,name FROM `ts_names` ORDER BY client_id",
@@ -307,17 +308,17 @@ mod test {
         update_ts_names(&mut conn, &data).unwrap();
 
         let res = get_ts_names_ordered(&mut conn).unwrap();
-        assert_eq!(res, vec![(1, name_a), (2, name_b)]);
-        // update
+        assert_eq!(res, vec![(1, name_a), (2, name_b.clone())]);
+        // update names of clients 1 & 3
         let name_a = "def".to_string();
         let name_c = "123".to_string();
         let data = [(1, name_a.as_str()), (3, name_c.as_str())];
         update_ts_names(&mut conn, &data).unwrap();
         let res = get_ts_names_ordered(&mut conn).unwrap();
         let expected = vec![
-            (1, "def".to_string()),
-            (2, "クマ".to_string()),
-            (3, "123".to_string()),
+            (1, name_a.to_string()),
+            (2, name_b.to_string()),
+            (3, name_c.to_string()),
         ];
         assert_eq!(res, expected);
     }

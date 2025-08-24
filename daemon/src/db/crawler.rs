@@ -162,7 +162,7 @@ pub fn get_missing_dates(conn: &mut PooledConn) -> Result<Vec<NaiveDate>> {
     Ok(dates)
 }
 
-/// Inserts TABLE_MISSING_DATES into `missing_entries`
+/// Inserts from TABLE_MISSING_DATES into `missing_entries`
 pub fn insert_missing_dates(conn: &mut PooledConn) -> Result<()> {
     conn.query_drop(format!(
         "INSERT INTO `missing_entries` (`date`)
@@ -172,8 +172,9 @@ pub fn insert_missing_dates(conn: &mut PooledConn) -> Result<()> {
     Ok(())
 }
 
-/// Retrieves the oldest & newest date `clan` & `member` table combined
-/// Returns (min,max) dates as String
+/// Retrieves the oldest & newest date of tables `clan` & `member` combined.
+///
+/// Returns (min,max) dates
 fn get_min_max_date(conn: &mut PooledConn) -> Result<(NaiveDate, NaiveDate)> {
     // full outer join to get all
     let values = conn.query_first_opt(
@@ -206,9 +207,10 @@ pub fn check_date_for_data(
     }
 }
 
-/// Get next older date from specified datetime which is not marked as as missing entry
-/// and not older than the specified minimum
-/// returns Result<None> if no older date within range was found
+/// Get next older date in table `member` than `date` (datetime) which is not marked as as missing entry
+/// and not older than the specified min date.
+///
+/// Returns `Result<None>` if no older date within range was found.
 pub fn get_next_older_date(
     conn: &mut PooledConn,
     date: &NaiveDateTime,
@@ -230,8 +232,9 @@ pub fn get_next_older_date(
     Ok(val.flatten())
 }
 
-/// Get left members from difference betweeen date1 & date2
-/// Expected date1 < date2
+/// Returns "left members" that are now ex-members based on the difference in data betweeen date1 & date2.
+///
+/// Errors if not date1 < date2
 pub fn get_member_left(
     conn: &mut PooledConn,
     date1: &NaiveDateTime,
@@ -327,15 +330,16 @@ mod test {
     use db::testing::*;
     use std::collections::HashMap;
 
-    /// Test temporary date lookup table creation
+    /// Test temporary date lookup table creation works
     #[test]
     fn create_temp_date_table_test() {
         let (mut conn, _guard) = setup_db();
         create_temp_date_table(&mut conn, TABLE_MISSING_DATES).unwrap();
     }
 
-    /// Test leave detection for member based on membership-entry
-    /// (1-day membership)
+    /// Simplest test of the leave detection for members based on their data entries.
+    ///
+    /// Test with 1-day membership and no other entries.
     #[test]
     fn check_get_member_left_single_join() {
         let (mut conn, _guard) = setup_db();
@@ -368,7 +372,7 @@ mod test {
         assert_eq!(expected, left[0]);
     }
 
-    /// Test leave detection for member based on member-data
+    /// Simple test of get_member_left, used for leave detection based on member-data entries
     #[test]
     fn check_get_member_left_single_data() {
         let (mut conn, _guard) = setup_db();
@@ -386,8 +390,8 @@ mod test {
         // insert open membership
         let ms_nr = insert_membership(&mut conn, &id, &date1.date(), None);
 
-        // create member which joined on date2 (verify date1&2 are not interchanged)
-        // should not be report as left
+        // create another member which joined on date2 (verify date1&2 are not interchanged)
+        // should not be reported as left
         vec_t.clear();
         vec_t.push(create_member(name_noise, id + 1, 4, 6));
         insert_members(&mut conn, &vec_t, &date2).unwrap();
@@ -403,6 +407,7 @@ mod test {
         assert_eq!(expected, left[0]);
     }
 
+    /// Extended test of get_member_left, used for leave detection based on member-data entries
     #[test]
     fn check_get_member_left_full() {
         let (mut conn, _guard) = setup_db();
@@ -429,7 +434,7 @@ mod test {
                 current = current.succ_opt().unwrap();
             }
             for ref mem in member_noise {
-                // open memberships
+                // create "open" memberships (no leave)
                 insert_membership(&mut conn, &mem.id, &date_noise_start, None);
             }
         }
@@ -496,17 +501,17 @@ mod test {
         }
         //offset += 1;
 
-        // test function
+        // test function get_member_left
         let found = get_member_left(&mut conn, &datetime_test_1, &datetime_test_2).unwrap();
-
+        // should have found this exact amount of ex-members
         assert_eq!(expected.len(), found.len());
-
+        // validate exact match
         for m in found {
             assert_eq!(expected.get(&m.id), Some(&m));
         }
     }
 
-    /// Check date valid with data function
+    /// Check date valid with check_date_for_data function
     #[test]
     fn check_date_for_data_test() {
         let date_valid: NaiveDate = NaiveDate::parse_from_str("2015-01-01", DATE_FORMAT).unwrap();
@@ -520,10 +525,13 @@ mod test {
                 .collect();
             insert_members(&mut conn, &members, &datetime).unwrap();
         }
+        // now verify our function finds the corresponding datetime for the specific date:
+        // members table contains a datetime for the date of `date_valid`
         assert_eq!(
             Some(datetime),
             check_date_for_data(&mut conn, date_valid).unwrap()
         );
+        // members table does not contain a datetime for the date of `date_invalid`
         assert_eq!(None, check_date_for_data(&mut conn, date_invalid).unwrap());
     }
 
@@ -537,6 +545,7 @@ mod test {
         insert_missing_entry(&time, &mut conn, false).unwrap();
     }
 
+    /// Validate get_min_max_date for three dates with gaps between
     #[test]
     fn get_min_max_date_test() {
         let (mut conn, _guard) = setup_db();
@@ -658,6 +667,7 @@ mod test {
         assert_eq!(trial, 1);
     }
 
+    /// Validate get_next_older_date
     #[test]
     fn get_next_older_date_test() {
         let date_start: NaiveDate = NaiveDate::parse_from_str("2015-01-01", DATE_FORMAT).unwrap();
