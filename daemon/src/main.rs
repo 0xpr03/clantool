@@ -324,8 +324,11 @@ fn cli<'a, 'b>() -> clap::App<'a, 'b> {
                 .help("simulation mode, leaves DB unchanged")))
         .subcommand(SubCommand::with_name("check-names")
             .about("Check for missing names of account IDs and fetch them"))
-        .subcommand(SubCommand::with_name("http-test"))
+        .subcommand(SubCommand::with_name("http-test")
             .about("Check http connectivity")
+            .arg(Arg::with_name("url")
+                .takes_value(true)
+                .short("u")))
 }
 
 fn init_db(config: &Config, retry_timeout: Dur) -> Pool {

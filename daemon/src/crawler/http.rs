@@ -38,7 +38,7 @@ pub fn get(url: &str, htype: HeaderType) -> Result<String, Error> {
     cmd.args([url, "--compressed", "-m", "60"])
         .args(["--fail", "--silent", "--show-error"])
         .args(["-H", &agent])
-        .args(["-H", "Accept-Language: en-US,en;q=0.5"])
+        .args(["-H", "Accept-Language: en-US,en;q=0.9"])
         .args(["-H", "Accept-Encoding: gzip, deflate, br, zstd"])
         .args(["-H", "Connection: keep-alive"]);
     match htype {
@@ -50,16 +50,14 @@ pub fn get(url: &str, htype: HeaderType) -> Result<String, Error> {
             .args(["-H", "Sec-Fetch-Dest: document"])
             .args(["-H", "Sec-Fetch-Mode: navigate"])
             .args(["-H", "Sec-Fetch-Site: none"])
-            .args(["-H", "Sec-Fetch-User: ?1"])
-            .args(["-H", "Priority: u=0, i"]);
+            .args(["-H", "Sec-Fetch-User: ?1"]);
         }
         HeaderType::Ajax => {
             cmd.args(["-H", "Accept: application/json, text/plain, */*"])
                 .args(["-H", "Referer: https://crossfire.z8games.com/clan/68910"])
                 .args(["-H", "Sec-Fetch-Dest: empty"])
                 .args(["-H", "Sec-Fetch-Mode: cors"])
-                .args(["-H", "Sec-Fetch-Site: same-origin"])
-                .args(["-H", "Priority: u=0"]);
+                .args(["-H", "Sec-Fetch-Site: same-origin"]);
         }
     }
 
