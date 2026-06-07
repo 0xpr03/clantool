@@ -17,7 +17,7 @@ use crate::error::Error;
 
 static CURL_CMD: &str = "curl";
 static UA: &str =
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0";
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:151.0) Gecko/20100101 Firefox/151.0";
 
 /// Header type for get requests
 pub enum HeaderType {
